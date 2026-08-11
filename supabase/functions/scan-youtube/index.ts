@@ -1,34 +1,28 @@
 import { authorizeRequest, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
 
-type Game = {
-  id: string;
-  workspace_id: string;
-  title: string;
-  youtube_last_scanned_at: string | null;
-};
-
-type SearchItem = {
-  id: { videoId: string };
-  snippet: {
-    publishedAt: string;
-    channelId: string;
-    title: string;
-    channelTitle: string;
-    thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } };
-  };
-};
+type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null };
+type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
   try {
-    const body = await request.json().catch(() => ({})) as { game_id?: string; force?: boolean };
+    const body = await request.json().catch(() => ({})) as { game_id?: string; force?: boolean; healthcheck?: boolean };
     const auth = await authorizeRequest(request, body.game_id);
+    if (!auth.internal && body.healthcheck) return json({ error: "Forbidden" }, 403);
     if (!auth.internal && !body.game_id) return json({ error: "A user-triggered scan requires game_id." }, 400);
-
     const apiKey = Deno.env.get("YOUTUBE_API_KEY");
     if (!apiKey) return json({ error: "YouTube API key is not configured." }, 503);
+
+    if (body.healthcheck) {
+      const healthUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+      healthUrl.searchParams.set("part", "id");
+      healthUrl.searchParams.set("id", "dQw4w9WgXcQ");
+      healthUrl.searchParams.set("key", apiKey);
+      const response = await fetch(healthUrl);
+      if (!response.ok) throw new Error(`YouTube API healthcheck failed: ${response.status} ${await response.text()}`);
+      return json({ ok: true, youtube: "authenticated" });
+    }
 
     const supabase = serviceClient();
     let query = supabase.from("games").select("id, workspace_id, title, youtube_last_scanned_at").eq("enabled", true);
@@ -37,17 +31,19 @@ Deno.serve(async (request) => {
       const limit = Math.max(1, Math.min(10, Number(Deno.env.get("YOUTUBE_GAMES_PER_RUN") ?? "1")));
       query = query.lte("youtube_next_scan_at", new Date().toISOString()).order("youtube_next_scan_at").limit(limit);
     }
-
     const { data, error } = await query;
     if (error) throw error;
     const games = (data ?? []) as Game[];
     if (!games.length) return json({ ok: true, games: 0, mentions: 0 });
 
     const workspaceIds = Array.from(new Set(games.map((game) => game.workspace_id)));
-    const { data: subscriptions } = await supabase.from("subscriptions").select("workspace_id, plan").in("workspace_id", workspaceIds);
-    const planByWorkspace = new Map((subscriptions ?? []).map((item) => [item.workspace_id as string, item.plan as Plan]));
-    let totalMentions = 0;
+    const { data: subscriptions } = await supabase.from("subscriptions").select("workspace_id, plan, status").in("workspace_id", workspaceIds);
+    const planByWorkspace = new Map((subscriptions ?? []).map((item) => [
+      item.workspace_id as string,
+      (item.status === "active" || item.status === "trialing" ? item.plan : "free") as Plan,
+    ]));
 
+    let totalMentions = 0;
     for (const game of games) {
       const runStarted = new Date();
       const { data: aliasesData } = await supabase.from("game_aliases").select("phrase, type").eq("game_id", game.id);
@@ -78,7 +74,6 @@ Deno.serve(async (request) => {
       const items = searchPayload.items ?? [];
       const ids = items.map((item) => item.id.videoId).filter(Boolean);
       const statistics = new Map<string, number>();
-
       if (ids.length) {
         const statsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
         statsUrl.searchParams.set("part", "statistics");
