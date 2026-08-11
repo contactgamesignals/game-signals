@@ -1,12 +1,6 @@
-name: Scan Twitch
+name: Twitch Healthcheck
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/scan-twitch.yml
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -14,7 +8,7 @@ permissions:
   id-token: write
 
 jobs:
-  scan:
+  healthcheck:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -31,22 +25,16 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Invoke Twitch scanner
+      - name: Check Twitch credentials
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          BODY='{}'
-          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            BODY='{"healthcheck":true}'
-          fi
-
           curl --fail-with-body --silent --show-error \
             --request POST \
             --header "Authorization: Bearer ${OIDC_TOKEN}" \
             --header "x-gamesignal-scheduler: github-actions" \
             --header "Content-Type: application/json" \
-            --data "$BODY" \
+            --data '{"healthcheck":true}' \
             "https://mgaufxduaaobrlyzdrdo.supabase.co/functions/v1/scan-twitch"
