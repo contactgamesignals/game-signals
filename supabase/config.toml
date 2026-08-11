@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.notify-discord]
 verify_jwt = false
+
+[functions.manage-discord]
+verify_jwt = false
