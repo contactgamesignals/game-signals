@@ -1,54 +1,42 @@
 # GameSignal
 
-GameSignal is a production-oriented Next.js + Supabase foundation for monitoring creator activity around video games.
+GameSignal is a Next.js + Supabase service for monitoring creator activity around video games.
 
-The application preserves the V6 landing-page design while replacing the fake demo backend with a real application structure:
+Production: `https://game-signals.vercel.app`
 
-- Next.js 16 App Router
-- Supabase email/password and Google authentication
-- protected dashboard
-- PostgreSQL schema with Row Level Security
-- workspace and plan limits enforced on the server and in PostgreSQL
-- real Twitch category resolution and live-stream scanning
-- real YouTube video search and statistics lookup
-- mention deduplication with `UNIQUE(platform, external_id)`
-- scan history and errors in `scan_runs`
-- Discord delivery worker
-- Supabase Cron examples
+## Current foundation
 
-## What works after configuration
+- Next.js App Router frontend preserving the GameSignal landing-page design.
+- Supabase email/password authentication and protected dashboard.
+- PostgreSQL workspaces, subscriptions, games, aliases, mentions, scan history and notification delivery records.
+- Hardened Row Level Security.
+- Database-enforced tracked-game limits: Free 1, Indie 1, Studio 3, Publisher 10.
+- Real Twitch and YouTube Edge Function workers.
+- Realtime mention updates in the dashboard.
+- Secure Discord webhook management: the saved webhook URL is server-only and is never returned to the browser.
+- Automatic Discord notification delivery every minute through Supabase Cron.
+- Cron authentication generated inside Postgres and stored in Supabase Vault; plaintext is never committed to Git.
 
-1. A user can register or log in.
-2. A default workspace and free subscription record are created automatically.
-3. The dashboard is protected by Supabase Auth.
-4. A user can add and remove a game.
-5. The backend and database check the tracked-game limit for the current plan.
-6. Adding a game attempts the first Twitch and YouTube scans.
-7. Twitch resolves the game category, fetches current streams, and stores new mentions.
-8. YouTube searches new videos, fetches view statistics, and stores new mentions.
-9. Duplicate platform results update the existing record instead of creating repeated alerts.
-10. Real mentions appear in the dashboard and open the source content.
+## External credentials still required
 
-## Not included yet
+Real platform scanning needs these Supabase Edge Function secrets:
 
-- Stripe Checkout, Billing portal, and webhook processing
-- production UI for Discord webhook management
-- transactional email provider integration
-- Kick worker
-- team invitations
-- weekly reports and CSV export
+```text
+TWITCH_CLIENT_ID
+TWITCH_CLIENT_SECRET
+YOUTUBE_API_KEY
+```
 
-Those are intentionally left for the next stages, after the first real Twitch and YouTube scans are verified.
+Do not commit or paste those values into source control.
+
+The internal cron authentication secret does **not** need to be supplied manually. `docs/CRON_SETUP.sql` generates it inside Postgres, stores it in Vault and stores only a SHA-256 value in the service-role-only runtime settings table.
 
 ## Local setup
 
 Requirements:
 
 - Node.js 22+
-- a Supabase project
 - Supabase CLI
-- Twitch Developer application
-- Google Cloud project with YouTube Data API enabled
 
 ```bash
 cp .env.example .env.local
@@ -56,17 +44,11 @@ npm install
 npm run dev
 ```
 
-The repository contains safe public defaults for the connected GameSignal Supabase project. To override them locally, set:
+The repository contains safe public defaults for the connected GameSignal Supabase project. Override them only when working with another project.
 
-```env
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-```
+## Database migrations
 
-## Database setup
-
-Link the repository to the Supabase project and push migrations:
+The filenames in `supabase/migrations` mirror the live Supabase migration history. After linking a matching project:
 
 ```bash
 supabase login
@@ -74,67 +56,70 @@ supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 ```
 
-For an already-created test account, delete and recreate the account after applying the migration, or manually create its profile/workspace records. The `handle_new_user` trigger handles all new registrations.
+Environment-specific cron schedules are intentionally provisioned separately from schema migrations. See `docs/CRON_SETUP.sql`.
 
-## Auth configuration
+## Auth production configuration
 
-In Supabase Auth URL Configuration, add:
+The hosted Supabase Auth configuration still needs these dashboard values:
 
-- Site URL: `http://localhost:3000` for local development
-- Redirect URL: `http://localhost:3000/auth/callback`
-- production equivalents for the deployed domain
+- Site URL: `https://game-signals.vercel.app`
+- Redirect URL: `https://game-signals.vercel.app/auth/callback`
 
-Enable Google in Supabase Auth Providers only after its OAuth client is configured.
+Email/password auth is the production path today. Google OAuth is intentionally hidden from the interface until the Google provider is configured.
 
-## Edge Function secrets
+## Edge Functions
 
-```bash
-supabase secrets set \
-  TWITCH_CLIENT_ID=... \
-  TWITCH_CLIENT_SECRET=... \
-  YOUTUBE_API_KEY=... \
-  CRON_SECRET=... \
-  DISCORD_USER_AGENT='GameSignal/0.1 (+https://your-domain.example)'
+Workers:
+
+```text
+scan-twitch
+scan-youtube
+notify-discord
+manage-discord
 ```
 
-Deploy the workers:
+All workers use custom authorization because scheduled jobs and authenticated user requests have different trust models. Scheduled requests carry a Vault-managed secret; workers hash the supplied value and compare it with the service-role-only runtime hash.
+
+Platform secrets can be added with the Supabase dashboard or CLI:
+
+```bash
+supabase secrets set TWITCH_CLIENT_ID=...
+supabase secrets set TWITCH_CLIENT_SECRET=...
+supabase secrets set YOUTUBE_API_KEY=...
+```
+
+Then deploy scanners with JWT gateway verification disabled; they validate authorization internally:
 
 ```bash
 supabase functions deploy scan-twitch --no-verify-jwt
 supabase functions deploy scan-youtube --no-verify-jwt
 supabase functions deploy notify-discord --no-verify-jwt
+supabase functions deploy manage-discord --no-verify-jwt
 ```
 
-The workers disable automatic JWT verification because they accept two controlled modes:
+## Monitoring cadence
 
-- an authenticated user's bearer token for a manual single-game scan
-- a private `x-cron-secret` header for scheduled scans
+Already active:
 
-They still validate authorization inside the function before using the service role.
+- Discord delivery: every minute.
 
-## Cron
+Enable after external API credentials exist:
 
-Use `supabase/migrations/202608050002_cron_jobs.sql` as a template after replacing the project reference and secret.
+- Twitch: recommended scheduler every 3 minutes; each game also stores a plan-dependent `next_scan_at`.
+- YouTube: recommended scheduler every 15 minutes; the worker defaults to one due game per run to conserve YouTube quota.
 
-Recommended starting cadence:
+## What still belongs to later product stages
 
-- Twitch: every 3 minutes
-- YouTube: every 15 minutes, one due game per run
-- Discord: every minute
+- Stripe Checkout, webhooks and Billing Portal.
+- Transactional email delivery with a verified sending domain.
+- Kick worker using an official API.
+- Team invitations.
+- Weekly reports / CSV export.
 
-The YouTube worker intentionally defaults to one game per run to conserve quota. Request a quota increase before promising faster scanning across many games.
+## Security
 
-## Deployment
-
-A practical production deployment is:
-
-- Next.js application: Vercel
-- database/auth/functions/cron: Supabase
-- transactional email: Resend, Postmark, or another provider with a verified sending domain
-- payments: Stripe Checkout + Billing
-
-Never add platform secrets or the Supabase service role key to public variables or source control.
-
-## Development workflow
-
-Treat this repository as the single source of truth. Modify full files in the project and return a complete Git commit, instead of copying isolated snippets into an old `index.html`.
+- No service-role key or external API secret is committed to the repository.
+- Discord webhook destinations are server-only.
+- Internal runtime settings are inaccessible to browser roles.
+- Cron plaintext lives only in Supabase Vault.
+- `pg_net` is used with `pg_cron` according to Supabase's scheduling model. The currently installed `pg_net` package is non-relocatable, so Database Advisor may report an extension-namespace warning even though its API lives in the dedicated `net` schema.

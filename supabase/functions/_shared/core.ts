@@ -17,10 +17,34 @@ export function serviceClient(): SupabaseClient {
   return createClient(url, serviceKey, { auth: { persistSession: false } });
 }
 
+let cronHashCache: { value: string; expiresAt: number } | null = null;
+
+async function expectedCronHash() {
+  if (cronHashCache && cronHashCache.expiresAt > Date.now()) return cronHashCache.value;
+
+  const { data, error } = await serviceClient()
+    .from("internal_settings")
+    .select("value")
+    .eq("key", "cron_secret_sha256")
+    .maybeSingle();
+
+  if (error || !data?.value) return null;
+  cronHashCache = { value: String(data.value), expiresAt: Date.now() + 5 * 60_000 };
+  return cronHashCache.value;
+}
+
+async function validCronSecret(value: string | null) {
+  if (!value) return false;
+  const expected = await expectedCronHash();
+  if (!expected) return false;
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hash === expected;
+}
+
 export async function authorizeRequest(request: Request, gameId?: string) {
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  const suppliedCronSecret = request.headers.get("x-cron-secret");
-  if (cronSecret && suppliedCronSecret === cronSecret) {
+  if (await validCronSecret(request.headers.get("x-cron-secret"))) {
     return { internal: true, userId: null };
   }
 

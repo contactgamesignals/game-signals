@@ -66,28 +66,6 @@ export default function AuthCard({ mode, configured }: Props) {
     }
   }
 
-  async function continueWithGoogle() {
-    if (!configured) {
-      setMessage("Add the Supabase environment variables before using authentication.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Google sign-in failed.");
-      setLoading(false);
-    }
-  }
-
   return (
     <main className="auth-page">
       <section className="auth-card">
@@ -114,7 +92,7 @@ export default function AuthCard({ mode, configured }: Props) {
               <input
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Karol"
+                placeholder="Your name"
                 autoComplete="name"
               />
             </label>
@@ -144,9 +122,6 @@ export default function AuthCard({ mode, configured }: Props) {
           </label>
           <button className="btn btn-primary" disabled={loading}>
             {loading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
-          </button>
-          <button className="btn btn-ghost" type="button" onClick={continueWithGoogle} disabled={loading}>
-            Continue with Google
           </button>
         </form>
 
