@@ -8,12 +8,14 @@
 - Database-enforced game limits matching pricing: Free 1, Indie 1, Studio 3, Publisher 10.
 - Concurrent game inserts are serialized per workspace so plan limits cannot be bypassed by a race.
 - Twitch and YouTube scanning Edge Functions, both deployed at v4.
-- Secure Discord webhook management and test notifications; manager deployed at v2.
-- Discord delivery worker deployed at v5 with up to five retry attempts for failed sends.
+- Secure Discord webhook management and test notifications; manager deployed at v3.
+- Discord alerts are enforced as Studio/Publisher features both when configuring a webhook and when the delivery worker runs.
+- Discord delivery worker deployed at v6 with up to five retry attempts for failed sends.
 - Automatic Discord delivery every minute through pg_cron + pg_net, verified with HTTP 200 responses.
 - Cron secret generated inside Postgres, stored in Supabase Vault, and validated by SHA-256 from a service-role-only runtime table.
 - Realtime mention updates in the dashboard.
 - Manual scan cooldown.
+- Publisher-only CSV signal export with spreadsheet formula-injection protection.
 - Production Next.js deployment: https://game-signals.vercel.app
 - GitHub CI: typecheck + production Next.js build.
 

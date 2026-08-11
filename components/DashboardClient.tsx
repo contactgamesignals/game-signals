@@ -230,6 +230,7 @@ export default function DashboardClient({
             </div>
             <div className="dashboard-actions">
               <span className="plan-pill">{plan} plan</span>
+              {plan === "publisher" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
               <button className="btn btn-primary" onClick={() => setModalOpen(true)}>Add game</button>
             </div>
           </div>

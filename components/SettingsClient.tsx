@@ -12,6 +12,8 @@ type DiscordStatus = {
   enabled: boolean;
   minimum_signal_score: number;
   minimum_live_viewers: number;
+  allowed: boolean;
+  plan: string;
 };
 
 export default function SettingsClient({ workspaceId }: Props) {
@@ -44,6 +46,8 @@ export default function SettingsClient({ workspaceId }: Props) {
           enabled: Boolean(data.enabled),
           minimum_signal_score: Number(data.minimum_signal_score ?? 0),
           minimum_live_viewers: Number(data.minimum_live_viewers ?? 0),
+          allowed: Boolean(data.allowed),
+          plan: String(data.plan ?? "free"),
         };
         setStatus(nextStatus);
         setMinimumSignalScore(nextStatus.minimum_signal_score);
@@ -59,6 +63,7 @@ export default function SettingsClient({ workspaceId }: Props) {
 
   async function saveDiscord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!status?.allowed) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -68,12 +73,14 @@ export default function SettingsClient({ workspaceId }: Props) {
         minimum_signal_score: minimumSignalScore,
         minimum_live_viewers: minimumLiveViewers,
       });
-      setStatus({
+      setStatus((current) => ({
         configured: true,
         enabled: true,
         minimum_signal_score: Number(data.minimum_signal_score ?? minimumSignalScore),
         minimum_live_viewers: Number(data.minimum_live_viewers ?? minimumLiveViewers),
-      });
+        allowed: Boolean(data.allowed ?? current?.allowed),
+        plan: String(data.plan ?? current?.plan ?? "free"),
+      }));
       setWebhookUrl("");
       setMessage("Discord webhook saved securely.");
     } catch (saveError) {
@@ -84,6 +91,7 @@ export default function SettingsClient({ workspaceId }: Props) {
   }
 
   async function testDiscord() {
+    if (!status?.allowed) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -104,7 +112,14 @@ export default function SettingsClient({ workspaceId }: Props) {
     setMessage(null);
     try {
       await invoke("delete");
-      setStatus({ configured: false, enabled: false, minimum_signal_score: 0, minimum_live_viewers: 0 });
+      setStatus((current) => ({
+        configured: false,
+        enabled: false,
+        minimum_signal_score: 0,
+        minimum_live_viewers: 0,
+        allowed: current?.allowed ?? false,
+        plan: current?.plan ?? "free",
+      }));
       setMinimumSignalScore(0);
       setMinimumLiveViewers(0);
       setWebhookUrl("");
@@ -116,6 +131,8 @@ export default function SettingsClient({ workspaceId }: Props) {
     }
   }
 
+  const discordLocked = status !== null && !status.allowed;
+
   return (
     <div className="settings-grid">
       <section className="settings-card">
@@ -124,9 +141,17 @@ export default function SettingsClient({ workspaceId }: Props) {
             <h2>Discord alerts</h2>
             <p>The webhook URL is stored server-side and is never returned to the browser after saving.</p>
           </div>
-          <span className="plan-pill">{status?.configured ? "Connected" : status ? "Not connected" : "Checking…"}</span>
+          <span className="plan-pill">
+            {!status ? "Checking…" : !status.allowed ? "Studio+ required" : status.configured ? "Connected" : "Not connected"}
+          </span>
         </div>
 
+        {discordLocked ? (
+          <div className="status-message" style={{ marginBottom: 14 }}>
+            Discord alerts are included in Studio and Publisher. Your current plan is <strong>{status.plan}</strong>.
+            Existing webhook data can still be removed after a downgrade, but alerts will not be delivered.
+          </div>
+        ) : null}
         {message ? <div className="auth-success" style={{ marginBottom: 14 }}>{message}</div> : null}
         {error ? <div className="auth-error" style={{ marginBottom: 14 }}>{error}</div> : null}
 
@@ -141,6 +166,7 @@ export default function SettingsClient({ workspaceId }: Props) {
               placeholder="https://discord.com/api/webhooks/..."
               required
               autoComplete="off"
+              disabled={busy || discordLocked}
             />
             <span className="form-help">Create it in Discord: Server Settings → Integrations → Webhooks.</span>
           </label>
@@ -153,6 +179,7 @@ export default function SettingsClient({ workspaceId }: Props) {
               max="100"
               value={minimumSignalScore}
               onChange={(event) => setMinimumSignalScore(Number(event.target.value))}
+              disabled={busy || discordLocked}
             />
           </label>
           <label>
@@ -164,13 +191,14 @@ export default function SettingsClient({ workspaceId }: Props) {
               step="1"
               value={minimumLiveViewers}
               onChange={(event) => setMinimumLiveViewers(Number(event.target.value))}
+              disabled={busy || discordLocked}
             />
           </label>
           <div className="dashboard-actions">
-            <button className="btn btn-primary" disabled={busy || !webhookUrl.trim()}>
+            <button className="btn btn-primary" disabled={busy || discordLocked || !webhookUrl.trim()}>
               {status?.configured ? "Replace webhook" : "Connect Discord"}
             </button>
-            <button className="btn btn-ghost" type="button" disabled={busy || !status?.configured} onClick={testDiscord}>
+            <button className="btn btn-ghost" type="button" disabled={busy || discordLocked || !status?.configured} onClick={testDiscord}>
               Send test
             </button>
             {status?.configured ? (

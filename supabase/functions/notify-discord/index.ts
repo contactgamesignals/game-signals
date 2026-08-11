@@ -53,8 +53,26 @@ Deno.serve(async (request) => {
     ]);
 
     const mentions = (mentionsData ?? []) as Mention[];
-    const channels = (channelsData ?? []) as Channel[];
-    if (!mentions.length || !channels.length) return json({ ok: true, delivered: 0, retried: 0 });
+    const allChannels = (channelsData ?? []) as Channel[];
+    if (!mentions.length || !allChannels.length) return json({ ok: true, delivered: 0, retried: 0 });
+
+    const workspaceIds = Array.from(new Set(allChannels.map((channel) => channel.workspace_id)));
+    const { data: subscriptionsData } = await supabase
+      .from("subscriptions")
+      .select("workspace_id, plan, status")
+      .in("workspace_id", workspaceIds);
+
+    const allowedWorkspaces = new Set(
+      (subscriptionsData ?? [])
+        .filter((subscription) =>
+          (subscription.status === "active" || subscription.status === "trialing") &&
+          (subscription.plan === "studio" || subscription.plan === "publisher"),
+        )
+        .map((subscription) => subscription.workspace_id as string),
+    );
+
+    const channels = allChannels.filter((channel) => allowedWorkspaces.has(channel.workspace_id));
+    if (!channels.length) return json({ ok: true, delivered: 0, retried: 0 });
 
     const mentionIds = mentions.map((mention) => mention.id);
     const channelIds = channels.map((channel) => channel.id);
