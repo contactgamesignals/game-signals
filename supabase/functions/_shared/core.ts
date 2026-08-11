@@ -1,9 +1,10 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@6";
 
 export const jsonHeaders = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-gamesignal-scheduler",
 };
 
 export function json(data: unknown, status = 200) {
@@ -15,6 +16,41 @@ export function serviceClient(): SupabaseClient {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !serviceKey) throw new Error("Supabase service environment is missing.");
   return createClient(url, serviceKey, { auth: { persistSession: false } });
+}
+
+const githubJwks = createRemoteJWKSet(
+  new URL("https://token.actions.githubusercontent.com/.well-known/jwks"),
+);
+
+const allowedSchedulerWorkflows = new Set([
+  "contactgamesignals/game-signals/.github/workflows/scan-twitch.yml@refs/heads/main",
+  "contactgamesignals/game-signals/.github/workflows/scan-youtube.yml@refs/heads/main",
+]);
+
+async function authorizeGithubScheduler(request: Request) {
+  if (request.headers.get("x-gamesignal-scheduler") !== "github-actions") return null;
+
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) throw new Error("Unauthorized");
+
+  const token = authHeader.slice("Bearer ".length);
+  const { payload } = await jwtVerify(token, githubJwks, {
+    issuer: "https://token.actions.githubusercontent.com",
+    audience: "gamesignal-scheduler",
+    algorithms: ["RS256"],
+  });
+
+  const repository = String(payload.repository ?? "");
+  const ref = String(payload.ref ?? "");
+  const workflowRef = String(payload.workflow_ref ?? "");
+  const eventName = String(payload.event_name ?? "");
+
+  if (repository !== "contactgamesignals/game-signals") throw new Error("Forbidden");
+  if (ref !== "refs/heads/main") throw new Error("Forbidden");
+  if (!allowedSchedulerWorkflows.has(workflowRef)) throw new Error("Forbidden");
+  if (!["schedule", "push", "workflow_dispatch"].includes(eventName)) throw new Error("Forbidden");
+
+  return { internal: true, userId: null, scheduler: "github-actions" as const };
 }
 
 let cronHashCache: { value: string; expiresAt: number } | null = null;
@@ -44,8 +80,15 @@ async function validCronSecret(value: string | null) {
 }
 
 export async function authorizeRequest(request: Request, gameId?: string) {
+  try {
+    const githubScheduler = await authorizeGithubScheduler(request);
+    if (githubScheduler) return githubScheduler;
+  } catch (error) {
+    if (request.headers.get("x-gamesignal-scheduler") === "github-actions") throw error;
+  }
+
   if (await validCronSecret(request.headers.get("x-cron-secret"))) {
-    return { internal: true, userId: null };
+    return { internal: true, userId: null, scheduler: "supabase-cron" as const };
   }
 
   const authHeader = request.headers.get("Authorization");
@@ -65,7 +108,7 @@ export async function authorizeRequest(request: Request, gameId?: string) {
     if (!game) throw new Error("Forbidden");
   }
 
-  return { internal: false, userId: data.user.id };
+  return { internal: false, userId: data.user.id, scheduler: null };
 }
 
 export function chunks<T>(items: T[], size: number) {
