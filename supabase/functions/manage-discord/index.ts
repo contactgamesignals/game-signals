@@ -29,9 +29,7 @@ Deno.serve(async (request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const authHeader = request.headers.get("Authorization");
-    if (!supabaseUrl || !anonKey || !serviceKey || !authHeader) {
-      return json({ error: "Unauthorized." }, 401);
-    }
+    if (!supabaseUrl || !anonKey || !serviceKey || !authHeader) return json({ error: "Unauthorized." }, 401);
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -113,27 +111,22 @@ Deno.serve(async (request) => {
     const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));
     const minimumLiveViewers = Math.max(0, Math.round(Number(body.minimum_live_viewers ?? 0)));
 
-    if (existing) {
-      const { error } = await service.from("notification_channels").update({
-        destination: webhook,
-        enabled: true,
-        minimum_signal_score: minimumSignalScore,
-        minimum_live_viewers: minimumLiveViewers,
-      }).eq("id", existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await service.from("notification_channels").insert({
-        workspace_id: body.workspace_id,
-        type: "discord",
-        destination: webhook,
-        enabled: true,
-        minimum_signal_score: minimumSignalScore,
-        minimum_live_viewers: minimumLiveViewers,
-      });
-      if (error) throw error;
-    }
+    const { error: upsertError } = await service.from("notification_channels").upsert({
+      workspace_id: body.workspace_id,
+      type: "discord",
+      destination: webhook,
+      enabled: true,
+      minimum_signal_score: minimumSignalScore,
+      minimum_live_viewers: minimumLiveViewers,
+    }, { onConflict: "workspace_id,type" });
+    if (upsertError) throw upsertError;
 
-    return json({ ok: true, configured: true, minimum_signal_score: minimumSignalScore, minimum_live_viewers: minimumLiveViewers });
+    return json({
+      ok: true,
+      configured: true,
+      minimum_signal_score: minimumSignalScore,
+      minimum_live_viewers: minimumLiveViewers,
+    });
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error." }, 500);
