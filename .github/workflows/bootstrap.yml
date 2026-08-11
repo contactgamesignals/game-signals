@@ -1,0 +1,39 @@
+name: Bootstrap Game Signals source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.bootstrap/gamesignal.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Expand application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -o .bootstrap/gamesignal.zip -d .
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+      - name: Commit application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Game Signals Bot"
+          git config user.email "contact.gamesignals@gmail.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "Bootstrap Game Signals application"
+          git push origin main
