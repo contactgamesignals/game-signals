@@ -1,0 +1,1 @@
+export { isSupabaseConfigured } from "./config";
