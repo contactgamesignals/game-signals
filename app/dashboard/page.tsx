@@ -73,7 +73,7 @@ export default async function DashboardPage() {
   if (gameIds.length) {
     const { data: mentionsData } = await supabase
       .from("mentions")
-      .select("id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, signal_score, games(title)")
+      .select("id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games(title)")
       .in("game_id", gameIds)
       .order("detected_at", { ascending: false })
       .limit(100);
