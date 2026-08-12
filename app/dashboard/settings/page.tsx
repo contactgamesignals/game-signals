@@ -30,7 +30,7 @@ export default async function SettingsPage() {
   return (
     <div className="app-shell">
       <header className="app-topbar">
-        <Link href="/" className="brand"><span className="brand-mark" /><span>GameSignal</span></Link>
+        <Link href="/dashboard" className="brand"><span className="brand-mark" /><span>GameSignal</span></Link>
         <div className="app-topbar-right">{data.user.email}</div>
       </header>
       <main className="dashboard-main" style={{ maxWidth: 1180, margin: "0 auto" }}>
