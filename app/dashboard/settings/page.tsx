@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import SettingsClient from "@/components/SettingsClient";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { normalizePlan } from "@/lib/plans";
+import { isStripeServerConfigured, isStripeWebhookConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,12 @@ export default async function SettingsPage() {
     .maybeSingle();
   if (!membership) redirect("/dashboard");
 
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("plan, status, stripe_customer_id")
+    .eq("workspace_id", membership.workspace_id)
+    .maybeSingle();
+
   return (
     <div className="app-shell">
       <header className="app-topbar">
@@ -28,10 +36,16 @@ export default async function SettingsPage() {
       </header>
       <main className="dashboard-main" style={{ maxWidth: 1180, margin: "0 auto" }}>
         <div className="dashboard-head">
-          <div><div className="kicker">Workspace</div><h1>Settings</h1><p>Notification and integration configuration.</p></div>
+          <div><div className="kicker">Workspace</div><h1>Settings</h1><p>Notification, billing, and integration configuration.</p></div>
           <Link href="/dashboard" className="btn btn-ghost">← Dashboard</Link>
         </div>
-        <SettingsClient workspaceId={membership.workspace_id as string} />
+        <SettingsClient
+          workspaceId={membership.workspace_id as string}
+          currentPlan={normalizePlan(subscription?.plan)}
+          subscriptionStatus={subscription?.status ?? "trialing"}
+          billingConfigured={isStripeServerConfigured() && isStripeWebhookConfigured()}
+          hasStripeCustomer={Boolean(subscription?.stripe_customer_id)}
+        />
       </main>
     </div>
   );
