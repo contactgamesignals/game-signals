@@ -306,6 +306,36 @@ export default function DashboardClient({
             </div>
           ) : null}
 
+          {games.length === 0 ? (
+            <section className="dashboard-panel" style={{ marginBottom: 20 }}>
+              <div className="dashboard-panel-head">
+                <div>
+                  <div className="panel-title">Getting started</div>
+                  <h2>Start monitoring your first game</h2>
+                </div>
+                <span className="plan-pill">Step 1 of 3</span>
+              </div>
+              <div className="dashboard-panel-body">
+                <div className="settings-row" style={{ borderTop: 0 }}>
+                  <div><strong>1. Add a game</strong><p>Enter the title and optional aliases so GameSignal knows what to look for.</p></div>
+                  <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
+                </div>
+                <div className="settings-row">
+                  <div><strong>2. Automatic scans start</strong><p>YouTube and Twitch checks are queued automatically. You do not need to press a scan button.</p></div>
+                  <span className="plan-pill">Automatic</span>
+                </div>
+                <div className="settings-row">
+                  <div><strong>3. Configure alerts</strong><p>When you are ready, open Settings to manage your plan and connect Discord alerts.</p></div>
+                  <Link className="btn btn-ghost" href="/dashboard/settings">Open Settings</Link>
+                </div>
+              </div>
+            </section>
+          ) : mentions.length === 0 ? (
+            <div className="status-message">
+              Your monitor is active and the first platform scans are queued. New YouTube videos and Twitch streams will appear here automatically when matching signals are found.
+            </div>
+          ) : null}
+
           <section className="dashboard-grid">
             <div className="metric-card"><span>New signals</span><b>{mentions.length}</b></div>
             <div className="metric-card"><span>Live now</span><b>{liveNow}</b></div>
