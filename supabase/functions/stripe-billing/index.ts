@@ -16,6 +16,7 @@ const lookupKeys = {
 
 type PaidPlan = keyof typeof lookupKeys;
 type Period = "monthly" | "yearly";
+type StripeObject = Record<string, unknown>;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
@@ -41,12 +42,44 @@ async function stripeRequest(path: string, options: { method?: "GET" | "POST"; b
     },
     body: options.body,
   });
-  const payload = await response.json() as Record<string, unknown>;
+  const payload = await response.json() as StripeObject;
   if (!response.ok) {
-    const error = payload.error && typeof payload.error === "object" ? payload.error as Record<string, unknown> : null;
+    const error = payload.error && typeof payload.error === "object" ? payload.error as StripeObject : null;
     throw new Error(typeof error?.message === "string" ? error.message : `Stripe HTTP ${response.status}`);
   }
   return payload;
+}
+
+async function ensurePortalConfiguration() {
+  const list = await stripeRequest("/billing_portal/configurations?active=true&limit=100");
+  const configurations = Array.isArray(list.data) ? list.data : [];
+  const existing = configurations.find((value) => {
+    if (!value || typeof value !== "object") return false;
+    const metadata = (value as StripeObject).metadata;
+    return metadata && typeof metadata === "object" && (metadata as StripeObject).gamesignal === "true";
+  }) as StripeObject | undefined;
+
+  if (typeof existing?.id === "string") return existing.id;
+
+  const params = new URLSearchParams();
+  params.set("business_profile[headline]", "Manage your GameSignal subscription");
+  params.set("default_return_url", `${SITE_URL}/dashboard/settings`);
+  params.set("features[customer_update][enabled]", "true");
+  params.append("features[customer_update][allowed_updates][]", "email");
+  params.append("features[customer_update][allowed_updates][]", "name");
+  params.append("features[customer_update][allowed_updates][]", "address");
+  params.set("features[invoice_history][enabled]", "true");
+  params.set("features[payment_method_update][enabled]", "true");
+  params.set("features[subscription_cancel][enabled]", "true");
+  params.set("features[subscription_cancel][mode]", "at_period_end");
+  params.set("features[subscription_cancel][proration_behavior]", "none");
+  params.set("features[subscription_update][enabled]", "false");
+  params.set("login_page[enabled]", "false");
+  params.set("metadata[gamesignal]", "true");
+
+  const created = await stripeRequest("/billing_portal/configurations", { method: "POST", body: params });
+  if (typeof created.id !== "string") throw new Error("Stripe did not create a billing portal configuration.");
+  return created.id;
 }
 
 Deno.serve(async (request) => {
@@ -108,8 +141,10 @@ Deno.serve(async (request) => {
 
     if (body.action === "portal") {
       if (!subscription.stripe_customer_id) return json({ error: "No Stripe customer exists for this workspace yet." }, 409);
+      const configuration = await ensurePortalConfiguration();
       const params = new URLSearchParams();
       params.set("customer", String(subscription.stripe_customer_id));
+      params.set("configuration", configuration);
       params.set("return_url", `${SITE_URL}/dashboard/settings`);
       const session = await stripeRequest("/billing_portal/sessions", { method: "POST", body: params });
       if (typeof session.url !== "string") throw new Error("Stripe did not return a portal URL.");
@@ -130,7 +165,7 @@ Deno.serve(async (request) => {
     const lookupKey = lookupKeys[body.plan][body.period];
     const priceList = await stripeRequest(`/prices?active=true&limit=1&lookup_keys[]=${encodeURIComponent(lookupKey)}`);
     const prices = Array.isArray(priceList.data) ? priceList.data : [];
-    const price = prices[0] && typeof prices[0] === "object" ? prices[0] as Record<string, unknown> : null;
+    const price = prices[0] && typeof prices[0] === "object" ? prices[0] as StripeObject : null;
     if (!price || typeof price.id !== "string") throw new Error(`Stripe price ${lookupKey} was not found.`);
 
     const params = new URLSearchParams();
