@@ -11,6 +11,7 @@ markup = replace(
   "GameSignal detects new YouTube videos plus live streams on Twitch and Kick. Instead of manually searching the web, you get one clean feed and alerts when it actually matters.",
   "GameSignal detects new YouTube videos and live streams on Twitch. Instead of manually searching the web, you get one clean feed of creator signals. Kick monitoring is planned, pending KICK developer approval.",
 );
+markup = replace(markup, "No credit card required. Add your game title and try the interactive monitoring demo.", "Closed beta. No real payments are accepted yet; billing currently uses Stripe sandbox.");
 markup = replace(markup, '<div class="platform"><span class="dot ki"></span>Kick</div>', '<div class="platform"><span class="dot ki"></span>Kick · coming soon</div>');
 markup = replace(markup, '<div class="platform">Email + Discord</div>', '<div class="platform">Discord · Email coming soon</div>');
 markup = replace(markup, '<div class="system-state"><i></i> 3 sources online</div>', '<div class="system-state"><i></i> 2 sources online</div>');
@@ -32,6 +33,11 @@ markup = replace(markup, '<div class="source-switch">Email <span class="switch o
 markup = replace(markup, '<div class="notice">UI demo. A production version still needs platform APIs and a backend.</div>', '<div class="notice">Interactive demo. Production monitoring is live for YouTube and Twitch; Kick and email delivery are still being prepared.</div>');
 markup = replace(markup, '<button class="tab" data-filter="kick">Kick</button>', '<button class="tab" data-filter="kick" disabled style="opacity:.55">Kick · soon</button>');
 markup = replace(markup, '<div class="result" data-source="kick" data-viewers="76"><div class="ico k">K</div><div><div class="result-title">RavenByte plays AFTERBLAST for the first time</div><div class="result-sub">Kick · 76 viewers</div></div><span class="badge live">LIVE</span><div class="result-time">51 min</div></div>', '');
+markup = replace(
+  markup,
+  "A simple subscription model based on the number of tracked games and how quickly you want alerts to arrive.",
+  "Closed beta pricing preview. Checkout currently uses Stripe sandbox and does not charge real money.",
+);
 
 markup = replace(
   markup,
@@ -58,11 +64,12 @@ markup = replace(
   "Yes. In the production version you will be able to cancel from account settings while keeping access until the end of the paid period.",
   "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period.",
 );
+markup = replace(markup, '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Privacy Policy · Terms · Contact</div></footer>', '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Closed beta · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></footer>');
 markup = replace(markup, '<div class="notification"><strong>New creator detected</strong><p>RavenByte is streaming your game on Kick for the first time.</p></div>', '');
 markup = replace(markup, '<button type="button" class="source-check selected">Kick</button>', '<button type="button" class="source-check" aria-disabled="true" style="opacity:.55">Kick · soon</button>');
 markup = replace(markup, '<div class="notice">Interactive frontend demo. A production version still needs APIs, a database, auth, and payments.</div>', '<div class="notice">After signup, YouTube and Twitch monitoring starts automatically. Kick and email delivery are coming soon.</div>');
 markup = replace(markup, '<div class="notice">In production this form should be connected to your authentication system.</div>', '<div class="notice">Account access is handled by the live GameSignal authentication system.</div>');
 markup = replace(markup, '<p style="color:#9099ad">In production this step would create a checkout session and activate the selected plan after payment.</p>', '<p style="color:#9099ad">Paid plans use Stripe-hosted Checkout and can be managed later in Stripe Customer Portal.</p>');
-markup = replace(markup, '<div class="notice">This demo does not process any payments.</div>', '<div class="notice">The public landing preview is interactive; billing is handled after account signup.</div>');
+markup = replace(markup, '<div class="notice">This demo does not process any payments.</div>', '<div class="notice">Closed beta billing currently uses Stripe sandbox and does not charge real money.</div>');
 
 export const landingRealityMarkup = markup;
