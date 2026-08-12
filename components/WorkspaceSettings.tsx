@@ -12,6 +12,13 @@ type Props = {
   initialWorkspaceName: string;
 };
 
+type DeleteAccountResponse = {
+  ok?: boolean;
+  error?: string;
+  code?: string;
+  requires_billing_portal?: boolean;
+};
+
 export default function WorkspaceSettings({
   userId,
   email,
@@ -24,6 +31,9 @@ export default function WorkspaceSettings({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,6 +62,28 @@ export default function WorkspaceSettings({
       setError(saveError instanceof Error ? saveError.message : "Could not save workspace settings.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (deleteConfirmation !== "DELETE") return;
+    if (!window.confirm("Permanently delete your GameSignal account and workspace data? This cannot be undone.")) return;
+
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const supabase = createClient();
+      const { data, error: functionError } = await supabase.functions.invoke("delete-account", {
+        body: { confirmation: deleteConfirmation },
+      });
+      if (functionError) throw new Error(functionError.message);
+      const result = (data ?? {}) as DeleteAccountResponse;
+      if (!result.ok) throw new Error(result.error ?? "Account deletion is not available yet.");
+      await supabase.auth.signOut();
+      window.location.assign("/");
+    } catch (accountError) {
+      setDeleteError(accountError instanceof Error ? accountError.message : "Could not delete the account.");
+      setDeleteBusy(false);
     }
   }
 
@@ -100,6 +132,42 @@ export default function WorkspaceSettings({
         <div className="settings-row">
           <span>Email</span>
           <a href="mailto:contact.gamesignals@gmail.com">contact.gamesignals@gmail.com</a>
+        </div>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
+          <div>
+            <h2>Danger zone</h2>
+            <p>Permanently delete your GameSignal account and owned workspace data.</p>
+          </div>
+          <span className="plan-pill">Permanent</span>
+        </div>
+
+        <div className="status-message" style={{ marginBottom: 14 }}>
+          Paid subscriptions must be cancelled and fully ended before account deletion. If the workspace has other members, deletion is blocked to protect their data.
+        </div>
+        {deleteError ? <div className="auth-error" style={{ marginBottom: 14 }}>{deleteError}</div> : null}
+        <label>
+          Type DELETE to confirm
+          <input
+            className="app-input"
+            value={deleteConfirmation}
+            onChange={(event) => setDeleteConfirmation(event.target.value)}
+            placeholder="DELETE"
+            autoComplete="off"
+            disabled={deleteBusy}
+          />
+        </label>
+        <div className="dashboard-actions" style={{ marginTop: 14 }}>
+          <button
+            type="button"
+            className="icon-btn danger"
+            disabled={deleteBusy || deleteConfirmation !== "DELETE"}
+            onClick={deleteAccount}
+          >
+            {deleteBusy ? "Deleting…" : "Delete account permanently"}
+          </button>
         </div>
       </section>
     </>
