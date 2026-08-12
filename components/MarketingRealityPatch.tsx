@@ -41,6 +41,14 @@ export default function MarketingRealityPatch() {
         element.style.display = "none";
       });
 
+      const kickSourceCheck = findTextElement(".source-check", "Kick");
+      if (kickSourceCheck) {
+        kickSourceCheck.classList.remove("selected");
+        kickSourceCheck.setAttribute("aria-disabled", "true");
+        kickSourceCheck.style.opacity = "0.55";
+        kickSourceCheck.title = "Coming soon, pending KICK developer approval";
+      }
+
       const kickToggleRow = findTextElement(".source-switch", "Kick");
       if (kickToggleRow) {
         const toggle = kickToggleRow.querySelector<HTMLElement>('[data-source-toggle="kick"]');
