@@ -1,0 +1,2 @@
+-- Historical production data cleanup.
+-- Superseded by 20260812193657_keep_email_notifications_disabled_until_domain_verified.sql.
