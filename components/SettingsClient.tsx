@@ -347,7 +347,7 @@ export default function SettingsClient({
               min="0"
               step="1"
               value={minimumLiveViewers}
-              onChange={(event) => setMinimumLiveViewers(Number(event.target.value))
+              onChange={(event) => setMinimumLiveViewers(Number(event.target.value))}
               disabled={busy || discordLocked}
             />
           </label>
