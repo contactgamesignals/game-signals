@@ -1,0 +1,4 @@
+-- Historical one-off production data cleanup after the Resend test.
+-- Intentionally no-op when replayed: it targeted one temporary test workspace only.
+-- The generic production policy is captured by the later migration
+-- 20260812193657_keep_email_notifications_disabled_until_domain_verified.sql.
