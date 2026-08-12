@@ -31,7 +31,7 @@ Deno.serve(async (request) => {
 
     const body = await request.json().catch(() => ({})) as { confirmation?: string };
     if (body.confirmation !== "DELETE") {
-      return json({ error: "Type DELETE to confirm account deletion." }, 400);
+      return json({ ok: false, error: "Type DELETE to confirm account deletion." });
     }
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
@@ -60,20 +60,22 @@ Deno.serve(async (request) => {
 
       if ((memberCount ?? 0) > 1) {
         return json({
+          ok: false,
           error: "This workspace has other members. Remove or transfer them before deleting the owner account.",
           code: "workspace_has_members",
-        }, 409);
+        });
       }
 
       if (subscription?.stripe_subscription_id && subscription.status !== "canceled") {
         return json({
+          ok: false,
           error: subscription.cancel_at_period_end
             ? "Your paid subscription is scheduled to end. Delete the account after the paid period finishes."
             : "Cancel the paid subscription in Stripe Customer Portal before deleting the account.",
           code: "active_subscription",
           requires_billing_portal: true,
           current_period_end: subscription.current_period_end,
-        }, 409);
+        });
       }
     }
 
