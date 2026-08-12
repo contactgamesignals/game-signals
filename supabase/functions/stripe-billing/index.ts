@@ -7,6 +7,7 @@ const headers = {
 };
 
 const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.vercel.app";
+const PORTAL_CONFIGURATION_VERSION = "2";
 
 const lookupKeys = {
   indie: { monthly: "gamesignal_indie_monthly", yearly: "gamesignal_indie_yearly" },
@@ -81,17 +82,40 @@ async function stripeRequest(path: string, options: { method?: "GET" | "POST"; b
   return payload;
 }
 
+async function getPortalProducts() {
+  const grouped = new Map<string, string[]>();
+
+  for (const lookupKey of allLookupKeys) {
+    const list = await stripeRequest(`/prices?active=true&limit=1&lookup_keys[]=${encodeURIComponent(lookupKey)}`);
+    const data = Array.isArray(list.data) ? list.data : [];
+    const price = data[0] && typeof data[0] === "object" ? data[0] as StripeObject : null;
+    if (!price || typeof price.id !== "string") throw new Error(`Stripe price ${lookupKey} was not found.`);
+    const productId = typeof price.product === "string"
+      ? price.product
+      : price.product && typeof price.product === "object" && typeof (price.product as StripeObject).id === "string"
+        ? String((price.product as StripeObject).id)
+        : null;
+    if (!productId) throw new Error(`Stripe product for ${lookupKey} was not found.`);
+    grouped.set(productId, [...(grouped.get(productId) ?? []), price.id]);
+  }
+
+  return Array.from(grouped.entries()).map(([product, prices]) => ({ product, prices }));
+}
+
 async function ensurePortalConfiguration() {
   const list = await stripeRequest("/billing_portal/configurations?active=true&limit=100");
   const configurations = Array.isArray(list.data) ? list.data : [];
   const existing = configurations.find((value) => {
     if (!value || typeof value !== "object") return false;
     const metadata = (value as StripeObject).metadata;
-    return metadata && typeof metadata === "object" && (metadata as StripeObject).gamesignal === "true";
+    return metadata && typeof metadata === "object" &&
+      (metadata as StripeObject).gamesignal === "true" &&
+      (metadata as StripeObject).gamesignal_version === PORTAL_CONFIGURATION_VERSION;
   }) as StripeObject | undefined;
 
   if (typeof existing?.id === "string") return existing.id;
 
+  const portalProducts = await getPortalProducts();
   const params = new URLSearchParams();
   params.set("business_profile[headline]", "Manage your GameSignal subscription");
   params.set("default_return_url", `${SITE_URL}/dashboard/settings`);
@@ -104,9 +128,21 @@ async function ensurePortalConfiguration() {
   params.set("features[subscription_cancel][enabled]", "true");
   params.set("features[subscription_cancel][mode]", "at_period_end");
   params.set("features[subscription_cancel][proration_behavior]", "none");
-  params.set("features[subscription_update][enabled]", "false");
+  params.set("features[subscription_update][enabled]", "true");
+  params.append("features[subscription_update][default_allowed_updates][]", "price");
+  params.set("features[subscription_update][proration_behavior]", "create_prorations");
+  params.set("features[subscription_update][billing_cycle_anchor]", "unchanged");
+
+  portalProducts.forEach((entry, index) => {
+    params.set(`features[subscription_update][products][${index}][product]`, entry.product);
+    entry.prices.forEach((priceId) => {
+      params.append(`features[subscription_update][products][${index}][prices][]`, priceId);
+    });
+  });
+
   params.set("login_page[enabled]", "false");
   params.set("metadata[gamesignal]", "true");
+  params.set("metadata[gamesignal_version]", PORTAL_CONFIGURATION_VERSION);
 
   const created = await stripeRequest("/billing_portal/configurations", { method: "POST", body: params });
   if (typeof created.id !== "string") throw new Error("Stripe did not create a billing portal configuration.");
