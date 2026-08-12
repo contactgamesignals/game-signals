@@ -73,15 +73,14 @@ export async function PATCH(
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const editingConfig = typeof body.title === "string";
-  if (!editingConfig && typeof body.enabled !== "boolean") {
-    return NextResponse.json({ error: "No supported update was provided." }, { status: 400 });
-  }
+  if (typeof body.title !== "string") {
+    if (typeof body.enabled !== "boolean") {
+      return NextResponse.json({ error: "No supported update was provided." }, { status: 400 });
+    }
 
-  if (!editingConfig) {
     const { data: game, error } = await supabase
       .from("games")
-      .update({ enabled: body.enabled as boolean })
+      .update({ enabled: body.enabled })
       .eq("id", id)
       .select(GAME_SELECT)
       .maybeSingle();
