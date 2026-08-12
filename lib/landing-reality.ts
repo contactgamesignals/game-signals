@@ -1,10 +1,10 @@
-import { landingMarkup } from "@/lib/landing-markup";
+import { landingMarkup as baseLandingMarkup } from "@/lib/landing-markup-base";
 
 function replace(source: string, before: string, after: string) {
   return source.includes(before) ? source.replace(before, after) : source;
 }
 
-let markup = landingMarkup;
+let markup = baseLandingMarkup;
 
 markup = replace(
   markup,
