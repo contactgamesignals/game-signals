@@ -1,7 +1,23 @@
 import { authorizeRequest, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
 
 type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null };
-type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
+type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; description?: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
+type VideoDetail = { views: number; categoryId: string | null; description: string; tags: string[] };
+
+const GAME_CONTEXT_HINTS = [
+  "game", "gameplay", "gaming", "video game", "videogame", "steam", "roguelike", "roguelite",
+  "fps", "shooter", "playthrough", "walkthrough", "let's play", "lets play", "review", "demo",
+  "early access", "indie game", "boss fight", "speedrun",
+];
+
+function looksGameRelated(item: SearchItem, detail: VideoDetail | undefined) {
+  if (!detail) return false;
+  if (detail.categoryId === "20") return true;
+  const context = [item.snippet.title, item.snippet.description ?? "", detail.description, ...detail.tags]
+    .join(" ")
+    .toLocaleLowerCase();
+  return GAME_CONTEXT_HINTS.some((hint) => context.includes(hint));
+}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
@@ -73,23 +89,38 @@ Deno.serve(async (request) => {
       const searchPayload = await searchResponse.json() as { items?: SearchItem[] };
       const items = searchPayload.items ?? [];
       const ids = items.map((item) => item.id.videoId).filter(Boolean);
-      const statistics = new Map<string, number>();
+      const details = new Map<string, VideoDetail>();
       if (ids.length) {
-        const statsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-        statsUrl.searchParams.set("part", "statistics");
-        statsUrl.searchParams.set("id", ids.join(","));
-        statsUrl.searchParams.set("key", apiKey);
-        const statsResponse = await fetch(statsUrl);
-        if (statsResponse.ok) {
-          const statsPayload = await statsResponse.json() as { items?: Array<{ id: string; statistics?: { viewCount?: string } }> };
-          for (const item of statsPayload.items ?? []) statistics.set(item.id, Number(item.statistics?.viewCount ?? 0));
+        const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+        detailsUrl.searchParams.set("part", "statistics,snippet");
+        detailsUrl.searchParams.set("id", ids.join(","));
+        detailsUrl.searchParams.set("key", apiKey);
+        const detailsResponse = await fetch(detailsUrl);
+        if (detailsResponse.ok) {
+          const detailsPayload = await detailsResponse.json() as { items?: Array<{ id: string; statistics?: { viewCount?: string }; snippet?: { categoryId?: string; description?: string; tags?: string[] } }> };
+          for (const item of detailsPayload.items ?? []) {
+            details.set(item.id, {
+              views: Number(item.statistics?.viewCount ?? 0),
+              categoryId: item.snippet?.categoryId ?? null,
+              description: item.snippet?.description ?? "",
+              tags: item.snippet?.tags ?? [],
+            });
+          }
         }
       }
 
       let gameMentions = 0;
+      let filteredOut = 0;
       for (const item of items) {
         const videoId = item.id.videoId;
-        const views = statistics.get(videoId) ?? 0;
+        const detail = details.get(videoId);
+        if (!looksGameRelated(item, detail)) {
+          filteredOut += 1;
+          await supabase.from("mentions").delete().eq("game_id", game.id).eq("platform", "youtube").eq("external_id", videoId);
+          continue;
+        }
+
+        const views = detail?.views ?? 0;
         const thumbnail = item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? null;
         const { error: upsertError } = await supabase.from("mentions").upsert({
           game_id: game.id,
@@ -115,7 +146,7 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + youtubeCadenceMinutes(plan) * 60_000).toISOString();
       await Promise.all([
         supabase.from("games").update({ youtube_last_scanned_at: now.toISOString(), youtube_next_scan_at: next }).eq("id", game.id),
-        supabase.from("scan_runs").insert({ game_id: game.id, platform: "youtube", status: "success", started_at: runStarted.toISOString(), finished_at: now.toISOString(), results_count: gameMentions, metadata: { query: searchTerm, published_after: publishedAfter } }),
+        supabase.from("scan_runs").insert({ game_id: game.id, platform: "youtube", status: "success", started_at: runStarted.toISOString(), finished_at: now.toISOString(), results_count: gameMentions, metadata: { query: searchTerm, published_after: publishedAfter, filtered_out: filteredOut } }),
       ]);
     }
 
