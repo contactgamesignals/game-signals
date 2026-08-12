@@ -21,6 +21,7 @@ export type DashboardMention = {
   view_count: number | null;
   published_at: string | null;
   detected_at: string;
+  last_seen_at: string | null;
   signal_score: number;
   games: { title: string } | { title: string }[] | null;
 };
