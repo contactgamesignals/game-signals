@@ -2,9 +2,15 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
+import { PLAN_LABELS } from "@/lib/plans";
 
 type Props = {
   workspaceId: string;
+  currentPlan: PlanName;
+  subscriptionStatus: string;
+  billingConfigured: boolean;
+  hasStripeCustomer: boolean;
 };
 
 type DiscordStatus = {
@@ -16,7 +22,30 @@ type DiscordStatus = {
   plan: string;
 };
 
-export default function SettingsClient({ workspaceId }: Props) {
+type BillingResponse = {
+  url?: string;
+  error?: string;
+  usePortal?: boolean;
+};
+
+const PAID_PLANS: Array<{
+  plan: PaidPlanName;
+  monthly: string;
+  yearly: string;
+  summary: string;
+}> = [
+  { plan: "indie", monthly: "24.50 PLN / mo", yearly: "245 PLN / yr", summary: "1 tracked game" },
+  { plan: "studio", monthly: "64.50 PLN / mo", yearly: "645 PLN / yr", summary: "Up to 3 games + Discord" },
+  { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 games + export" },
+];
+
+export default function SettingsClient({
+  workspaceId,
+  currentPlan,
+  subscriptionStatus,
+  billingConfigured,
+  hasStripeCustomer,
+}: Props) {
   const [status, setStatus] = useState<DiscordStatus | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [minimumSignalScore, setMinimumSignalScore] = useState(0);
@@ -24,6 +53,14 @@ export default function SettingsClient({ workspaceId }: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  const effectivePlan =
+    subscriptionStatus === "active" || subscriptionStatus === "trialing" ? currentPlan : "free";
+  const hasPaidPlan = effectivePlan !== "free";
 
   async function invoke(action: "status" | "upsert" | "delete" | "test", extra: Record<string, unknown> = {}) {
     const supabase = createClient();
@@ -56,6 +93,16 @@ export default function SettingsClient({ workspaceId }: Props) {
         if (active) setError(statusError instanceof Error ? statusError.message : "Could not load Discord settings.");
       }
     })();
+
+    const billingResult = new URLSearchParams(window.location.search).get("billing");
+    if (billingResult === "success") {
+      setBillingMessage("Checkout completed. Stripe is synchronizing your subscription now.");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (billingResult === "cancelled") {
+      setBillingMessage("Checkout was cancelled. No changes were made.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
     return () => { active = false; };
     // workspaceId is stable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,10 +178,120 @@ export default function SettingsClient({ workspaceId }: Props) {
     }
   }
 
+  async function openBillingPortal() {
+    setBillingBusy(true);
+    setBillingError(null);
+    setBillingMessage(null);
+    try {
+      const response = await fetch("/api/billing/portal", { method: "POST" });
+      const data = (await response.json()) as BillingResponse;
+      if (!response.ok || !data.url) throw new Error(data.error ?? "Could not open billing portal.");
+      window.location.assign(data.url);
+    } catch (portalError) {
+      setBillingError(portalError instanceof Error ? portalError.message : "Could not open billing portal.");
+      setBillingBusy(false);
+    }
+  }
+
+  async function startCheckout(plan: PaidPlanName) {
+    if (!billingConfigured || hasPaidPlan) return;
+    setBillingBusy(true);
+    setBillingError(null);
+    setBillingMessage(null);
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, period: billingPeriod }),
+      });
+      const data = (await response.json()) as BillingResponse;
+      if (data.usePortal) {
+        setBillingBusy(false);
+        await openBillingPortal();
+        return;
+      }
+      if (!response.ok || !data.url) throw new Error(data.error ?? "Could not create Checkout session.");
+      window.location.assign(data.url);
+    } catch (checkoutError) {
+      setBillingError(checkoutError instanceof Error ? checkoutError.message : "Could not create Checkout session.");
+      setBillingBusy(false);
+    }
+  }
+
   const discordLocked = status !== null && !status.allowed;
 
   return (
     <div className="settings-grid">
+      <section className="settings-card">
+        <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
+          <div>
+            <h2>Billing</h2>
+            <p>Stripe-hosted Checkout for new subscriptions and Stripe Customer Portal for plan changes or cancellation.</p>
+          </div>
+          <span className="plan-pill">
+            {PLAN_LABELS[effectivePlan]} · {subscriptionStatus}
+          </span>
+        </div>
+
+        {!billingConfigured ? (
+          <div className="status-message" style={{ marginBottom: 14 }}>
+            Billing code is deployed, but server secrets still need to be added before Checkout can be enabled.
+          </div>
+        ) : null}
+        {billingMessage ? <div className="auth-success" style={{ marginBottom: 14 }}>{billingMessage}</div> : null}
+        {billingError ? <div className="auth-error" style={{ marginBottom: 14 }}>{billingError}</div> : null}
+
+        <div className="dashboard-actions" style={{ marginBottom: 14 }}>
+          <button
+            type="button"
+            className={billingPeriod === "monthly" ? "btn btn-primary" : "btn btn-ghost"}
+            onClick={() => setBillingPeriod("monthly")}
+            disabled={billingBusy || hasPaidPlan}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            className={billingPeriod === "yearly" ? "btn btn-primary" : "btn btn-ghost"}
+            onClick={() => setBillingPeriod("yearly")}
+            disabled={billingBusy || hasPaidPlan}
+          >
+            Yearly · 2 months free
+          </button>
+          {hasStripeCustomer ? (
+            <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured} onClick={openBillingPortal}>
+              Manage billing
+            </button>
+          ) : null}
+        </div>
+
+        <div className="form-grid">
+          {PAID_PLANS.map((item) => {
+            const isCurrent = effectivePlan === item.plan;
+            return (
+              <div className="settings-row" key={item.plan} style={{ alignItems: "center" }}>
+                <div>
+                  <strong>{PLAN_LABELS[item.plan]}</strong>
+                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {billingPeriod === "monthly" ? item.monthly : item.yearly}</p>
+                </div>
+                {isCurrent ? (
+                  <span className="plan-pill">Current plan</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={billingBusy || !billingConfigured || hasPaidPlan}
+                    onClick={() => startCheckout(item.plan)}
+                  >
+                    {hasPaidPlan ? "Use portal" : `Choose ${PLAN_LABELS[item.plan]}`}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
@@ -190,7 +347,7 @@ export default function SettingsClient({ workspaceId }: Props) {
               min="0"
               step="1"
               value={minimumLiveViewers}
-              onChange={(event) => setMinimumLiveViewers(Number(event.target.value))}
+              onChange={(event) => setMinimumLiveViewers(Number(event.target.value))
               disabled={busy || discordLocked}
             />
           </label>
@@ -217,15 +374,10 @@ export default function SettingsClient({ workspaceId }: Props) {
       </section>
 
       <section className="settings-card">
-        <h2>Billing</h2>
-        <p>Stripe Checkout and Billing Portal are the next payment stage after real platform monitoring is verified.</p>
-        <div className="settings-row"><span>Status</span><span className="plan-pill">Not connected</span></div>
-      </section>
-
-      <section className="settings-card">
         <h2>Platform monitoring</h2>
-        <p>Twitch and YouTube workers are deployed. Their production API credentials still need to be added before real scans can run.</p>
-        <div className="settings-row"><span>Workers</span><span className="plan-pill">Deployed</span></div>
+        <p>YouTube and Twitch API credentials are configured and their server-side schedulers are active. Kick is the remaining platform integration.</p>
+        <div className="settings-row"><span>YouTube + Twitch</span><span className="plan-pill">Active</span></div>
+        <div className="settings-row"><span>Kick</span><span className="plan-pill">Pending API integration</span></div>
       </section>
     </div>
   );
