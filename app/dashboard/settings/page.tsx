@@ -4,7 +4,6 @@ import SettingsClient from "@/components/SettingsClient";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
-import { isStripeServerConfigured, isStripeWebhookConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +42,6 @@ export default async function SettingsPage() {
           workspaceId={membership.workspace_id as string}
           currentPlan={normalizePlan(subscription?.plan)}
           subscriptionStatus={subscription?.status ?? "trialing"}
-          billingConfigured={isStripeServerConfigured() && isStripeWebhookConfigured()}
           hasStripeCustomer={Boolean(subscription?.stripe_customer_id)}
         />
       </main>
