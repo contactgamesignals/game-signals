@@ -23,22 +23,24 @@
 - Publisher-only CSV signal export with spreadsheet formula-injection protection.
 - Stripe sandbox products and recurring prices created for Indie, Studio and Publisher, monthly and yearly (yearly = 10 monthly payments / 2 months free).
 - Stable Stripe price lookup keys are configured instead of hard-coding generated price IDs.
+- `STRIPE_SECRET_KEY` is configured in Supabase Edge Function Secrets and authenticated against Stripe from the deployed billing worker.
 - `stripe-billing` Supabase Edge Function handles authenticated billing status, Stripe-hosted Checkout and Customer Portal sessions.
 - Customer Portal configuration is created/reused automatically and supports customer details, payment method changes, invoice history and cancellation at period end.
 - `stripe-webhook` Supabase Edge Function validates Stripe HMAC signatures and synchronizes Checkout/subscription lifecycle state into `subscriptions`.
 - Stripe webhook signing secret is stored in Supabase Vault and exposed only to service-role code through a revoked-by-default helper RPC.
 - Stripe webhook signature path was tested end-to-end from Vault through pg_net and returned HTTP 200 / `received: true`.
 - Stripe sandbox webhook endpoint points directly to the Supabase Edge Function and listens only to required Checkout/subscription events.
+- Stripe integration test verified all 6 expected recurring prices, successfully created and immediately expired a sandbox Checkout Session, and confirmed Customer Portal configuration.
+- Landing availability copy is patched so Twitch + YouTube are presented as live integrations while Kick is marked as coming soon pending KICK approval; unsupported Kick demo signals are hidden/disabled.
 - Production Next.js deployment: https://game-signals.vercel.app
 - GitHub CI: typecheck + production Next.js build.
 
 ## Still required before paid public launch
-- Add the Stripe sandbox API secret to Supabase Edge Function Secrets as `STRIPE_SECRET_KEY`, then perform a real sandbox Checkout test.
 - Create the first real user through the production signup flow and verify the email confirmation callback end-to-end.
-- Configure a production transactional email provider and verified sending domain.
-- Integrate Kick using the official KICK developer API; do not rely on scraping/private endpoints.
+- Run a user-authenticated sandbox Checkout from the production Settings page and confirm the webhook changes that real workspace from Free to the selected plan.
+- Configure a production transactional email provider and verified sending domain before advertising email delivery as live.
+- Obtain the appropriate KICK developer/commercial approval before enabling Kick monitoring for the paid product; do not rely on scraping/private endpoints.
 - Configure Google OAuth only if/when social login is enabled in the UI.
-- Reconcile marketing/demo copy with the real implementation so unsupported sources/features are not presented as already live.
 - Revisit YouTube quota/refresh promises before scaling paid plans; the Search API quota cannot sustain aggressive per-game refresh rates at large customer counts.
 - Before accepting real money, recreate/verify Stripe products, prices, webhook and secrets in Stripe live mode rather than sandbox mode.
 
