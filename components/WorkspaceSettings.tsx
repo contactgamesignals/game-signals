@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -26,6 +27,7 @@ export default function WorkspaceSettings({
   workspaceId,
   initialWorkspaceName,
 }: Props) {
+  const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
   const [busy, setBusy] = useState(false);
@@ -80,7 +82,8 @@ export default function WorkspaceSettings({
       const result = (data ?? {}) as DeleteAccountResponse;
       if (!result.ok) throw new Error(result.error ?? "Account deletion is not available yet.");
       await supabase.auth.signOut();
-      window.location.assign("/");
+      router.push("/");
+      router.refresh();
     } catch (accountError) {
       setDeleteError(accountError instanceof Error ? accountError.message : "Could not delete the account.");
       setDeleteBusy(false);
