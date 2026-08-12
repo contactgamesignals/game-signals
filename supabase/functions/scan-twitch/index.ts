@@ -1,7 +1,9 @@
 import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, twitchCadenceMinutes, type Plan } from "../_shared/core.ts";
 
-type Game = { id: string; workspace_id: string; title: string; twitch_game_id: string | null };
+type Game = { id: string; workspace_id: string; title: string; twitch_game_id: string | null; twitch_last_scanned_at: string | null };
 type TwitchStream = { id: string; user_id: string; user_login: string; user_name: string; game_id: string; game_name: string; title: string; viewer_count: number; started_at: string; language: string; thumbnail_url: string };
+
+const MANUAL_SCAN_COOLDOWN_MS = 5 * 60_000;
 
 async function twitchToken(clientId: string, clientSecret: string) {
   const url = new URL("https://id.twitch.tv/oauth2/token");
@@ -44,13 +46,26 @@ Deno.serve(async (request) => {
     }
 
     const supabase = serviceClient();
-    let query = supabase.from("games").select("id, workspace_id, title, twitch_game_id").eq("enabled", true);
+    let query = supabase.from("games").select("id, workspace_id, title, twitch_game_id, twitch_last_scanned_at").eq("enabled", true);
     if (body.game_id) query = query.eq("id", body.game_id);
     else query = query.lte("twitch_next_scan_at", new Date().toISOString()).limit(100);
     const { data, error } = await query;
     if (error) throw error;
     const games = (data ?? []) as Game[];
     if (!games.length) return json({ ok: true, games: 0, mentions: 0 });
+
+    if (!auth.internal && body.game_id) {
+      const lastScannedAt = games[0]?.twitch_last_scanned_at;
+      if (lastScannedAt) {
+        const retryAt = new Date(new Date(lastScannedAt).getTime() + MANUAL_SCAN_COOLDOWN_MS);
+        if (retryAt.getTime() > Date.now()) {
+          return json({
+            error: "Twitch manual scans are limited to one request every five minutes per game.",
+            retry_at: retryAt.toISOString(),
+          }, 429);
+        }
+      }
+    }
 
     const token = await twitchToken(clientId, clientSecret);
     const prepared: Game[] = [];
