@@ -18,6 +18,15 @@ function isKickControl(element: Element | null) {
 
 export default function MarketingRealityPatch() {
   useEffect(() => {
+    const removeDynamicKickSignals = () => {
+      document.querySelectorAll<HTMLElement>('[data-source="kick"]').forEach((element) => {
+        element.remove();
+      });
+      document.querySelectorAll<HTMLElement>("#heroFeed .feed-line").forEach((element) => {
+        if ((element.textContent ?? "").includes("Kick")) element.remove();
+      });
+    };
+
     const apply = () => {
       const heroCopy = document.querySelector<HTMLElement>(".hero-copy");
       if (heroCopy) {
@@ -45,13 +54,7 @@ export default function MarketingRealityPatch() {
         if (count) count.textContent = "soon";
       }
 
-      document.querySelectorAll<HTMLElement>('[data-source="kick"]').forEach((element) => {
-        element.remove();
-      });
-
-      document.querySelectorAll<HTMLElement>("#heroFeed .feed-line").forEach((element) => {
-        if ((element.textContent ?? "").includes("Kick")) element.remove();
-      });
+      removeDynamicKickSignals();
 
       const kickSourceCheck = findTextElement(".source-check", "Kick");
       if (kickSourceCheck) {
@@ -112,7 +115,7 @@ export default function MarketingRealityPatch() {
     apply();
     const frame = requestAnimationFrame(apply);
     const timeout = window.setTimeout(apply, 250);
-    const observer = new MutationObserver(apply);
+    const observer = new MutationObserver(removeDynamicKickSignals);
     const landingHost = document.querySelector(".landing-host");
     if (landingHost) observer.observe(landingHost, { childList: true, subtree: true });
 
