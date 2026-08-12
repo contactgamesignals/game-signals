@@ -18,23 +18,29 @@
 - GitHub OIDC healthcheck workflows remain available for manual Twitch/YouTube credential checks; GitHub is no longer the production scheduler.
 - Secure Discord webhook management and test notifications.
 - Discord alerts are enforced as Studio/Publisher features both when configuring a webhook and when the delivery worker runs.
-- Discord delivery worker with retries.
-- Automatic Discord delivery every minute through pg_cron + pg_net, verified with HTTP 200 responses.
-- Cron secret generated inside Postgres, stored in Supabase Vault, and validated by SHA-256 from a service-role-only runtime table.
-- Realtime mention updates in the dashboard.
-- Manual scan cooldown.
+- Discord delivery worker with retries and automatic delivery every minute through pg_cron + pg_net.
+- Realtime mention updates in the dashboard and manual scan cooldown.
 - Publisher-only CSV signal export with spreadsheet formula-injection protection.
+- Stripe sandbox products and recurring prices created for Indie, Studio and Publisher, monthly and yearly (yearly = 10 monthly payments / 2 months free).
+- Stable Stripe price lookup keys are configured instead of hard-coding generated price IDs.
+- `stripe-billing` Supabase Edge Function handles authenticated billing status, Stripe-hosted Checkout and Customer Portal sessions.
+- Customer Portal configuration is created/reused automatically and supports customer details, payment method changes, invoice history and cancellation at period end.
+- `stripe-webhook` Supabase Edge Function validates Stripe HMAC signatures and synchronizes Checkout/subscription lifecycle state into `subscriptions`.
+- Stripe webhook signing secret is stored in Supabase Vault and exposed only to service-role code through a revoked-by-default helper RPC.
+- Stripe webhook signature path was tested end-to-end from Vault through pg_net and returned HTTP 200 / `received: true`.
+- Stripe sandbox webhook endpoint points directly to the Supabase Edge Function and listens only to required Checkout/subscription events.
 - Production Next.js deployment: https://game-signals.vercel.app
 - GitHub CI: typecheck + production Next.js build.
 
 ## Still required before paid public launch
+- Add the Stripe sandbox API secret to Supabase Edge Function Secrets as `STRIPE_SECRET_KEY`, then perform a real sandbox Checkout test.
 - Create the first real user through the production signup flow and verify the email confirmation callback end-to-end.
-- Configure a production SMTP/email provider and verified sending domain.
-- Implement Stripe billing and webhook-driven paid subscription state before paid-plan checkout is enabled.
+- Configure a production transactional email provider and verified sending domain.
 - Integrate Kick using the official KICK developer API; do not rely on scraping/private endpoints.
 - Configure Google OAuth only if/when social login is enabled in the UI.
 - Reconcile marketing/demo copy with the real implementation so unsupported sources/features are not presented as already live.
-- Revisit YouTube quota/refresh promises before scaling paid plans; the default Search API quota cannot sustain aggressive per-game refresh rates at large customer counts.
+- Revisit YouTube quota/refresh promises before scaling paid plans; the Search API quota cannot sustain aggressive per-game refresh rates at large customer counts.
+- Before accepting real money, recreate/verify Stripe products, prices, webhook and secrets in Stripe live mode rather than sandbox mode.
 
 ## Deployment
 Supabase project: `mgaufxduaaobrlyzdrdo`.
