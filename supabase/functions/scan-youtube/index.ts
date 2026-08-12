@@ -52,7 +52,7 @@ Deno.serve(async (request) => {
       const searchTerm = `${includes.map((phrase) => `"${phrase.replaceAll('"', '')}"`).join("|")} ${excludes.map((phrase) => `-${phrase}`).join(" ")}`.trim();
       const publishedAfter = game.youtube_last_scanned_at
         ? new Date(new Date(game.youtube_last_scanned_at).getTime() - 5 * 60_000).toISOString()
-        : new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+        : new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString();
 
       const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
       searchUrl.searchParams.set("part", "snippet");
@@ -115,7 +115,7 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + youtubeCadenceMinutes(plan) * 60_000).toISOString();
       await Promise.all([
         supabase.from("games").update({ youtube_last_scanned_at: now.toISOString(), youtube_next_scan_at: next }).eq("id", game.id),
-        supabase.from("scan_runs").insert({ game_id: game.id, platform: "youtube", status: "success", started_at: runStarted.toISOString(), finished_at: now.toISOString(), results_count: gameMentions, metadata: { query: searchTerm } }),
+        supabase.from("scan_runs").insert({ game_id: game.id, platform: "youtube", status: "success", started_at: runStarted.toISOString(), finished_at: now.toISOString(), results_count: gameMentions, metadata: { query: searchTerm, published_after: publishedAfter } }),
       ]);
     }
 
