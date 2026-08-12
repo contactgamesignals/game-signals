@@ -8,6 +8,14 @@ function findTextElement(selector: string, startsWith: string) {
   );
 }
 
+function isKickControl(element: Element | null) {
+  if (!element) return false;
+  if (element.closest('[data-source-toggle="kick"]')) return true;
+  if (element.closest('.tab[data-filter="kick"]')) return true;
+  const sourceCheck = element.closest(".source-check");
+  return Boolean(sourceCheck && (sourceCheck.textContent ?? "").trim().startsWith("Kick"));
+}
+
 export default function MarketingRealityPatch() {
   useEffect(() => {
     const apply = () => {
@@ -38,7 +46,11 @@ export default function MarketingRealityPatch() {
       }
 
       document.querySelectorAll<HTMLElement>('[data-source="kick"]').forEach((element) => {
-        element.style.display = "none";
+        element.remove();
+      });
+
+      document.querySelectorAll<HTMLElement>("#heroFeed .feed-line").forEach((element) => {
+        if ((element.textContent ?? "").includes("Kick")) element.remove();
       });
 
       const kickSourceCheck = findTextElement(".source-check", "Kick");
@@ -88,10 +100,25 @@ export default function MarketingRealityPatch() {
       });
     };
 
+    const blockKickClick = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!isKickControl(target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      apply();
+    };
+
+    document.addEventListener("click", blockKickClick, true);
     apply();
     const frame = requestAnimationFrame(apply);
     const timeout = window.setTimeout(apply, 250);
+    const observer = new MutationObserver(apply);
+    const landingHost = document.querySelector(".landing-host");
+    if (landingHost) observer.observe(landingHost, { childList: true, subtree: true });
+
     return () => {
+      document.removeEventListener("click", blockKickClick, true);
+      observer.disconnect();
       cancelAnimationFrame(frame);
       window.clearTimeout(timeout);
     };
