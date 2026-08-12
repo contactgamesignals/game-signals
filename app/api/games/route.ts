@@ -9,7 +9,14 @@ type CreateGameBody = {
   title?: string;
   steamUrl?: string;
   aliases?: string;
+  excludes?: string;
 };
+
+function parseTerms(value: string | undefined) {
+  return Array.from(new Set(
+    (value ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+  )).slice(0, 20);
+}
 
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
@@ -19,14 +26,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as CreateGameBody;
   const title = body.title?.trim();
   const steamUrl = body.steamUrl?.trim() || null;
-  const aliases = (body.aliases ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, 20);
+  const aliases = parseTerms(body.aliases);
+  const excludes = parseTerms(body.excludes);
 
   if (!title || title.length > 180) {
     return NextResponse.json({ error: "Enter a valid game title." }, { status: 400 });
+  }
+  if ([...aliases, ...excludes].some((term) => term.length > 180)) {
+    return NextResponse.json({ error: "Search phrases must be 180 characters or shorter." }, { status: 400 });
   }
 
   if (steamUrl) {
@@ -88,11 +95,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const uniqueAliases = Array.from(new Set([title, ...aliases]));
-  if (uniqueAliases.length) {
-    await supabase.from("game_aliases").insert(
-      uniqueAliases.map((phrase) => ({ game_id: game.id, phrase, type: "include" })),
-    );
+  const aliasRows = [
+    ...aliases.filter((phrase) => phrase.toLocaleLowerCase() !== title.toLocaleLowerCase()).map((phrase) => ({ game_id: game.id, phrase, type: "include" as const })),
+    ...excludes.map((phrase) => ({ game_id: game.id, phrase, type: "exclude" as const })),
+  ];
+  if (aliasRows.length) {
+    await supabase.from("game_aliases").insert(aliasRows);
   }
 
   // Best effort. Missing platform secrets or quota should not undo game creation.
