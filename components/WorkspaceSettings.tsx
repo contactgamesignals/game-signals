@@ -117,6 +117,7 @@ export default function WorkspaceSettings({
           <div className="dashboard-actions">
             <button className="btn btn-primary" disabled={busy}>Save changes</button>
             <Link className="btn btn-ghost" href="/forgot-password">Reset password</Link>
+            <a className="btn btn-ghost" href="/api/account/export">Download my data</a>
           </div>
         </form>
       </section>
