@@ -1,6 +1,6 @@
 import { authorizeRequest, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
 
-type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null };
+type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null; youtube_next_scan_at: string | null };
 type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; description?: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
 type VideoDetail = { views: number; categoryId: string | null; description: string; tags: string[] };
 
@@ -41,7 +41,7 @@ Deno.serve(async (request) => {
     }
 
     const supabase = serviceClient();
-    let query = supabase.from("games").select("id, workspace_id, title, youtube_last_scanned_at").eq("enabled", true);
+    let query = supabase.from("games").select("id, workspace_id, title, youtube_last_scanned_at, youtube_next_scan_at").eq("enabled", true);
     if (body.game_id) query = query.eq("id", body.game_id);
     else {
       const limit = Math.max(1, Math.min(10, Number(Deno.env.get("YOUTUBE_GAMES_PER_RUN") ?? "1")));
@@ -51,6 +51,16 @@ Deno.serve(async (request) => {
     if (error) throw error;
     const games = (data ?? []) as Game[];
     if (!games.length) return json({ ok: true, games: 0, mentions: 0 });
+
+    if (!auth.internal && body.game_id) {
+      const nextScanAt = games[0]?.youtube_next_scan_at;
+      if (nextScanAt && new Date(nextScanAt).getTime() > Date.now()) {
+        return json({
+          error: "YouTube scan is not due yet. Manual requests follow the plan cadence to protect the shared API quota.",
+          retry_at: nextScanAt,
+        }, 429);
+      }
+    }
 
     const workspaceIds = Array.from(new Set(games.map((game) => game.workspace_id)));
     const { data: subscriptions } = await supabase.from("subscriptions").select("workspace_id, plan, status").in("workspace_id", workspaceIds);
