@@ -29,6 +29,30 @@ function isPaidPlan(value: unknown): value is "indie" | "studio" | "publisher" {
   return value === "indie" || value === "studio" || value === "publisher";
 }
 
+function planFromLookupKey(value: unknown): "indie" | "studio" | "publisher" | null {
+  if (typeof value !== "string") return null;
+  const match = /^gamesignal_(indie|studio|publisher)_(monthly|yearly)$/.exec(value);
+  return match ? match[1] as "indie" | "studio" | "publisher" : null;
+}
+
+function planFromPrice(value: unknown) {
+  const price = objectValue(value);
+  if (!price) return null;
+  const fromLookup = planFromLookupKey(price.lookup_key);
+  if (fromLookup) return fromLookup;
+  const metadata = metadataOf(price);
+  return isPaidPlan(metadata.gamesignal_plan) ? metadata.gamesignal_plan : null;
+}
+
+function planFromSubscription(object: Record<string, unknown>) {
+  const items = objectValue(object.items);
+  const data = Array.isArray(items?.data) ? items.data : [];
+  const first = data.length ? objectValue(data[0]) : null;
+  const fromItem = planFromPrice(first?.price) ?? planFromPrice(first?.plan);
+  if (fromItem) return fromItem;
+  return planFromPrice(object.plan);
+}
+
 function mapStatus(value: unknown): "trialing" | "active" | "past_due" | "canceled" | "incomplete" {
   if (value === "trialing" || value === "active" || value === "past_due" || value === "canceled" || value === "incomplete") {
     return value;
@@ -170,9 +194,11 @@ Deno.serve(async (request) => {
           updated_at: new Date().toISOString(),
         };
         const customerId = idFromExpandable(object.customer);
+        const derivedPlan = planFromSubscription(object);
         if (subscriptionId) update.stripe_subscription_id = subscriptionId;
         if (customerId) update.stripe_customer_id = customerId;
-        if (isPaidPlan(metadata.plan)) update.plan = metadata.plan;
+        if (derivedPlan) update.plan = derivedPlan;
+        else if (isPaidPlan(metadata.plan)) update.plan = metadata.plan;
         const { error } = await service.from("subscriptions").update(update).eq("workspace_id", workspaceId);
         if (error) throw error;
       }
