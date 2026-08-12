@@ -52,14 +52,14 @@
 - Landing/dashboard availability copy presents Twitch + YouTube as live integrations while Kick is marked as coming soon pending KICK approval.
 - GitHub migration history has been synchronized with later production migrations, including email-disable policy and active-game downgrade reconciliation.
 - GitHub CI validates typecheck + production Next.js build; latest application changes pass both.
+- Vercel project is now connected directly to `contactgamesignals/game-signals` for automatic deployments from Git.
 
 ## Deployment state
 - Supabase backend changes listed above are deployed live in project `mgaufxduaaobrlyzdrdo`.
 - Existing production frontend remains available at `https://game-signals.vercel.app`.
-- Latest frontend/main-branch polish (Pause/Resume, edit monitor/exclusions, improved live status, Settings polish and password recovery) is built successfully in CI but still needs a Vercel production redeploy because the connected `deploy_to_vercel` tool currently fails input validation before creating a deployment.
+- Direct Git integration with the Vercel project is enabled; this commit intentionally verifies automatic production deployment from `main`.
 
 ## Still required before paid public launch
-- Redeploy the current GitHub `main` to Vercel once the deployment path is available.
 - Add and verify a production sending domain before advertising email delivery as live; then enable `gamesignal-email-every-minute`.
 - Obtain the appropriate KICK developer/commercial approval before enabling Kick monitoring for the paid product; do not rely on scraping/private endpoints.
 - Configure Google OAuth only if/when social login is enabled in the UI.
