@@ -27,7 +27,7 @@ export default function AuthCard({ mode, configured }: Props) {
     setSuccess(false);
 
     if (!configured) {
-      setMessage("Add the Supabase environment variables before using authentication.");
+      setMessage("Authentication is temporarily unavailable.");
       return;
     }
 
@@ -120,6 +120,11 @@ export default function AuthCard({ mode, configured }: Props) {
               required
             />
           </label>
+          {isLogin ? (
+            <div style={{ textAlign: "right", marginTop: -6 }}>
+              <Link href="/forgot-password" className="tiny">Forgot password?</Link>
+            </div>
+          ) : null}
           <button className="btn btn-primary" disabled={loading}>
             {loading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
           </button>
