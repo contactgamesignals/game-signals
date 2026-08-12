@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import LandingPage from "@/components/LandingPage";
 import MarketingRealityPatch from "@/components/MarketingRealityPatch";
+import PricingCyclePatch from "@/components/PricingCyclePatch";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,6 +18,7 @@ export default async function HomePage() {
     <>
       <LandingPage />
       <MarketingRealityPatch />
+      <PricingCyclePatch />
     </>
   );
 }
