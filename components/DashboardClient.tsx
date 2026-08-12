@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 import type { PlanName } from "@/lib/plans";
+import { PLAN_LABELS, PLAN_LIMITS } from "@/lib/plans";
 
 type Props = {
   email: string;
@@ -54,7 +55,7 @@ export default function DashboardClient({
   const [aliases, setAliases] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | DashboardMention["platform"]>("all");
+  const [filter, setFilter] = useState<"all" | "youtube" | "twitch">("all");
 
   const filteredMentions = useMemo(
     () => mentions.filter((mention) => filter === "all" || mention.platform === filter),
@@ -69,6 +70,9 @@ export default function DashboardClient({
     0,
   );
   const creators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
+  const gameLimit = PLAN_LIMITS[plan].games;
+  const planLabel = PLAN_LABELS[plan];
+  const atGameLimit = games.length >= gameLimit;
 
   useEffect(() => {
     const supabase = createClient();
@@ -141,7 +145,7 @@ export default function DashboardClient({
       setSteamUrl("");
       setAliases("");
       setModalOpen(false);
-      setMessage("Game added. The first platform scan was queued.");
+      setMessage("Game added. The first YouTube and Twitch scans are queued.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not add the game.");
@@ -179,7 +183,7 @@ export default function DashboardClient({
       });
       const result = (await response.json()) as { error?: string; details?: string };
       if (!response.ok) throw new Error(result.error ?? "Could not start a scan.");
-      setMessage(result.details ?? "Scan completed. Refreshing results.");
+      setMessage(result.details ?? "Scan completed. New signals will appear here automatically.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not start a scan.");
@@ -198,7 +202,7 @@ export default function DashboardClient({
   return (
     <div className={`app-shell${busy ? " loading-inline" : ""}`}>
       <header className="app-topbar">
-        <Link href="/" className="brand">
+        <Link href="/dashboard" className="brand">
           <span className="brand-mark" />
           <span>GameSignal</span>
         </Link>
@@ -226,16 +230,23 @@ export default function DashboardClient({
             <div>
               <div className="kicker">Live workspace</div>
               <h1>Creator signals</h1>
-              <p>Real mentions saved by the monitoring workers.</p>
+              <p>YouTube and Twitch monitoring is active. Kick is coming soon.</p>
             </div>
             <div className="dashboard-actions">
-              <span className="plan-pill">{plan} plan</span>
+              <span className="plan-pill">{planLabel} · {games.length}/{gameLimit} games</span>
               {plan === "publisher" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
-              <button className="btn btn-primary" onClick={() => setModalOpen(true)}>Add game</button>
+              <button className="btn btn-primary" disabled={atGameLimit} onClick={() => setModalOpen(true)}>
+                {atGameLimit ? "Game limit reached" : "Add game"}
+              </button>
             </div>
           </div>
 
           {message ? <div className="status-message">{message}</div> : null}
+          {atGameLimit && plan !== "publisher" ? (
+            <div className="status-message">
+              You are using all {gameLimit} game slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Manage your plan in Settings to track more games.
+            </div>
+          ) : null}
 
           <section className="dashboard-grid">
             <div className="metric-card"><span>New signals</span><b>{mentions.length}</b></div>
@@ -247,7 +258,7 @@ export default function DashboardClient({
           <section className="dashboard-panel" id="games">
             <div className="dashboard-panel-head">
               <div><div className="panel-title">Tracked portfolio</div><h2>Your games</h2></div>
-              <span className="tiny">workspace {workspaceId.slice(0, 8)}</span>
+              <span className="tiny">YouTube + Twitch active · {games.length}/{gameLimit} slots used</span>
             </div>
             <div className="dashboard-panel-body">
               {games.length ? games.map((game) => (
@@ -255,7 +266,7 @@ export default function DashboardClient({
                   <div>
                     <div className="game-title">{game.title}</div>
                     <div className="game-meta">
-                      {game.twitch_game_id ? `Twitch category ${game.twitch_game_id}` : "Twitch category will be resolved on first scan"}
+                      {game.twitch_game_id ? "Twitch category resolved" : "Twitch category will resolve automatically"} · YouTube monitoring active
                     </div>
                   </div>
                   <div className="game-status"><i />{game.enabled ? "Monitoring" : "Paused"}</div>
@@ -266,8 +277,8 @@ export default function DashboardClient({
                 </div>
               )) : (
                 <div className="empty-state">
-                  <strong>No games yet</strong>
-                  Add the first title to start resolving platform categories.
+                  <strong>No games tracked yet</strong>
+                  Add your first game and GameSignal will start monitoring YouTube and Twitch automatically.
                 </div>
               )}
             </div>
@@ -277,7 +288,7 @@ export default function DashboardClient({
             <div className="dashboard-panel-head">
               <div><div className="panel-title">Detected content</div><h2>Latest mentions</h2></div>
               <div className="tabs">
-                {(["all", "youtube", "twitch", "kick"] as const).map((item) => (
+                {(["all", "youtube", "twitch"] as const).map((item) => (
                   <button key={item} className={`tab${filter === item ? " active" : ""}`} onClick={() => setFilter(item)}>
                     {item === "all" ? "All" : item[0].toUpperCase() + item.slice(1)}
                   </button>
@@ -306,8 +317,8 @@ export default function DashboardClient({
                 );
               }) : (
                 <div className="empty-state">
-                  <strong>No real signals saved yet</strong>
-                  Configure API secrets, deploy the workers, and run the first scan.
+                  <strong>No matching signals yet</strong>
+                  GameSignal is monitoring your tracked games. New YouTube videos and Twitch streams will appear here automatically.
                 </div>
               )}
             </div>
