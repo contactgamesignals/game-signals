@@ -1,5 +1,5 @@
 .score-row{display:flex;align-items:end;justify-content:space-between;margin-top:18px}
-    .score-number{font-family:"Space Grotesk";font-size:44px;line-height:.85;letter-spacing:-.07em}
+    .score-number{font-family:var(--font-space-grotesk);font-size:44px;line-height:.85;letter-spacing:-.07em}
     .score-number small{font-size:14px;color:#717a91;letter-spacing:0}
     .spark{width:82px;height:34px}
     .spark path{fill:none;stroke:url(#sparkGradient);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:180;stroke-dashoffset:180;animation:draw 2s ease forwards}
@@ -8,7 +8,7 @@
     .source-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid rgba(255,255,255,.05)}
     .source-row:first-of-type{border-top:0}
     .source-name{display:flex;align-items:center;gap:8px;font-size:11px;color:#b1b8c9}
-    .source-count{font-family:"Space Grotesk";font-size:14px}
+    .source-count{font-family:var(--font-space-grotesk);font-size:14px}
     .feed-card{grid-column:1/-1;min-height:187px;padding:8px;overflow:hidden}
     .feed-line{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border-radius:11px;transition:.3s}
     .feed-line.new{background:linear-gradient(90deg,rgba(53,231,255,.055),rgba(122,108,255,.025))}
