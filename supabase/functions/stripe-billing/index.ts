@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
 const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.vercel.app";
@@ -14,12 +14,43 @@ const lookupKeys = {
   publisher: { monthly: "gamesignal_publisher_monthly", yearly: "gamesignal_publisher_yearly" },
 } as const;
 
+const allLookupKeys = Object.values(lookupKeys).flatMap((periods) => [periods.monthly, periods.yearly]);
+
 type PaidPlan = keyof typeof lookupKeys;
 type Period = "monthly" | "yearly";
 type StripeObject = Record<string, unknown>;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
+}
+
+function serviceClient() {
+  const url = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !serviceKey) throw new Error("Supabase service environment is missing.");
+  return createClient(url, serviceKey, { auth: { persistSession: false } });
+}
+
+let cronHashCache: { value: string; expiresAt: number } | null = null;
+async function expectedCronHash() {
+  if (cronHashCache && cronHashCache.expiresAt > Date.now()) return cronHashCache.value;
+  const { data, error } = await serviceClient()
+    .from("internal_settings")
+    .select("value")
+    .eq("key", "cron_secret_sha256")
+    .maybeSingle();
+  if (error || !data?.value) return null;
+  cronHashCache = { value: String(data.value), expiresAt: Date.now() + 5 * 60_000 };
+  return cronHashCache.value;
+}
+
+async function validCronSecret(value: string | null) {
+  if (!value) return false;
+  const expected = await expectedCronHash();
+  if (!expected) return false;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hash === expected;
 }
 
 function isPaidPlan(value: unknown): value is PaidPlan {
@@ -82,11 +113,68 @@ async function ensurePortalConfiguration() {
   return created.id;
 }
 
+async function runIntegrationHealthcheck() {
+  await stripeRequest("/account");
+
+  const found = new Set<string>();
+  for (const lookupKey of allLookupKeys) {
+    const list = await stripeRequest(`/prices?active=true&limit=1&lookup_keys[]=${encodeURIComponent(lookupKey)}`);
+    const data = Array.isArray(list.data) ? list.data : [];
+    const price = data[0] && typeof data[0] === "object" ? data[0] as StripeObject : null;
+    if (price && typeof price.id === "string") found.add(lookupKey);
+  }
+  if (found.size !== allLookupKeys.length) {
+    throw new Error(`Expected ${allLookupKeys.length} Stripe prices, found ${found.size}.`);
+  }
+
+  const portalConfiguration = await ensurePortalConfiguration();
+  const indiePriceList = await stripeRequest(`/prices?active=true&limit=1&lookup_keys[]=${encodeURIComponent(lookupKeys.indie.monthly)}`);
+  const indiePrices = Array.isArray(indiePriceList.data) ? indiePriceList.data : [];
+  const indiePrice = indiePrices[0] && typeof indiePrices[0] === "object" ? indiePrices[0] as StripeObject : null;
+  if (!indiePrice || typeof indiePrice.id !== "string") throw new Error("Indie monthly price missing.");
+
+  const params = new URLSearchParams();
+  params.set("mode", "subscription");
+  params.set("line_items[0][price]", indiePrice.id);
+  params.set("line_items[0][quantity]", "1");
+  params.set("success_url", `${SITE_URL}/dashboard/settings?billing=test-success`);
+  params.set("cancel_url", `${SITE_URL}/dashboard/settings?billing=test-cancelled`);
+  params.set("metadata[gamesignal_test]", "true");
+  const session = await stripeRequest("/checkout/sessions", { method: "POST", body: params });
+  if (typeof session.id !== "string") throw new Error("Stripe did not create a test Checkout Session.");
+  await stripeRequest(`/checkout/sessions/${encodeURIComponent(session.id)}/expire`, { method: "POST", body: new URLSearchParams() });
+
+  return {
+    ok: true,
+    stripe: "authenticated",
+    prices: found.size,
+    checkout: "created_and_expired",
+    portal: typeof portalConfiguration === "string" ? "configured" : "error",
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
 
   try {
+    const body = await request.json().catch(() => ({})) as {
+      action?: "healthcheck" | "integration_healthcheck" | "status" | "checkout" | "portal";
+      workspace_id?: string;
+      plan?: unknown;
+      period?: unknown;
+    };
+
+    if (body.action === "healthcheck" || body.action === "integration_healthcheck") {
+      if (!(await validCronSecret(request.headers.get("x-cron-secret")))) {
+        return json({ error: "Forbidden." }, 403);
+      }
+      if (!Deno.env.get("STRIPE_SECRET_KEY")) return json({ error: "Stripe secret is not configured." }, 503);
+      if (body.action === "integration_healthcheck") return json(await runIntegrationHealthcheck());
+      await stripeRequest("/account");
+      return json({ ok: true, stripe: "authenticated" });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const authHeader = request.headers.get("Authorization");
@@ -99,12 +187,6 @@ Deno.serve(async (request) => {
     const { data: authData, error: authError } = await userClient.auth.getUser();
     if (authError || !authData.user) return json({ error: "Unauthorized." }, 401);
 
-    const body = await request.json().catch(() => ({})) as {
-      action?: "status" | "checkout" | "portal";
-      workspace_id?: string;
-      plan?: unknown;
-      period?: unknown;
-    };
     if (!body.action || !body.workspace_id) return json({ error: "Missing workspace or action." }, 400);
 
     const [{ data: membership, error: membershipError }, { data: subscription, error: subscriptionError }] = await Promise.all([
