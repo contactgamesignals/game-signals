@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "GameSignal — creator intelligence for game developers",
   description:
-    "Monitor YouTube, Twitch, and Kick for videos and live streams about your game.",
+    "Monitor YouTube videos and Twitch live streams about your game. Kick monitoring is planned, pending KICK developer approval.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
