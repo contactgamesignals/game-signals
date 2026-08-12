@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   if (steamUrl) {
     try {
       const parsed = new URL(steamUrl);
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error("Invalid protocol");
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Invalid protocol");
     } catch {
       return NextResponse.json({ error: "Enter a valid Steam or game URL." }, { status: 400 });
     }
@@ -56,7 +56,11 @@ export async function POST(request: Request) {
 
   const workspaceId = membership.workspace_id as string;
   const [{ count }, { data: subscription }] = await Promise.all([
-    supabase.from("games").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+    supabase
+      .from("games")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("enabled", true),
     supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
   ]);
 
@@ -65,7 +69,7 @@ export async function POST(request: Request) {
     : "free";
   if ((count ?? 0) >= PLAN_LIMITS[plan].games) {
     return NextResponse.json(
-      { error: `The ${plan} plan supports up to ${PLAN_LIMITS[plan].games} tracked game(s).` },
+      { error: `The ${plan} plan supports up to ${PLAN_LIMITS[plan].games} active game(s). Pause a game or change plan to free a slot.` },
       { status: 403 },
     );
   }
@@ -91,7 +95,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Best effort. Missing platform secrets should not undo game creation.
+  // Best effort. Missing platform secrets or quota should not undo game creation.
   await Promise.allSettled([
     supabase.functions.invoke("scan-twitch", { body: { game_id: game.id } }),
     supabase.functions.invoke("scan-youtube", { body: { game_id: game.id } }),
