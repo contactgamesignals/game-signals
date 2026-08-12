@@ -3,13 +3,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
-import { PLAN_LABELS } from "@/lib/plans";
+import { PLAN_LABELS, normalizePlan } from "@/lib/plans";
 
 type Props = {
   workspaceId: string;
   currentPlan: PlanName;
   subscriptionStatus: string;
-  billingConfigured: boolean;
   hasStripeCustomer: boolean;
 };
 
@@ -23,6 +22,10 @@ type DiscordStatus = {
 };
 
 type BillingResponse = {
+  configured?: boolean;
+  plan?: string;
+  status?: string;
+  has_customer?: boolean;
   url?: string;
   error?: string;
   usePortal?: boolean;
@@ -39,13 +42,7 @@ const PAID_PLANS: Array<{
   { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 games + export" },
 ];
 
-export default function SettingsClient({
-  workspaceId,
-  currentPlan,
-  subscriptionStatus,
-  billingConfigured,
-  hasStripeCustomer,
-}: Props) {
+export default function SettingsClient({ workspaceId, currentPlan, subscriptionStatus, hasStripeCustomer }: Props) {
   const [status, setStatus] = useState<DiscordStatus | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [minimumSignalScore, setMinimumSignalScore] = useState(0);
@@ -53,16 +50,21 @@ export default function SettingsClient({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [billingBusy, setBillingBusy] = useState(false);
+  const [billingChecking, setBillingChecking] = useState(true);
+  const [billingConfigured, setBillingConfigured] = useState(false);
+  const [billingPlan, setBillingPlan] = useState<PlanName>(currentPlan);
+  const [billingStatus, setBillingStatus] = useState(subscriptionStatus);
+  const [billingHasCustomer, setBillingHasCustomer] = useState(hasStripeCustomer);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
 
-  const effectivePlan =
-    subscriptionStatus === "active" || subscriptionStatus === "trialing" ? currentPlan : "free";
+  const effectivePlan = billingStatus === "active" || billingStatus === "trialing" ? billingPlan : "free";
   const hasPaidPlan = effectivePlan !== "free";
 
-  async function invoke(action: "status" | "upsert" | "delete" | "test", extra: Record<string, unknown> = {}) {
+  async function invokeDiscord(action: "status" | "upsert" | "delete" | "test", extra: Record<string, unknown> = {}) {
     const supabase = createClient();
     const { data, error: functionError } = await supabase.functions.invoke("manage-discord", {
       body: { action, workspace_id: workspaceId, ...extra },
@@ -72,11 +74,23 @@ export default function SettingsClient({
     return data as Record<string, unknown>;
   }
 
+  async function invokeBilling(action: "status" | "checkout" | "portal", extra: Record<string, unknown> = {}) {
+    const supabase = createClient();
+    const { data, error: functionError } = await supabase.functions.invoke("stripe-billing", {
+      body: { action, workspace_id: workspaceId, ...extra },
+    });
+    if (functionError) throw new Error(functionError.message);
+    const result = data as BillingResponse | null;
+    if (result?.error) throw new Error(result.error);
+    return result ?? {};
+  }
+
   useEffect(() => {
     let active = true;
+
     void (async () => {
       try {
-        const data = await invoke("status");
+        const data = await invokeDiscord("status");
         if (!active) return;
         const nextStatus: DiscordStatus = {
           configured: Boolean(data.configured),
@@ -91,6 +105,21 @@ export default function SettingsClient({
         setMinimumLiveViewers(nextStatus.minimum_live_viewers);
       } catch (statusError) {
         if (active) setError(statusError instanceof Error ? statusError.message : "Could not load Discord settings.");
+      }
+    })();
+
+    void (async () => {
+      try {
+        const data = await invokeBilling("status");
+        if (!active) return;
+        setBillingConfigured(Boolean(data.configured));
+        setBillingPlan(normalizePlan(data.plan));
+        setBillingStatus(String(data.status ?? "trialing"));
+        setBillingHasCustomer(Boolean(data.has_customer));
+      } catch (statusError) {
+        if (active) setBillingError(statusError instanceof Error ? statusError.message : "Could not load billing status.");
+      } finally {
+        if (active) setBillingChecking(false);
       }
     })();
 
@@ -115,7 +144,7 @@ export default function SettingsClient({
     setError(null);
     setMessage(null);
     try {
-      const data = await invoke("upsert", {
+      const data = await invokeDiscord("upsert", {
         webhook_url: webhookUrl,
         minimum_signal_score: minimumSignalScore,
         minimum_live_viewers: minimumLiveViewers,
@@ -143,7 +172,7 @@ export default function SettingsClient({
     setError(null);
     setMessage(null);
     try {
-      await invoke("test");
+      await invokeDiscord("test");
       setMessage("Test notification sent to Discord.");
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : "Could not send the test notification.");
@@ -158,7 +187,7 @@ export default function SettingsClient({
     setError(null);
     setMessage(null);
     try {
-      await invoke("delete");
+      await invokeDiscord("delete");
       setStatus((current) => ({
         configured: false,
         enabled: false,
@@ -183,9 +212,8 @@ export default function SettingsClient({
     setBillingError(null);
     setBillingMessage(null);
     try {
-      const response = await fetch("/api/billing/portal", { method: "POST" });
-      const data = (await response.json()) as BillingResponse;
-      if (!response.ok || !data.url) throw new Error(data.error ?? "Could not open billing portal.");
+      const data = await invokeBilling("portal");
+      if (!data.url) throw new Error("Stripe did not return a billing portal URL.");
       window.location.assign(data.url);
     } catch (portalError) {
       setBillingError(portalError instanceof Error ? portalError.message : "Could not open billing portal.");
@@ -199,18 +227,13 @@ export default function SettingsClient({
     setBillingError(null);
     setBillingMessage(null);
     try {
-      const response = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, period: billingPeriod }),
-      });
-      const data = (await response.json()) as BillingResponse;
+      const data = await invokeBilling("checkout", { plan, period: billingPeriod });
       if (data.usePortal) {
         setBillingBusy(false);
         await openBillingPortal();
         return;
       }
-      if (!response.ok || !data.url) throw new Error(data.error ?? "Could not create Checkout session.");
+      if (!data.url) throw new Error("Stripe did not return a Checkout URL.");
       window.location.assign(data.url);
     } catch (checkoutError) {
       setBillingError(checkoutError instanceof Error ? checkoutError.message : "Could not create Checkout session.");
@@ -226,16 +249,16 @@ export default function SettingsClient({
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Billing</h2>
-            <p>Stripe-hosted Checkout for new subscriptions and Stripe Customer Portal for plan changes or cancellation.</p>
+            <p>Stripe-hosted Checkout for subscriptions and a secure billing portal for existing customers.</p>
           </div>
           <span className="plan-pill">
-            {PLAN_LABELS[effectivePlan]} · {subscriptionStatus}
+            {billingChecking ? "Checking…" : `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`}
           </span>
         </div>
 
-        {!billingConfigured ? (
+        {!billingChecking && !billingConfigured ? (
           <div className="status-message" style={{ marginBottom: 14 }}>
-            Billing code is deployed, but server secrets still need to be added before Checkout can be enabled.
+            Stripe backend is deployed. Add the Stripe sandbox secret to Supabase to enable Checkout.
           </div>
         ) : null}
         {billingMessage ? <div className="auth-success" style={{ marginBottom: 14 }}>{billingMessage}</div> : null}
@@ -246,7 +269,7 @@ export default function SettingsClient({
             type="button"
             className={billingPeriod === "monthly" ? "btn btn-primary" : "btn btn-ghost"}
             onClick={() => setBillingPeriod("monthly")}
-            disabled={billingBusy || hasPaidPlan}
+            disabled={billingBusy || billingChecking || hasPaidPlan}
           >
             Monthly
           </button>
@@ -254,11 +277,11 @@ export default function SettingsClient({
             type="button"
             className={billingPeriod === "yearly" ? "btn btn-primary" : "btn btn-ghost"}
             onClick={() => setBillingPeriod("yearly")}
-            disabled={billingBusy || hasPaidPlan}
+            disabled={billingBusy || billingChecking || hasPaidPlan}
           >
             Yearly · 2 months free
           </button>
-          {hasStripeCustomer ? (
+          {billingHasCustomer ? (
             <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured} onClick={openBillingPortal}>
               Manage billing
             </button>
@@ -280,7 +303,7 @@ export default function SettingsClient({
                   <button
                     type="button"
                     className="btn btn-primary"
-                    disabled={billingBusy || !billingConfigured || hasPaidPlan}
+                    disabled={billingBusy || billingChecking || !billingConfigured || hasPaidPlan}
                     onClick={() => startCheckout(item.plan)}
                   >
                     {hasPaidPlan ? "Use portal" : `Choose ${PLAN_LABELS[item.plan]}`}
