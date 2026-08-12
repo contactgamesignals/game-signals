@@ -21,7 +21,13 @@ type PendingGame = {
   title?: string;
   aliases?: string;
   steamUrl?: string;
-  sources?: string[];
+};
+
+type GameConfigResponse = {
+  game?: DashboardGame;
+  aliases?: string[];
+  excludes?: string[];
+  error?: string;
 };
 
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
@@ -62,9 +68,11 @@ export default function DashboardClient({
   const [games, setGames] = useState(initialGames);
   const [mentions, setMentions] = useState(initialMentions);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingGame, setEditingGame] = useState<DashboardGame | null>(null);
   const [title, setTitle] = useState("");
   const [steamUrl, setSteamUrl] = useState("");
   const [aliases, setAliases] = useState("");
+  const [excludes, setExcludes] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "youtube" | "twitch">("all");
@@ -108,11 +116,7 @@ export default function DashboardClient({
         { event: "UPDATE", schema: "public", table: "mentions" },
         (payload) => {
           const row = payload.new as Omit<DashboardMention, "games">;
-          setMentions((current) =>
-            current.map((mention) =>
-              mention.id === row.id ? { ...mention, ...row } : mention,
-            ),
-          );
+          setMentions((current) => current.map((mention) => mention.id === row.id ? { ...mention, ...row } : mention));
         },
       )
       .subscribe();
@@ -129,37 +133,78 @@ export default function DashboardClient({
     localStorage.removeItem("gamesignal-pending-game");
     try {
       const pending = JSON.parse(pendingRaw) as PendingGame;
+      setEditingGame(null);
       setTitle(pending.title ?? "");
       setSteamUrl(pending.steamUrl ?? "");
       setAliases(pending.aliases ?? "");
+      setExcludes("");
       setModalOpen(true);
     } catch {
       // Ignore malformed browser data.
     }
   }, []);
 
-  async function addGame(event: FormEvent<HTMLFormElement>) {
+  function openNewMonitor() {
+    setEditingGame(null);
+    setTitle("");
+    setSteamUrl("");
+    setAliases("");
+    setExcludes("");
+    setMessage(null);
+    setModalOpen(true);
+  }
+
+  async function openEditMonitor(game: DashboardGame) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}`);
+      const result = (await response.json()) as GameConfigResponse;
+      if (!response.ok || !result.game) throw new Error(result.error ?? "Could not load monitor settings.");
+      setEditingGame(result.game);
+      setTitle(result.game.title);
+      setSteamUrl(result.game.steam_url ?? "");
+      setAliases((result.aliases ?? []).join(", "));
+      setExcludes((result.excludes ?? []).join(", "));
+      setModalOpen(true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not load monitor settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveMonitor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
 
     try {
-      const response = await fetch("/api/games", {
-        method: "POST",
+      const response = await fetch(editingGame ? `/api/games/${editingGame.id}` : "/api/games", {
+        method: editingGame ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, steamUrl, aliases }),
+        body: JSON.stringify({ title, steamUrl, aliases, excludes }),
       });
-      const result = (await response.json()) as { game?: DashboardGame; error?: string };
-      if (!response.ok || !result.game) throw new Error(result.error ?? "Could not add the game.");
-      setGames((current) => [result.game as DashboardGame, ...current]);
+      const result = (await response.json()) as GameConfigResponse;
+      if (!response.ok || !result.game) throw new Error(result.error ?? "Could not save the monitor.");
+
+      if (editingGame) {
+        setGames((current) => current.map((game) => game.id === result.game?.id ? result.game as DashboardGame : game));
+        setMessage(`${result.game.title} monitor settings updated.`);
+      } else {
+        setGames((current) => [result.game as DashboardGame, ...current]);
+        setMessage("Game added. YouTube and Twitch monitoring will start automatically.");
+      }
+
+      setEditingGame(null);
       setTitle("");
       setSteamUrl("");
       setAliases("");
+      setExcludes("");
       setModalOpen(false);
-      setMessage("Game added. YouTube and Twitch monitoring will start automatically.");
       router.refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not add the game.");
+      setMessage(error instanceof Error ? error.message : "Could not save the monitor.");
     } finally {
       setBusy(false);
     }
@@ -175,7 +220,7 @@ export default function DashboardClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: nextEnabled }),
       });
-      const result = (await response.json()) as { game?: DashboardGame; error?: string };
+      const result = (await response.json()) as GameConfigResponse;
       if (!response.ok || !result.game) throw new Error(result.error ?? `Could not ${nextEnabled ? "resume" : "pause"} the game.`);
       setGames((current) => current.map((item) => item.id === game.id ? result.game as DashboardGame : item));
       setMessage(`${game.title} monitoring ${nextEnabled ? "resumed" : "paused"}.`);
@@ -248,7 +293,7 @@ export default function DashboardClient({
             <div className="dashboard-actions">
               <span className="plan-pill">{planLabel} · {activeGames}/{gameLimit} active games</span>
               {plan === "publisher" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
-              <button className="btn btn-primary" disabled={atGameLimit} onClick={() => setModalOpen(true)}>
+              <button className="btn btn-primary" disabled={atGameLimit || busy} onClick={openNewMonitor}>
                 {atGameLimit ? "Active game limit reached" : "Add game"}
               </button>
             </div>
@@ -278,17 +323,12 @@ export default function DashboardClient({
                 <div className="game-row" key={game.id}>
                   <div>
                     <div className="game-title">{game.title}</div>
-                    <div className="game-meta">
-                      YouTube: {scanTime(game.youtube_last_scanned_at)} · Twitch: {scanTime(game.twitch_last_scanned_at)}
-                    </div>
+                    <div className="game-meta">YouTube: {scanTime(game.youtube_last_scanned_at)} · Twitch: {scanTime(game.twitch_last_scanned_at)}</div>
                   </div>
                   <div className="game-status"><i />{game.enabled ? "Monitoring" : "Paused"}</div>
                   <div className="dashboard-actions">
-                    <button
-                      className="icon-btn"
-                      disabled={busy || (!game.enabled && atGameLimit)}
-                      onClick={() => toggleGame(game)}
-                    >
+                    <button className="icon-btn" disabled={busy} onClick={() => openEditMonitor(game)}>Edit</button>
+                    <button className="icon-btn" disabled={busy || (!game.enabled && atGameLimit)} onClick={() => toggleGame(game)}>
                       {game.enabled ? "Pause" : atGameLimit ? "No free slot" : "Resume"}
                     </button>
                     <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
@@ -349,30 +389,38 @@ export default function DashboardClient({
 
       {modalOpen ? (
         <div className="modal-backdrop react-modal open" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setModalOpen(false);
+          if (event.target === event.currentTarget && !busy) setModalOpen(false);
         }}>
           <div className="modal">
             <div className="modal-top">
-              <div><div className="kicker">New monitor</div><h3>Add your game</h3></div>
-              <button className="close" onClick={() => setModalOpen(false)}>×</button>
+              <div>
+                <div className="kicker">{editingGame ? "Monitor settings" : "New monitor"}</div>
+                <h3>{editingGame ? `Edit ${editingGame.title}` : "Add your game"}</h3>
+              </div>
+              <button className="close" disabled={busy} onClick={() => setModalOpen(false)}>×</button>
             </div>
-            <form className="form-grid" onSubmit={addGame}>
+            <form className="form-grid" onSubmit={saveMonitor}>
               <label>
                 Game title
-                <input className="app-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="AFTERBLAST" required />
+                <input className="app-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="AFTERBLAST" required disabled={busy} />
               </label>
               <label>
-                Aliases and extra keywords
-                <input className="app-input" value={aliases} onChange={(event) => setAliases(event.target.value)} placeholder="AFTER BLAST, Lumino Games" />
-                <span className="form-help">Separate multiple aliases with commas.</span>
+                Additional names / search phrases
+                <input className="app-input" value={aliases} onChange={(event) => setAliases(event.target.value)} placeholder="AFTER BLAST, Lumino Games" disabled={busy} />
+                <span className="form-help">Comma-separated phrases that should also find your game. The main title is always included automatically.</span>
+              </label>
+              <label>
+                Exclude terms
+                <input className="app-input" value={excludes} onChange={(event) => setExcludes(event.target.value)} placeholder="unrelated product, unwanted channel" disabled={busy} />
+                <span className="form-help">Comma-separated terms used to reduce unrelated YouTube search results.</span>
               </label>
               <label>
                 Steam or official game URL
-                <input className="app-input" type="url" value={steamUrl} onChange={(event) => setSteamUrl(event.target.value)} placeholder="https://store.steampowered.com/app/..." />
+                <input className="app-input" type="url" value={steamUrl} onChange={(event) => setSteamUrl(event.target.value)} placeholder="https://store.steampowered.com/app/..." disabled={busy} />
               </label>
               <div className="dialog-actions">
-                <button className="btn btn-ghost" type="button" onClick={() => setModalOpen(false)}>Cancel</button>
-                <button className="btn btn-primary" disabled={busy}>Create monitor</button>
+                <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setModalOpen(false)}>Cancel</button>
+                <button className="btn btn-primary" disabled={busy}>{editingGame ? "Save monitor" : "Create monitor"}</button>
               </div>
             </form>
           </div>
