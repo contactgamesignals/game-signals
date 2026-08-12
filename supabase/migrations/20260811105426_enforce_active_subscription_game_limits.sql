@@ -1,0 +1,4 @@
+-- Historical production migration.
+-- This version changed game-limit enforcement so inactive subscriptions are treated as Free.
+-- The function is superseded by 20260812194151_reconcile_active_games_with_subscription_limits.sql,
+-- which contains the complete current implementation and is safe to replay from a fresh database.
