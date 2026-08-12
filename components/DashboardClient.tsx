@@ -40,6 +40,10 @@ function relativeTime(value: string) {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
+function scanTime(value: string | null) {
+  return value ? `${relativeTime(value)} ago` : "pending";
+}
+
 function isTwitchLive(mention: DashboardMention) {
   return mention.platform === "twitch" && Boolean(
     mention.last_seen_at && Date.now() - new Date(mention.last_seen_at).getTime() <= TWITCH_LIVE_FRESHNESS_MS,
@@ -78,7 +82,8 @@ export default function DashboardClient({
   const creators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const gameLimit = PLAN_LIMITS[plan].games;
   const planLabel = PLAN_LABELS[plan];
-  const atGameLimit = games.length >= gameLimit;
+  const activeGames = games.filter((game) => game.enabled).length;
+  const atGameLimit = activeGames >= gameLimit;
 
   useEffect(() => {
     const supabase = createClient();
@@ -151,10 +156,32 @@ export default function DashboardClient({
       setSteamUrl("");
       setAliases("");
       setModalOpen(false);
-      setMessage("Game added. The first YouTube and Twitch scans are queued.");
+      setMessage("Game added. YouTube and Twitch monitoring will start automatically.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not add the game.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleGame(game: DashboardGame) {
+    const nextEnabled = !game.enabled;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/games/${game.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      const result = (await response.json()) as { game?: DashboardGame; error?: string };
+      if (!response.ok || !result.game) throw new Error(result.error ?? `Could not ${nextEnabled ? "resume" : "pause"} the game.`);
+      setGames((current) => current.map((item) => item.id === game.id ? result.game as DashboardGame : item));
+      setMessage(`${game.title} monitoring ${nextEnabled ? "resumed" : "paused"}.`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Could not ${nextEnabled ? "resume" : "pause"} the game.`);
     } finally {
       setBusy(false);
     }
@@ -173,26 +200,6 @@ export default function DashboardClient({
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not remove the game.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function scanGame(id: string) {
-    setBusy(true);
-    setMessage("Starting Twitch and YouTube scans…");
-    try {
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId: id }),
-      });
-      const result = (await response.json()) as { error?: string; details?: string };
-      if (!response.ok) throw new Error(result.error ?? "Could not start a scan.");
-      setMessage(result.details ?? "Scan completed. New signals will appear here automatically.");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not start a scan.");
     } finally {
       setBusy(false);
     }
@@ -239,10 +246,10 @@ export default function DashboardClient({
               <p>YouTube and Twitch monitoring is active. Kick is coming soon.</p>
             </div>
             <div className="dashboard-actions">
-              <span className="plan-pill">{planLabel} · {games.length}/{gameLimit} games</span>
+              <span className="plan-pill">{planLabel} · {activeGames}/{gameLimit} active games</span>
               {plan === "publisher" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
               <button className="btn btn-primary" disabled={atGameLimit} onClick={() => setModalOpen(true)}>
-                {atGameLimit ? "Game limit reached" : "Add game"}
+                {atGameLimit ? "Active game limit reached" : "Add game"}
               </button>
             </div>
           </div>
@@ -250,7 +257,7 @@ export default function DashboardClient({
           {message ? <div className="status-message">{message}</div> : null}
           {atGameLimit && plan !== "publisher" ? (
             <div className="status-message">
-              You are using all {gameLimit} game slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Manage your plan in Settings to track more games.
+              You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or manage your plan in Settings to monitor another title.
             </div>
           ) : null}
 
@@ -264,7 +271,7 @@ export default function DashboardClient({
           <section className="dashboard-panel" id="games">
             <div className="dashboard-panel-head">
               <div><div className="panel-title">Tracked portfolio</div><h2>Your games</h2></div>
-              <span className="tiny">YouTube + Twitch active · {games.length}/{gameLimit} slots used</span>
+              <span className="tiny">YouTube + Twitch active · {activeGames}/{gameLimit} active slots used</span>
             </div>
             <div className="dashboard-panel-body">
               {games.length ? games.map((game) => (
@@ -272,13 +279,19 @@ export default function DashboardClient({
                   <div>
                     <div className="game-title">{game.title}</div>
                     <div className="game-meta">
-                      {game.twitch_game_id ? "Twitch category resolved" : "Twitch category will resolve automatically"} · YouTube monitoring active
+                      YouTube: {scanTime(game.youtube_last_scanned_at)} · Twitch: {scanTime(game.twitch_last_scanned_at)}
                     </div>
                   </div>
                   <div className="game-status"><i />{game.enabled ? "Monitoring" : "Paused"}</div>
                   <div className="dashboard-actions">
-                    <button className="icon-btn" onClick={() => scanGame(game.id)}>Scan now</button>
-                    <button className="icon-btn danger" onClick={() => removeGame(game.id)}>Remove</button>
+                    <button
+                      className="icon-btn"
+                      disabled={busy || (!game.enabled && atGameLimit)}
+                      onClick={() => toggleGame(game)}
+                    >
+                      {game.enabled ? "Pause" : atGameLimit ? "No free slot" : "Resume"}
+                    </button>
+                    <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
                   </div>
                 </div>
               )) : (
