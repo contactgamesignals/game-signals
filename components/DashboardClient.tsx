@@ -24,6 +24,8 @@ type PendingGame = {
   sources?: string[];
 };
 
+const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
+
 function platformClass(platform: DashboardMention["platform"]) {
   if (platform === "youtube") return { cls: "y", short: "YT" };
   if (platform === "twitch") return { cls: "t", short: "TW" };
@@ -36,6 +38,12 @@ function relativeTime(value: string) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
   return `${Math.floor(seconds / 86400)}d`;
+}
+
+function isTwitchLive(mention: DashboardMention) {
+  return mention.platform === "twitch" && Boolean(
+    mention.last_seen_at && Date.now() - new Date(mention.last_seen_at).getTime() <= TWITCH_LIVE_FRESHNESS_MS,
+  );
 }
 
 export default function DashboardClient({
@@ -62,9 +70,7 @@ export default function DashboardClient({
     [mentions, filter],
   );
 
-  const liveNow = mentions.filter(
-    (mention) => mention.platform !== "youtube" && Date.now() - new Date(mention.detected_at).getTime() < 4 * 60 * 60 * 1000,
-  ).length;
+  const liveNow = mentions.filter(isTwitchLive).length;
   const totalReach = mentions.reduce(
     (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
     0,
@@ -300,17 +306,19 @@ export default function DashboardClient({
                 const icon = platformClass(mention.platform);
                 const gameValue = Array.isArray(mention.games) ? mention.games[0] : mention.games;
                 const reach = mention.view_count ?? mention.viewer_count;
+                const twitchLive = isTwitchLive(mention);
                 return (
                   <a className="mention-row" href={mention.url} target="_blank" rel="noreferrer" key={mention.id}>
                     <div className={`ico ${icon.cls}`}>{icon.short}</div>
                     <div>
                       <div className="mention-title">{mention.title}</div>
                       <div className="mention-sub">
-                        {mention.creator_name} · {gameValue?.title ?? "Tracked game"}{reach !== null ? ` · ${reach.toLocaleString("en-US")}` : ""}
+                        {mention.creator_name} · {gameValue?.title ?? "Tracked game"}
+                        {reach !== null ? ` · ${reach.toLocaleString("en-US")}` : ""} · score {mention.signal_score}/100
                       </div>
                     </div>
                     <span className={`badge ${mention.platform === "youtube" ? "video" : "live"}`}>
-                      {mention.platform === "youtube" ? "VIDEO" : "LIVE"}
+                      {mention.platform === "youtube" ? "VIDEO" : twitchLive ? "LIVE" : "STREAM"}
                     </span>
                     <div className="mention-time">{relativeTime(mention.detected_at)}</div>
                   </a>
