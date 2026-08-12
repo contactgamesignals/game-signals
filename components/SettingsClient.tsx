@@ -37,9 +37,9 @@ const PAID_PLANS: Array<{
   yearly: string;
   summary: string;
 }> = [
-  { plan: "indie", monthly: "24.50 PLN / mo", yearly: "245 PLN / yr", summary: "1 tracked game" },
-  { plan: "studio", monthly: "64.50 PLN / mo", yearly: "645 PLN / yr", summary: "Up to 3 games + Discord" },
-  { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 games + export" },
+  { plan: "indie", monthly: "24.50 PLN / mo", yearly: "245 PLN / yr", summary: "1 active game" },
+  { plan: "studio", monthly: "64.50 PLN / mo", yearly: "645 PLN / yr", summary: "Up to 3 active games + Discord" },
+  { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 active games + export" },
 ];
 
 export default function SettingsClient({ workspaceId, currentPlan, subscriptionStatus, hasStripeCustomer }: Props) {
@@ -242,6 +242,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
   }
 
   const discordLocked = status !== null && !status.allowed;
+  const discordConnected = Boolean(status?.configured && status?.enabled);
 
   return (
     <div className="settings-grid">
@@ -249,7 +250,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Billing</h2>
-            <p>Stripe-hosted Checkout for subscriptions and a secure billing portal for existing customers.</p>
+            <p>Choose a plan with Stripe Checkout. Existing subscriptions are changed or cancelled securely in Stripe Customer Portal.</p>
           </div>
           <span className="plan-pill">
             {billingChecking ? "Checking…" : `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`}
@@ -258,16 +259,24 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
         {!billingChecking && !billingConfigured ? (
           <div className="status-message" style={{ marginBottom: 14 }}>
-            Stripe backend is deployed. Add the Stripe sandbox secret to Supabase to enable Checkout.
+            Billing is temporarily unavailable. Please try again later.
           </div>
         ) : null}
         {billingMessage ? <div className="auth-success" style={{ marginBottom: 14 }}>{billingMessage}</div> : null}
         {billingError ? <div className="auth-error" style={{ marginBottom: 14 }}>{billingError}</div> : null}
 
         <div className="dashboard-actions" style={{ marginBottom: 14 }}>
-          <button type="button" className={billingPeriod === "monthly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("monthly")} disabled={billingBusy || billingChecking || hasPaidPlan}>Monthly</button>
-          <button type="button" className={billingPeriod === "yearly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("yearly")} disabled={billingBusy || billingChecking || hasPaidPlan}>Yearly · 2 months free</button>
-          {billingHasCustomer ? <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured} onClick={openBillingPortal}>Manage billing</button> : null}
+          {!hasPaidPlan ? (
+            <>
+              <button type="button" className={billingPeriod === "monthly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("monthly")} disabled={billingBusy || billingChecking}>Monthly</button>
+              <button type="button" className={billingPeriod === "yearly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("yearly")} disabled={billingBusy || billingChecking}>Yearly · 2 months free</button>
+            </>
+          ) : null}
+          {billingHasCustomer ? (
+            <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured} onClick={openBillingPortal}>
+              Manage billing
+            </button>
+          ) : null}
         </div>
 
         <div className="form-grid">
@@ -279,25 +288,45 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
                   <strong>{PLAN_LABELS[item.plan]}</strong>
                   <p style={{ margin: "4px 0 0" }}>{item.summary} · {billingPeriod === "monthly" ? item.monthly : item.yearly}</p>
                 </div>
-                {isCurrent ? <span className="plan-pill">Current plan</span> : (
-                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured || hasPaidPlan} onClick={() => startCheckout(item.plan)}>{hasPaidPlan ? "Use portal" : `Choose ${PLAN_LABELS[item.plan]}`}</button>
+                {isCurrent ? (
+                  <span className="plan-pill">Current plan</span>
+                ) : hasPaidPlan ? (
+                  <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
+                    Change plan
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(item.plan)}>
+                    Choose {PLAN_LABELS[item.plan]}
+                  </button>
                 )}
               </div>
             );
           })}
         </div>
+
+        {hasPaidPlan ? (
+          <div className="status-message" style={{ marginTop: 14 }}>
+            Plan changes, monthly/yearly switching, payment methods, invoices and cancellation are handled in Stripe Customer Portal.
+          </div>
+        ) : null}
       </section>
 
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Discord alerts</h2>
-            <p>The webhook URL is stored server-side and is never returned to the browser after saving.</p>
+            <p>Get creator signals in a Discord channel. The webhook URL stays server-side and is never returned after saving.</p>
           </div>
-          <span className="plan-pill">{!status ? "Checking…" : !status.allowed ? "Studio+ required" : status.configured ? "Connected" : "Not connected"}</span>
+          <span className="plan-pill">
+            {!status ? "Checking…" : !status.allowed ? "Studio+ required" : discordConnected ? "Connected" : "Not connected"}
+          </span>
         </div>
 
-        {discordLocked ? <div className="status-message" style={{ marginBottom: 14 }}>Discord alerts are included in Studio and Publisher. Your current plan is <strong>{status.plan}</strong>. Existing webhook data can still be removed after a downgrade, but alerts will not be delivered.</div> : null}
+        {discordLocked ? (
+          <div className="status-message" style={{ marginBottom: 14 }}>
+            Discord alerts are included in Studio and Publisher. A saved webhook is not used while the workspace is on an ineligible plan.
+          </div>
+        ) : null}
         {message ? <div className="auth-success" style={{ marginBottom: 14 }}>{message}</div> : null}
         {error ? <div className="auth-error" style={{ marginBottom: 14 }}>{error}</div> : null}
 
@@ -305,14 +334,14 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
           <label>
             {status?.configured ? "Replace webhook URL" : "Discord webhook URL"}
             <input className="app-input" type="url" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://discord.com/api/webhooks/..." required autoComplete="off" disabled={busy || discordLocked} />
-            <span className="form-help">Create it in Discord: Server Settings → Integrations → Webhooks.</span>
+            <span className="form-help">Discord → Server Settings → Integrations → Webhooks.</span>
           </label>
           <label>
             Minimum signal score: {minimumSignalScore}
             <input className="range" type="range" min="0" max="100" value={minimumSignalScore} onChange={(event) => setMinimumSignalScore(Number(event.target.value))} disabled={busy || discordLocked} />
           </label>
           <label>
-            Minimum viewers for live streams
+            Minimum viewers for Twitch live streams
             <input className="app-input" type="number" min="0" step="1" value={minimumLiveViewers} onChange={(event) => setMinimumLiveViewers(Number(event.target.value))} disabled={busy || discordLocked} />
           </label>
           <div className="dashboard-actions">
@@ -324,16 +353,21 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
       </section>
 
       <section className="settings-card">
-        <h2>Email alerts</h2>
-        <p>The delivery pipeline is implemented and tested, but production email sending stays disabled until GameSignal has a verified sending domain.</p>
-        <div className="settings-row"><span>Status</span><span className="plan-pill">Coming soon</span></div>
+        <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
+          <div>
+            <h2>Email alerts</h2>
+            <p>The delivery pipeline is implemented and tested. Production sending remains disabled until GameSignal has a verified sending domain.</p>
+          </div>
+          <span className="plan-pill">Coming soon</span>
+        </div>
       </section>
 
       <section className="settings-card">
         <h2>Platform monitoring</h2>
-        <p>YouTube and Twitch API credentials are configured and their server-side schedulers are active. Kick is the remaining platform integration.</p>
-        <div className="settings-row"><span>YouTube + Twitch</span><span className="plan-pill">Active</span></div>
-        <div className="settings-row"><span>Kick</span><span className="plan-pill">Pending API integration</span></div>
+        <p>YouTube and Twitch monitoring is live. Kick remains disabled until the required API/commercial approval is in place.</p>
+        <div className="settings-row"><span>YouTube</span><span className="plan-pill">Active</span></div>
+        <div className="settings-row"><span>Twitch</span><span className="plan-pill">Active</span></div>
+        <div className="settings-row"><span>Kick</span><span className="plan-pill">Coming soon</span></div>
       </section>
     </div>
   );
