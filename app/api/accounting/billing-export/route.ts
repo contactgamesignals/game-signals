@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { deriveBillingCompliance, SELLER_TAX_PROFILE } from "@/lib/billing-compliance";
 
 export const dynamic = "force-dynamic";
 
@@ -83,35 +84,58 @@ export async function GET() {
     "service_period_start",
     "service_period_end",
     "stripe_mode",
+    "seller_vat_status",
+    "tax_route",
+    "vat_action",
+    "vat_ue_action",
+    "sme_action",
+    "ksef_action",
+    "live_readiness",
+    "accounting_review_required",
     "hosted_invoice_url",
     "invoice_pdf",
   ];
 
-  const rows = (records ?? []).map((record) => [
-    record.invoice_created_at,
-    record.invoice_number,
-    record.stripe_invoice_id,
-    record.stripe_status,
-    record.buyer_type,
-    record.jurisdiction_bucket,
-    record.customer_country,
-    record.customer_name,
-    record.customer_email,
-    addressCell(record.customer_address),
-    taxIdsCell(record.customer_tax_ids),
-    record.currency,
-    record.subtotal_amount,
-    record.discount_amount,
-    record.tax_amount,
-    record.total_amount,
-    record.amount_paid,
-    record.amount_remaining,
-    record.period_start,
-    record.period_end,
-    record.livemode ? "live" : "sandbox",
-    record.hosted_invoice_url,
-    record.invoice_pdf,
-  ].map(safeCell).join(","));
+  const rows = (records ?? []).map((record) => {
+    const compliance = deriveBillingCompliance({
+      buyerType: record.buyer_type,
+      jurisdictionBucket: record.jurisdiction_bucket,
+    });
+
+    return [
+      record.invoice_created_at,
+      record.invoice_number,
+      record.stripe_invoice_id,
+      record.stripe_status,
+      record.buyer_type,
+      record.jurisdiction_bucket,
+      record.customer_country,
+      record.customer_name,
+      record.customer_email,
+      addressCell(record.customer_address),
+      taxIdsCell(record.customer_tax_ids),
+      record.currency,
+      record.subtotal_amount,
+      record.discount_amount,
+      record.tax_amount,
+      record.total_amount,
+      record.amount_paid,
+      record.amount_remaining,
+      record.period_start,
+      record.period_end,
+      record.livemode ? "live" : "sandbox",
+      SELLER_TAX_PROFILE.vatStatus,
+      compliance.taxRoute,
+      compliance.vatAction,
+      compliance.vatUeAction,
+      compliance.smeAction,
+      compliance.ksefAction,
+      compliance.liveReadiness,
+      compliance.accountingReviewRequired ? "yes" : "no",
+      record.hosted_invoice_url,
+      record.invoice_pdf,
+    ].map(safeCell).join(",");
+  });
 
   const csv = `\uFEFF${headers.map(safeCell).join(",")}\r\n${rows.join("\r\n")}`;
   const date = new Date().toISOString().slice(0, 10);
