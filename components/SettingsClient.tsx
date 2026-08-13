@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
 import { PLAN_LABELS, normalizePlan } from "@/lib/plans";
@@ -31,6 +32,8 @@ type BillingResponse = {
   usePortal?: boolean;
 };
 
+type BuyerType = "individual" | "company";
+
 const PAID_PLANS: Array<{
   plan: PaidPlanName;
   monthly: string;
@@ -60,9 +63,17 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
   const [billingHasCustomer, setBillingHasCustomer] = useState(hasStripeCustomer);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [buyerType, setBuyerType] = useState<BuyerType>("individual");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [recurringBillingAccepted, setRecurringBillingAccepted] = useState(false);
+  const [immediateServiceRequested, setImmediateServiceRequested] = useState(false);
 
   const effectivePlan = billingStatus === "active" || billingStatus === "trialing" ? billingPlan : "free";
   const hasPaidPlan = effectivePlan !== "free";
+  const checkoutConsentsReady =
+    termsAccepted &&
+    recurringBillingAccepted &&
+    (buyerType === "company" || immediateServiceRequested);
 
   async function invokeDiscord(action: "status" | "upsert" | "delete" | "test", extra: Record<string, unknown> = {}) {
     const supabase = createClient();
@@ -223,11 +234,22 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
   async function startCheckout(plan: PaidPlanName) {
     if (!billingConfigured || hasPaidPlan) return;
+    if (!checkoutConsentsReady) {
+      setBillingError("Choose Individual or Company and accept the required checkout statements first.");
+      return;
+    }
     setBillingBusy(true);
     setBillingError(null);
     setBillingMessage(null);
     try {
-      const data = await invokeBilling("checkout", { plan, period: billingPeriod });
+      const data = await invokeBilling("checkout", {
+        plan,
+        period: billingPeriod,
+        buyer_type: buyerType,
+        terms_accepted: termsAccepted,
+        recurring_billing_accepted: recurringBillingAccepted,
+        immediate_service_requested: buyerType === "individual" ? immediateServiceRequested : false,
+      });
       if (data.usePortal) {
         setBillingBusy(false);
         await openBillingPortal();
@@ -279,6 +301,66 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
           ) : null}
         </div>
 
+        {!hasPaidPlan ? (
+          <div className="form-grid" style={{ marginBottom: 18 }}>
+            <div>
+              <strong>Who is buying?</strong>
+              <p className="form-help" style={{ marginTop: 5 }}>Choose how the subscription should be purchased and documented.</p>
+            </div>
+            <div className="dashboard-actions">
+              <button
+                type="button"
+                className={buyerType === "individual" ? "btn btn-primary" : "btn btn-ghost"}
+                onClick={() => { setBuyerType("individual"); setImmediateServiceRequested(false); }}
+                disabled={billingBusy}
+              >
+                Individual / solo
+              </button>
+              <button
+                type="button"
+                className={buyerType === "company" ? "btn btn-primary" : "btn btn-ghost"}
+                onClick={() => { setBuyerType("company"); setImmediateServiceRequested(false); }}
+                disabled={billingBusy}
+              >
+                Company / business
+              </button>
+            </div>
+
+            <div className="status-message">
+              {buyerType === "company"
+                ? "Stripe Checkout will collect the billing address and, where supported for the selected country, require the company legal name and VAT/tax ID."
+                : "Stripe Checkout will collect your billing address as an individual. Company VAT/tax fields will not be required."}
+            </div>
+
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
+              <span>
+                I accept the <Link href="/terms" target="_blank">Terms</Link> and confirm that I have read the <Link href="/privacy" target="_blank">Privacy Policy</Link>.
+              </span>
+            </label>
+
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={recurringBillingAccepted} onChange={(event) => setRecurringBillingAccepted(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
+              <span>
+                I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation takes effect at the end of the current paid period. Payments are generally non-refundable and no credits are provided for partially used billing periods, except where required by applicable law.
+              </span>
+            </label>
+
+            {buyerType === "individual" ? (
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <input type="checkbox" checked={immediateServiceRequested} onChange={(event) => setImmediateServiceRequested(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
+                <span>
+                  I expressly request that GameSignal starts providing the digital service immediately, before the 14-day withdrawal period ends. I understand that if I validly withdraw during that period, I may have to pay a proportionate amount for the service already provided, and mandatory consumer rights remain unaffected.
+                </span>
+              </label>
+            ) : (
+              <div className="form-help">
+                Company purchase. Mandatory rights that apply by law to a particular business customer, including any statutory protections for qualifying sole traders, are not excluded.
+              </div>
+            )}
+          </div>
+        ) : null}
+
         <div className="form-grid">
           {PAID_PLANS.map((item) => {
             const isCurrent = effectivePlan === item.plan;
@@ -295,8 +377,8 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
                     Change plan
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(item.plan)}>
-                    Choose {PLAN_LABELS[item.plan]}
+                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured || !checkoutConsentsReady} onClick={() => startCheckout(item.plan)}>
+                    Continue with {PLAN_LABELS[item.plan]}
                   </button>
                 )}
               </div>
@@ -306,7 +388,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
         {hasPaidPlan ? (
           <div className="status-message" style={{ marginTop: 14 }}>
-            Plan changes, monthly/yearly switching, payment methods, invoices and cancellation are handled in Stripe Customer Portal.
+            Plan changes, monthly/yearly switching, payment methods, invoices and cancellation are handled in Stripe Customer Portal. Cancellation applies at the end of the paid period; unused time is not normally refunded or credited except where required by law.
           </div>
         ) : null}
       </section>
