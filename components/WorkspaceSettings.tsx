@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { COMPANY } from "@/lib/company";
 
 type Props = {
   userId: string;
@@ -128,14 +129,30 @@ export default function WorkspaceSettings({
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
-            <h2>Support</h2>
-            <p>Need help with monitoring, billing or a false-positive signal? Contact GameSignal support.</p>
+            <h2>Operator & support</h2>
+            <p>GameSignal is operated by {COMPANY.legalName}.</p>
           </div>
-          <span className="plan-pill">Support</span>
+          <span className="plan-pill">Lumino Games</span>
         </div>
         <div className="settings-row">
-          <span>Email</span>
-          <a href="mailto:contact.gamesignals@gmail.com">contact.gamesignals@gmail.com</a>
+          <span>Company</span>
+          <span>{COMPANY.legalName}</span>
+        </div>
+        <div className="settings-row">
+          <span>Registered office</span>
+          <span>{COMPANY.registeredAddress}</span>
+        </div>
+        <div className="settings-row">
+          <span>Company IDs</span>
+          <span>KRS {COMPANY.krs} · NIP {COMPANY.nip}</span>
+        </div>
+        <div className="settings-row">
+          <span>Support</span>
+          <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a>
+        </div>
+        <div className="dashboard-actions" style={{ marginTop: 14 }}>
+          <Link className="btn btn-ghost" href="/privacy">Privacy Policy</Link>
+          <Link className="btn btn-ghost" href="/terms">Terms</Link>
         </div>
       </section>
 
