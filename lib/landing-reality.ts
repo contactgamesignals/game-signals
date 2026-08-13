@@ -64,7 +64,16 @@ markup = replace(
   "Yes. In the production version you will be able to cancel from account settings while keeping access until the end of the paid period.",
   "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period.",
 );
-markup = replace(markup, '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Privacy Policy · Terms · Contact</div></footer>', '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Closed beta · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></footer>');
+markup = replace(
+  markup,
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Privacy Policy · Terms · Contact</div></div></footer>',
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+);
+markup = replace(
+  markup,
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Closed beta · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+);
 markup = replace(markup, '<div class="notification"><strong>New creator detected</strong><p>RavenByte is streaming your game on Kick for the first time.</p></div>', '');
 markup = replace(markup, '<button type="button" class="source-check selected">Kick</button>', '<button type="button" class="source-check" aria-disabled="true" style="opacity:.55">Kick · soon</button>');
 markup = replace(markup, '<div class="notice">Interactive frontend demo. A production version still needs APIs, a database, auth, and payments.</div>', '<div class="notice">After signup, YouTube and Twitch monitoring starts automatically. Kick and email delivery are coming soon.</div>');
