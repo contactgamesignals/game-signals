@@ -163,6 +163,32 @@ function jurisdictionBucket(country: string | null) {
   return "non_eu";
 }
 
+async function workspaceFromCustomer(
+  service: ReturnType<typeof createClient>,
+  customerId: string | null,
+) {
+  if (!customerId) return null;
+  const { data } = await service
+    .from("subscriptions")
+    .select("workspace_id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+  return data?.workspace_id ?? null;
+}
+
+async function workspaceFromInvoiceLedger(
+  service: ReturnType<typeof createClient>,
+  invoiceId: string | null,
+) {
+  if (!invoiceId) return { workspaceId: null as string | null, linked: false };
+  const { data } = await service
+    .from("billing_invoice_records")
+    .select("workspace_id")
+    .eq("stripe_invoice_id", invoiceId)
+    .maybeSingle();
+  return { workspaceId: data?.workspace_id ?? null, linked: Boolean(data?.workspace_id) };
+}
+
 async function syncInvoiceRecord(
   service: ReturnType<typeof createClient>,
   eventId: string,
@@ -185,14 +211,7 @@ async function syncInvoiceRecord(
       .maybeSingle();
     workspaceId = data?.workspace_id ?? null;
   }
-  if (!workspaceId && customerId) {
-    const { data } = await service
-      .from("subscriptions")
-      .select("workspace_id")
-      .eq("stripe_customer_id", customerId)
-      .maybeSingle();
-    workspaceId = data?.workspace_id ?? null;
-  }
+  if (!workspaceId) workspaceId = await workspaceFromCustomer(service, customerId);
   if (!workspaceId) {
     console.warn("Stripe invoice could not be linked to a GameSignal workspace", invoiceId);
     return;
@@ -270,6 +289,91 @@ async function syncInvoiceRecord(
   if (error) throw error;
 }
 
+async function syncCreditNote(
+  service: ReturnType<typeof createClient>,
+  eventId: string,
+  creditNote: Record<string, unknown>,
+) {
+  const creditNoteId = stringValue(creditNote.id);
+  if (!creditNoteId) return;
+  const invoiceId = idFromExpandable(creditNote.invoice);
+  const customerId = idFromExpandable(creditNote.customer);
+  const invoiceLookup = await workspaceFromInvoiceLedger(service, invoiceId);
+  const workspaceId = invoiceLookup.workspaceId ?? await workspaceFromCustomer(service, customerId);
+  if (!workspaceId) {
+    console.warn("Stripe credit note could not be linked to a GameSignal workspace", creditNoteId);
+    return;
+  }
+
+  const record: Record<string, unknown> = {
+    workspace_id: workspaceId,
+    adjustment_type: "credit_note",
+    stripe_object_id: creditNoteId,
+    livemode: Boolean(creditNote.livemode),
+    needs_accounting_review: !invoiceLookup.linked,
+    last_stripe_event_id: eventId,
+  };
+  const optional: Array<[string, unknown]> = [
+    ["stripe_invoice_id", invoiceId],
+    ["stripe_customer_id", customerId],
+    ["document_number", stringValue(creditNote.number)],
+    ["status", stringValue(creditNote.status)],
+    ["reason", stringValue(creditNote.reason)],
+    ["currency", stringValue(creditNote.currency)?.toLowerCase() ?? null],
+    ["amount", numberValue(creditNote.amount) ?? numberValue(creditNote.total)],
+    ["pre_payment_amount", numberValue(creditNote.pre_payment_amount)],
+    ["post_payment_amount", numberValue(creditNote.post_payment_amount)],
+    ["effective_at", timestampValue(creditNote.effective_at) ?? timestampValue(creditNote.created)],
+    ["voided_at", timestampValue(creditNote.voided_at)],
+    ["document_pdf", stringValue(creditNote.pdf)],
+  ];
+  for (const [key, value] of optional) {
+    if (value !== null && value !== undefined) record[key] = value;
+  }
+
+  const { error } = await service
+    .from("billing_adjustment_records")
+    .upsert(record, { onConflict: "adjustment_type,stripe_object_id" });
+  if (error) throw error;
+}
+
+async function syncChargeRefundTotal(
+  service: ReturnType<typeof createClient>,
+  eventId: string,
+  eventCreated: number | null,
+  charge: Record<string, unknown>,
+) {
+  const chargeId = stringValue(charge.id);
+  const amountRefunded = numberValue(charge.amount_refunded);
+  if (!chargeId || amountRefunded === null || amountRefunded <= 0) return;
+  const customerId = idFromExpandable(charge.customer);
+  const workspaceId = await workspaceFromCustomer(service, customerId);
+  if (!workspaceId) {
+    console.warn("Stripe refunded charge could not be linked to a GameSignal workspace", chargeId);
+    return;
+  }
+
+  const record: Record<string, unknown> = {
+    workspace_id: workspaceId,
+    adjustment_type: "refund_total",
+    stripe_object_id: chargeId,
+    stripe_charge_id: chargeId,
+    stripe_customer_id: customerId,
+    status: charge.refunded === true ? "fully_refunded" : "partially_refunded",
+    currency: stringValue(charge.currency)?.toLowerCase() ?? null,
+    amount: amountRefunded,
+    effective_at: eventCreated === null ? null : new Date(eventCreated * 1000).toISOString(),
+    livemode: Boolean(charge.livemode),
+    needs_accounting_review: true,
+    last_stripe_event_id: eventId,
+  };
+
+  const { error } = await service
+    .from("billing_adjustment_records")
+    .upsert(record, { onConflict: "adjustment_type,stripe_object_id" });
+  if (error) throw error;
+}
+
 function hexToBytes(hex: string) {
   if (hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) return null;
   const bytes = new Uint8Array(hex.length / 2);
@@ -340,6 +444,7 @@ Deno.serve(async (request) => {
     const event = JSON.parse(rawBody) as {
       id: string;
       type: string;
+      created?: number;
       data: { object: Record<string, unknown> };
     };
     const object = event.data.object;
@@ -410,6 +515,18 @@ Deno.serve(async (request) => {
       event.type === "invoice.marked_uncollectible"
     ) {
       await syncInvoiceRecord(service, event.id, object);
+    }
+
+    if (
+      event.type === "credit_note.created" ||
+      event.type === "credit_note.updated" ||
+      event.type === "credit_note.voided"
+    ) {
+      await syncCreditNote(service, event.id, object);
+    }
+
+    if (event.type === "charge.refunded") {
+      await syncChargeRefundTotal(service, event.id, numberValue(event.created), object);
     }
 
     return json({ received: true });
