@@ -8,6 +8,8 @@ const headers = {
 
 const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.vercel.app";
 const PORTAL_CONFIGURATION_VERSION = "2";
+const TERMS_VERSION = "2026-08-13-v2";
+const PRIVACY_VERSION = "2026-08-13-v2";
 
 const lookupKeys = {
   indie: { monthly: "gamesignal_indie_monthly", yearly: "gamesignal_indie_yearly" },
@@ -19,6 +21,7 @@ const allLookupKeys = Object.values(lookupKeys).flatMap((periods) => [periods.mo
 
 type PaidPlan = keyof typeof lookupKeys;
 type Period = "monthly" | "yearly";
+type BuyerType = "individual" | "company";
 type StripeObject = Record<string, unknown>;
 
 function json(data: unknown, status = 200) {
@@ -60,6 +63,10 @@ function isPaidPlan(value: unknown): value is PaidPlan {
 
 function isPeriod(value: unknown): value is Period {
   return value === "monthly" || value === "yearly";
+}
+
+function isBuyerType(value: unknown): value is BuyerType {
+  return value === "individual" || value === "company";
 }
 
 async function stripeRequest(path: string, options: { method?: "GET" | "POST"; body?: URLSearchParams } = {}) {
@@ -199,6 +206,10 @@ Deno.serve(async (request) => {
       workspace_id?: string;
       plan?: unknown;
       period?: unknown;
+      buyer_type?: unknown;
+      terms_accepted?: unknown;
+      recurring_billing_accepted?: unknown;
+      immediate_service_requested?: unknown;
     };
 
     if (body.action === "healthcheck" || body.action === "integration_healthcheck") {
@@ -272,6 +283,15 @@ Deno.serve(async (request) => {
     if (!isPaidPlan(body.plan) || !isPeriod(body.period)) {
       return json({ error: "Invalid billing plan or period." }, 400);
     }
+    if (!isBuyerType(body.buyer_type)) {
+      return json({ error: "Choose whether you are buying as an individual or a company." }, 400);
+    }
+    if (body.terms_accepted !== true || body.recurring_billing_accepted !== true) {
+      return json({ error: "Terms and recurring billing must be accepted before checkout." }, 400);
+    }
+    if (body.buyer_type === "individual" && body.immediate_service_requested !== true) {
+      return json({ error: "Individuals must explicitly request immediate service before checkout." }, 400);
+    }
 
     const alreadyPaid =
       subscription.plan !== "free" &&
@@ -286,6 +306,26 @@ Deno.serve(async (request) => {
     const price = prices[0] && typeof prices[0] === "object" ? prices[0] as StripeObject : null;
     if (!price || typeof price.id !== "string") throw new Error(`Stripe price ${lookupKey} was not found.`);
 
+    const admin = serviceClient();
+    const { data: consent, error: consentError } = await admin
+      .from("billing_checkout_consents")
+      .insert({
+        workspace_id: body.workspace_id,
+        user_id: authData.user.id,
+        buyer_type: body.buyer_type,
+        plan: body.plan,
+        billing_period: body.period,
+        terms_version: TERMS_VERSION,
+        privacy_version: PRIVACY_VERSION,
+        terms_accepted: true,
+        recurring_billing_accepted: true,
+        immediate_service_requested: body.buyer_type === "individual" ? true : Boolean(body.immediate_service_requested),
+        user_agent: request.headers.get("user-agent"),
+      })
+      .select("id")
+      .single();
+    if (consentError || !consent?.id) throw new Error("Could not record checkout consent.");
+
     const params = new URLSearchParams();
     params.set("mode", "subscription");
     params.set("line_items[0][price]", price.id);
@@ -294,22 +334,43 @@ Deno.serve(async (request) => {
     params.set("cancel_url", `${SITE_URL}/dashboard/settings?billing=cancelled`);
     params.set("client_reference_id", body.workspace_id);
     params.set("allow_promotion_codes", "true");
-    params.set("billing_address_collection", "auto");
+    params.set("billing_address_collection", "required");
     params.set("metadata[workspace_id]", body.workspace_id);
     params.set("metadata[plan]", body.plan);
     params.set("metadata[billing_period]", body.period);
+    params.set("metadata[buyer_type]", body.buyer_type);
+    params.set("metadata[consent_id]", String(consent.id));
+    params.set("metadata[terms_version]", TERMS_VERSION);
     params.set("subscription_data[metadata][workspace_id]", body.workspace_id);
     params.set("subscription_data[metadata][plan]", body.plan);
     params.set("subscription_data[metadata][billing_period]", body.period);
+    params.set("subscription_data[metadata][buyer_type]", body.buyer_type);
+    params.set("subscription_data[metadata][consent_id]", String(consent.id));
+
+    if (body.buyer_type === "company") {
+      params.set("tax_id_collection[enabled]", "true");
+      params.set("tax_id_collection[required]", "if_supported");
+    }
 
     if (subscription.stripe_customer_id) {
       params.set("customer", String(subscription.stripe_customer_id));
+      params.set("customer_update[address]", "auto");
+      if (body.buyer_type === "company") params.set("customer_update[name]", "auto");
     } else if (authData.user.email) {
       params.set("customer_email", authData.user.email);
     }
 
     const session = await stripeRequest("/checkout/sessions", { method: "POST", body: params });
-    if (typeof session.url !== "string") throw new Error("Stripe did not return a Checkout URL.");
+    if (typeof session.url !== "string" || typeof session.id !== "string") {
+      throw new Error("Stripe did not return a Checkout URL.");
+    }
+
+    const { error: consentLinkError } = await admin
+      .from("billing_checkout_consents")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", consent.id);
+    if (consentLinkError) console.error("Could not link consent to Stripe session", consentLinkError);
+
     return json({ url: session.url });
   } catch (error) {
     console.error(error);
