@@ -12,6 +12,7 @@ type Props = {
   initialDisplayName: string;
   workspaceId: string;
   initialWorkspaceName: string;
+  canManageBilling: boolean;
 };
 
 type DeleteAccountResponse = {
@@ -27,6 +28,7 @@ export default function WorkspaceSettings({
   initialDisplayName,
   workspaceId,
   initialWorkspaceName,
+  canManageBilling,
 }: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -129,7 +131,7 @@ export default function WorkspaceSettings({
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
-            <h2>Operator & support</h2>
+            <h2>Operator & legal</h2>
             <p>GameSignal is operated by {COMPANY.legalName}.</p>
           </div>
           <span className="plan-pill">Lumino Games</span>
@@ -153,8 +155,27 @@ export default function WorkspaceSettings({
         <div className="dashboard-actions" style={{ marginTop: 14 }}>
           <Link className="btn btn-ghost" href="/privacy">Privacy Policy</Link>
           <Link className="btn btn-ghost" href="/terms">Terms</Link>
+          <Link className="btn btn-ghost" href="/withdrawal">Withdrawal</Link>
         </div>
       </section>
+
+      {canManageBilling ? (
+        <section className="settings-card">
+          <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
+            <div>
+              <h2>Accounting export</h2>
+              <p>Download the Stripe billing ledger for bookkeeping and future KSeF/OSS workflows.</p>
+            </div>
+            <span className="plan-pill">Owner / admin</span>
+          </div>
+          <div className="status-message" style={{ marginBottom: 14 }}>
+            The export contains invoice snapshots, buyer type, billing country, tax IDs, currency and Stripe amounts. It does not contain payment-card details or secret keys.
+          </div>
+          <div className="dashboard-actions">
+            <a className="btn btn-ghost" href="/api/accounting/billing-export">Download billing ledger CSV</a>
+          </div>
+        </section>
+      ) : null}
 
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
