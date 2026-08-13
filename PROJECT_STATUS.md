@@ -12,62 +12,56 @@
 - Database-enforced active monitoring limits: Free 1, Indie 1, Studio 3, Publisher 10.
 - Concurrent create/resume operations are serialized so limits cannot be race-bypassed.
 - Plan downgrades preserve data by pausing excess monitors; resume above the new limit is blocked.
-- Downgrade behavior was transactionally verified: Studio with 3 active games -> Indie with 1 active + 2 paused.
 - Twitch Edge Function authenticated against the real Twitch API; server scheduler runs every minute and workers apply per-plan due times.
 - YouTube Edge Function authenticated against the real YouTube Data API; scheduler runs every 15 minutes with a conservative due-game queue to protect Search API quota.
-- Manual scan quota protection is enforced server-side; dashboard relies on automatic monitoring and shows last scan times.
-- Real AFTERBLAST monitoring verified: Twitch category resolved and YouTube found real mentions.
-- YouTube first scan performs a 30-day backfill and gaming-context quality filtering removed false positives in the real test.
-- Twitch `LIVE` state is based on recent `last_seen_at`; old streams remain historical `STREAM` rows.
-- Realtime mention updates in the dashboard.
-- Studio/Publisher Discord webhook management and delivery worker with retries/deduplication; a real AFTERBLAST Discord alert was delivered successfully.
-- Publisher CSV signal export with spreadsheet formula-injection protection.
-- Stripe SANDBOX products/prices for Indie, Studio and Publisher, monthly + yearly; stable lookup keys configured.
-- Stripe-hosted Checkout, webhook synchronization and Customer Portal are live in sandbox mode.
-- Real sandbox Checkout upgraded the production test workspace from Free to Studio / active, and Stripe/Supabase subscription state matched.
-- Customer Portal supports payment details, invoice history, cancellation at period end and changing among all six recurring prices.
+- Real AFTERBLAST monitoring and real Studio/Publisher Discord delivery were verified.
+- Publisher signal CSV export has spreadsheet formula-injection protection.
+- Stripe SANDBOX products/prices for Indie, Studio and Publisher, monthly + yearly; Stripe-hosted Checkout and Customer Portal are configured in sandbox mode.
 - First paid checkout supports `Individual / solo` and `Company / business` before redirecting to Stripe.
-- Company checkout requests a full billing address and Stripe Tax ID collection where supported; buyer type is copied into Checkout/subscription metadata.
-- Individual checkout requires an explicit immediate-service request in addition to Terms/Privacy acceptance and recurring-billing acknowledgement.
-- Checkout creation is blocked server-side unless the required buyer type and legal acknowledgements are present; this cannot be bypassed by calling the Edge Function directly.
-- Checkout evidence is written server-side to `billing_checkout_consents` with user/workspace, plan, period, document versions, buyer type, acknowledgement flags, timestamp/user-agent and associated Stripe Checkout Session ID.
-- Consent evidence has RLS plus explicit deny policies for `anon` and `authenticated`; client roles have no table privileges. Security Advisor no longer reports the table.
-- Public Terms include recurring billing, cancellation at the end of the paid period and a generally non-refundable/no-partial-period-credit policy subject to mandatory legal remedies.
-- Public `/withdrawal` page provides consumer withdrawal information and a model withdrawal statement; Terms and Privacy link to it.
-- Stripe webhook verifies HMAC signatures; its signing secret is stored in Supabase Vault.
-- Resend email delivery backend is implemented and a real test alert was delivered to the Resend account email.
-- Production email cron and test channel are intentionally disabled until a verified sender domain exists.
-- Kick is intentionally unavailable and marked Coming soon pending appropriate KICK developer/commercial approval.
-- Public landing is rendered truthfully server-side: YouTube + Twitch live, Kick/email Coming soon, no unsupported team/history/filter/support claims.
-- Landing explains that checkout can be Individual or Company/business and links Privacy, Terms, Withdrawal and Contact.
-- Public site is explicitly marked Closed beta and Stripe sandbox is disclosed; no real payments are accepted yet.
+- Company checkout requests full billing address and Stripe Tax ID collection where supported; Individual checkout requires the explicit immediate-service request.
+- Terms/Privacy acceptance and recurring-billing acknowledgement are enforced server-side before Checkout creation.
+- Checkout evidence is stored server-side in `billing_checkout_consents`, linked to the Stripe Checkout Session and inaccessible to client writes/deletes.
+- Public Terms include recurring billing, end-of-period cancellation and a generally non-refundable/no-partial-period-credit policy subject to mandatory legal remedies.
+- Public `/withdrawal` page provides consumer withdrawal information and a model withdrawal statement.
+- GameSignal is presented as operated by `Lumino Games sp. z o.o.` and public Terms/Privacy/Withdrawal plus company details are linked from the product.
+- Stripe invoice accounting snapshots are stored in `billing_invoice_records`: invoice/customer/subscription IDs, buyer type, billing country/address, tax IDs, currency, amounts, service period, invoice status and Stripe document links.
+- Billing records are grouped only into neutral `pl / eu / non_eu / unknown` jurisdiction buckets; the application does not automatically declare reverse charge, OSS or a VAT rate from the buyer checkbox.
+- Stripe webhook v7 synchronizes subscription state, invoice lifecycle, Credit Notes and direct charge refund totals. HMAC signature verification uses the webhook secret in Supabase Vault.
+- Credit Notes are linked to their Stripe invoice where possible. Direct card refunds that cannot be safely tied to a specific invoice are retained with `needs_accounting_review=true` rather than guessed.
+- Owner/admin Settings exposes separate accounting CSV exports for invoice ledger and billing adjustments; neither export includes payment-card data or secrets.
+- One existing Studio sandbox invoice was backfilled into the billing ledger to verify a real record shape without creating a new payment.
+- Stripe sandbox webhook endpoint is enabled for checkout/subscription events, invoice lifecycle events, `credit_note.created/updated/voided` and `charge.refunded`.
+- Internal `docs/ACCOUNTING_AND_VAT_FLOW.md` documents the neutral PL/EU/non-EU routing, KSeF handoff principles and the no-tax-guessing rule.
+- Privacy Policy discloses checkout-consent evidence and Stripe invoice-ledger snapshots.
+- Resend email backend is implemented/tested but production email cron remains disabled until a verified sender domain exists.
+- Kick remains Coming soon pending appropriate KICK approval; no scraping/private endpoints.
+- Public landing is rendered truthfully server-side and explicitly says Closed beta / Stripe sandbox; no real payments are accepted yet.
 - DM Sans and Space Grotesk are self-hosted through `next/font`.
-- Production security headers are live: nosniff, DENY framing, strict referrer policy, camera/microphone/geolocation disabled, COOP and restrictive base/object/frame CSP directives.
-- Supabase downgrade reconciliation trigger is no longer callable as a public RPC; execute is limited to postgres/service_role.
-- GameSignal is formally presented in the product as operated by `Lumino Games sp. z o.o.` with KRS/NIP/REGON and the current registered office in Kraków.
-- Public `/terms` and `/privacy` pages and the operator details are integrated with Settings.
+- Production security headers are live.
+- Supabase Security Advisor after the billing-ledger migrations reports only the two known items: `pg_net` in public schema and Leaked Password Protection disabled.
 
 ## Current automation
 - `gamesignal-discord-every-minute` — active.
 - `gamesignal-twitch-every-minute` — active.
 - `gamesignal-youtube-every-15-minutes` — active.
 - `gamesignal-email-every-minute` — intentionally inactive.
-- Recent Twitch and YouTube scan runs are succeeding without errors.
 
 ## Remaining before a paid public launch
-1. Finalize tax treatment for the two buyer paths before real charges: Company/B2B VAT-ID handling and Individual/B2C place-of-supply/VAT/OSS handling. Decide whether displayed consumer prices are VAT-inclusive and whether Stripe Tax or another tax workflow will be used.
-2. Finalize invoicing/accounting flow under Lumino Games, including Polish/KSeF handling where applicable and what sales evidence is passed from Stripe/GameSignal to accounting.
-3. Move billing from Stripe sandbox to Stripe live mode: recreate/verify live products and prices, live webhook, live portal and live secrets. Do this only after items 1-2.
-4. Perform a final paid-launch legal review of Terms/Privacy/Withdrawal/checkout wording. The current safeguards are implemented in closed beta, but mandatory consumer rights remain intentionally preserved.
-5. Enable Supabase Auth Leaked Password Protection in the dashboard.
-6. If email alerts should launch immediately, verify a production sending domain and then enable the email cron. Otherwise keep Email as Coming soon.
-7. Obtain appropriate KICK approval before enabling paid Kick monitoring; do not substitute scraping/private endpoints.
-8. Review YouTube Search quota before meaningful scale. The current default Search API budget is not suitable for aggressive per-game refresh promises across many customers; request/plan additional quota before scaling.
-9. Google OAuth is optional and should only be configured if social login is intentionally enabled.
+1. Confirm Lumino Games' actual launch-date VAT/VAT-UE status and approve the transaction matrix for: PL Individual, PL Company, EU Individual, EU Company, non-EU Individual and non-EU Company. The code intentionally does not guess this.
+2. Decide EU B2C electronic-service handling (including the EUR 10,000 cross-border threshold/OSS where applicable), evidence required for EU B2B treatment and whether customer-facing prices are VAT-inclusive.
+3. Implement the actual Polish invoice/KSeF document-generation and submission layer for transactions where it is required. Stripe invoice PDFs remain payment/billing evidence and are not treated as a substitute for KSeF.
+4. Run final sandbox Checkout tests for both buyer paths, including an EU Company with tax ID and an EU Individual, then test a Credit Note/refund flow.
+5. Move Stripe from sandbox to live mode: live products/prices, live webhook, live portal, live account/business/tax configuration and live secrets. Do this only after items 1-4.
+6. Final paid-launch legal review of Terms/Privacy/Withdrawal/checkout wording.
+7. Enable Supabase Auth Leaked Password Protection in the dashboard.
+8. If email alerts should launch immediately, verify a production sending domain; otherwise keep Email Coming soon.
+9. Obtain appropriate KICK approval before enabling Kick monitoring.
+10. Review/request YouTube Search quota before meaningful scale.
+11. Google OAuth remains optional.
 
 ## Legal operator
 - Product/brand: `GameSignal`.
-- Operator/controller/seller for launch preparation: `Lumino Games sp. z o.o.`.
+- Operator/controller/seller: `Lumino Games sp. z o.o.`.
 - KRS: `0000910452`.
 - NIP: `6762600090`.
 - REGON: `389433660`.
@@ -81,6 +75,6 @@
 - Production URL: `https://game-signals.vercel.app`.
 
 ## Advisor notes
-- Supabase Security Advisor: known `pg_net` extension-in-public warning remains. The installed extension is non-relocatable and is required by the working pg_cron/pg_net scheduler path, so it is intentionally left in place.
-- Supabase Security Advisor also reports Leaked Password Protection disabled; this is the remaining manual Auth setting to enable.
-- Performance Advisor currently shows unused-index informational hints expected for the very small dataset; no indexes are being removed at this stage.
+- Supabase Security Advisor: known `pg_net` extension-in-public warning remains. It is required by the working pg_cron/pg_net scheduler path and is intentionally left in place.
+- Supabase Security Advisor reports Leaked Password Protection disabled; this remains a manual Auth setting.
+- Performance Advisor unused-index hints are informational for the current very small dataset; no indexes are being removed at this stage.
