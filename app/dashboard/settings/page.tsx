@@ -16,7 +16,7 @@ export default async function SettingsPage() {
 
   const { data: membership } = await supabase
     .from("workspace_members")
-    .select("workspace_id, workspaces(name)")
+    .select("workspace_id, role, workspaces(name)")
     .eq("user_id", data.user.id)
     .limit(1)
     .maybeSingle();
@@ -41,6 +41,7 @@ export default async function SettingsPage() {
   const workspaceName = (workspaceValue?.name as string | undefined) ?? "My workspace";
   const email = data.user.email ?? "";
   const displayName = profile?.display_name ?? email.split("@")[0] ?? "Account";
+  const canManageBilling = membership.role === "owner" || membership.role === "admin";
 
   return (
     <div className="app-shell">
@@ -60,6 +61,7 @@ export default async function SettingsPage() {
             initialDisplayName={displayName}
             workspaceId={membership.workspace_id as string}
             initialWorkspaceName={workspaceName}
+            canManageBilling={canManageBilling}
           />
         </div>
         <SettingsClient
