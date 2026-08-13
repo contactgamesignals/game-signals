@@ -26,17 +26,26 @@
 - Stripe-hosted Checkout, webhook synchronization and Customer Portal are live in sandbox mode.
 - Real sandbox Checkout upgraded the production test workspace from Free to Studio / active, and Stripe/Supabase subscription state matched.
 - Customer Portal supports payment details, invoice history, cancellation at period end and changing among all six recurring prices.
+- First paid checkout supports `Individual / solo` and `Company / business` before redirecting to Stripe.
+- Company checkout requests a full billing address and Stripe Tax ID collection where supported; buyer type is copied into Checkout/subscription metadata.
+- Individual checkout requires an explicit immediate-service request in addition to Terms/Privacy acceptance and recurring-billing acknowledgement.
+- Checkout creation is blocked server-side unless the required buyer type and legal acknowledgements are present; this cannot be bypassed by calling the Edge Function directly.
+- Checkout evidence is written server-side to `billing_checkout_consents` with user/workspace, plan, period, document versions, buyer type, acknowledgement flags, timestamp/user-agent and associated Stripe Checkout Session ID.
+- Consent evidence has RLS plus explicit deny policies for `anon` and `authenticated`; client roles have no table privileges. Security Advisor no longer reports the table.
+- Public Terms include recurring billing, cancellation at the end of the paid period and a generally non-refundable/no-partial-period-credit policy subject to mandatory legal remedies.
+- Public `/withdrawal` page provides consumer withdrawal information and a model withdrawal statement; Terms and Privacy link to it.
 - Stripe webhook verifies HMAC signatures; its signing secret is stored in Supabase Vault.
 - Resend email delivery backend is implemented and a real test alert was delivered to the Resend account email.
 - Production email cron and test channel are intentionally disabled until a verified sender domain exists.
 - Kick is intentionally unavailable and marked Coming soon pending appropriate KICK developer/commercial approval.
 - Public landing is rendered truthfully server-side: YouTube + Twitch live, Kick/email Coming soon, no unsupported team/history/filter/support claims.
+- Landing explains that checkout can be Individual or Company/business and links Privacy, Terms, Withdrawal and Contact.
 - Public site is explicitly marked Closed beta and Stripe sandbox is disclosed; no real payments are accepted yet.
 - DM Sans and Space Grotesk are self-hosted through `next/font`.
 - Production security headers are live: nosniff, DENY framing, strict referrer policy, camera/microphone/geolocation disabled, COOP and restrictive base/object/frame CSP directives.
 - Supabase downgrade reconciliation trigger is no longer callable as a public RPC; execute is limited to postgres/service_role.
 - GameSignal is formally presented in the product as operated by `Lumino Games sp. z o.o.` with KRS/NIP/REGON and the current registered office in Kraków.
-- Public `/terms` and `/privacy` closed-beta pages are live and linked from the landing footer; Settings also identifies Lumino Games as operator and links the legal pages.
+- Public `/terms` and `/privacy` pages and the operator details are integrated with Settings.
 
 ## Current automation
 - `gamesignal-discord-every-minute` — active.
@@ -46,14 +55,15 @@
 - Recent Twitch and YouTube scan runs are succeeding without errors.
 
 ## Remaining before a paid public launch
-1. Decide whether the paid launch is B2B-only or also accepts consumers (B2C). This determines final consumer disclosures, withdrawal/digital-service clauses, checkout wording and EU VAT/OSS handling.
-2. Move billing from Stripe sandbox to Stripe live mode: recreate/verify live products and prices, live webhook, and live secrets. Do this only as an intentional launch step after item 1.
-3. Final legal review of the paid-service Terms/Privacy/checkout disclosures using Lumino Games as operator. Current pages are intentionally closed-beta documents and must be upgraded before real charges are accepted.
-4. Enable Supabase Auth Leaked Password Protection in the dashboard.
-5. If email alerts should launch immediately, verify a production sending domain and then enable the email cron. Otherwise keep Email as Coming soon.
-6. Obtain appropriate KICK approval before enabling paid Kick monitoring; do not substitute scraping/private endpoints.
-7. Review YouTube Search quota before meaningful scale. The current default Search API budget is not suitable for aggressive per-game refresh promises across many customers; request/plan additional quota before scaling.
-8. Google OAuth is optional and should only be configured if social login is intentionally enabled.
+1. Finalize tax treatment for the two buyer paths before real charges: Company/B2B VAT-ID handling and Individual/B2C place-of-supply/VAT/OSS handling. Decide whether displayed consumer prices are VAT-inclusive and whether Stripe Tax or another tax workflow will be used.
+2. Finalize invoicing/accounting flow under Lumino Games, including Polish/KSeF handling where applicable and what sales evidence is passed from Stripe/GameSignal to accounting.
+3. Move billing from Stripe sandbox to Stripe live mode: recreate/verify live products and prices, live webhook, live portal and live secrets. Do this only after items 1-2.
+4. Perform a final paid-launch legal review of Terms/Privacy/Withdrawal/checkout wording. The current safeguards are implemented in closed beta, but mandatory consumer rights remain intentionally preserved.
+5. Enable Supabase Auth Leaked Password Protection in the dashboard.
+6. If email alerts should launch immediately, verify a production sending domain and then enable the email cron. Otherwise keep Email as Coming soon.
+7. Obtain appropriate KICK approval before enabling paid Kick monitoring; do not substitute scraping/private endpoints.
+8. Review YouTube Search quota before meaningful scale. The current default Search API budget is not suitable for aggressive per-game refresh promises across many customers; request/plan additional quota before scaling.
+9. Google OAuth is optional and should only be configured if social login is intentionally enabled.
 
 ## Legal operator
 - Product/brand: `GameSignal`.
