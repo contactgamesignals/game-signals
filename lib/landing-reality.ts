@@ -36,7 +36,7 @@ markup = replace(markup, '<div class="result" data-source="kick" data-viewers="7
 markup = replace(
   markup,
   "A simple subscription model based on the number of tracked games and how quickly you want alerts to arrive.",
-  "Closed beta pricing preview. Checkout currently uses Stripe sandbox and does not charge real money.",
+  "Closed beta pricing preview. Checkout currently uses Stripe sandbox and does not charge real money. At checkout you can purchase as Individual / solo or Company / business.",
 );
 
 markup = replace(
@@ -62,17 +62,17 @@ markup = replace(
 markup = replace(
   markup,
   "Yes. In the production version you will be able to cancel from account settings while keeping access until the end of the paid period.",
-  "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period.",
+  "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.",
 );
 markup = replace(
   markup,
   '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Privacy Policy · Terms · Contact</div></div></footer>',
-  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
 );
 markup = replace(
   markup,
   '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Closed beta · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
-  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
 );
 markup = replace(markup, '<div class="notification"><strong>New creator detected</strong><p>RavenByte is streaming your game on Kick for the first time.</p></div>', '');
 markup = replace(markup, '<button type="button" class="source-check selected">Kick</button>', '<button type="button" class="source-check" aria-disabled="true" style="opacity:.55">Kick · soon</button>');
