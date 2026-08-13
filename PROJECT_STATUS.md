@@ -35,6 +35,8 @@
 - DM Sans and Space Grotesk are self-hosted through `next/font`.
 - Production security headers are live: nosniff, DENY framing, strict referrer policy, camera/microphone/geolocation disabled, COOP and restrictive base/object/frame CSP directives.
 - Supabase downgrade reconciliation trigger is no longer callable as a public RPC; execute is limited to postgres/service_role.
+- GameSignal is formally presented in the product as operated by `Lumino Games sp. z o.o.` with KRS/NIP/REGON and the current registered office in Kraków.
+- Public `/terms` and `/privacy` closed-beta pages are live and linked from the landing footer; Settings also identifies Lumino Games as operator and links the legal pages.
 
 ## Current automation
 - `gamesignal-discord-every-minute` — active.
@@ -44,13 +46,23 @@
 - Recent Twitch and YouTube scan runs are succeeding without errors.
 
 ## Remaining before a paid public launch
-1. Move billing from Stripe sandbox to Stripe live mode: recreate/verify live products and prices, live webhook, and live secrets. Do this only as an intentional launch step.
-2. Decide the legal operator of GameSignal and add real Terms, Privacy Policy, company/contact details and required checkout/legal disclosures. Do not invent these details.
-3. Enable Supabase Auth Leaked Password Protection in the dashboard.
-4. If email alerts should launch immediately, verify a production sending domain and then enable the email cron. Otherwise keep Email as Coming soon.
-5. Obtain appropriate KICK approval before enabling paid Kick monitoring; do not substitute scraping/private endpoints.
-6. Review YouTube Search quota before meaningful scale. The current default Search API budget is not suitable for aggressive per-game refresh promises across many customers; request/plan additional quota before scaling.
-7. Google OAuth is optional and should only be configured if social login is intentionally enabled.
+1. Decide whether the paid launch is B2B-only or also accepts consumers (B2C). This determines final consumer disclosures, withdrawal/digital-service clauses, checkout wording and EU VAT/OSS handling.
+2. Move billing from Stripe sandbox to Stripe live mode: recreate/verify live products and prices, live webhook, and live secrets. Do this only as an intentional launch step after item 1.
+3. Final legal review of the paid-service Terms/Privacy/checkout disclosures using Lumino Games as operator. Current pages are intentionally closed-beta documents and must be upgraded before real charges are accepted.
+4. Enable Supabase Auth Leaked Password Protection in the dashboard.
+5. If email alerts should launch immediately, verify a production sending domain and then enable the email cron. Otherwise keep Email as Coming soon.
+6. Obtain appropriate KICK approval before enabling paid Kick monitoring; do not substitute scraping/private endpoints.
+7. Review YouTube Search quota before meaningful scale. The current default Search API budget is not suitable for aggressive per-game refresh promises across many customers; request/plan additional quota before scaling.
+8. Google OAuth is optional and should only be configured if social login is intentionally enabled.
+
+## Legal operator
+- Product/brand: `GameSignal`.
+- Operator/controller/seller for launch preparation: `Lumino Games sp. z o.o.`.
+- KRS: `0000910452`.
+- NIP: `6762600090`.
+- REGON: `389433660`.
+- Registered office used by GameSignal legal pages: `ul. Ujastek 1, 31-752 Kraków, Poland`.
+- Product support/privacy contact: `contact.gamesignals@gmail.com`.
 
 ## Infrastructure
 - GitHub: `contactgamesignals/game-signals`, branch `main` is the source of truth.
