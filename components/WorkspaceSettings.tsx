@@ -164,15 +164,16 @@ export default function WorkspaceSettings({
           <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
             <div>
               <h2>Accounting export</h2>
-              <p>Download the Stripe billing ledger for bookkeeping and future KSeF/OSS workflows.</p>
+              <p>Download Stripe billing records for bookkeeping and future KSeF/OSS workflows.</p>
             </div>
             <span className="plan-pill">Owner / admin</span>
           </div>
           <div className="status-message" style={{ marginBottom: 14 }}>
-            The export contains invoice snapshots, buyer type, billing country, tax IDs, currency and Stripe amounts. It does not contain payment-card details or secret keys.
+            Invoice snapshots and billing adjustments are kept separately. Direct card refunds that cannot be safely linked to an invoice are flagged for accounting review instead of being guessed automatically.
           </div>
           <div className="dashboard-actions">
-            <a className="btn btn-ghost" href="/api/accounting/billing-export">Download billing ledger CSV</a>
+            <a className="btn btn-ghost" href="/api/accounting/billing-export">Download invoices CSV</a>
+            <a className="btn btn-ghost" href="/api/accounting/adjustments-export">Download adjustments CSV</a>
           </div>
         </section>
       ) : null}
