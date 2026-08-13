@@ -78,3 +78,46 @@
 - Supabase Security Advisor: known `pg_net` extension-in-public warning remains. It is required by the working pg_cron/pg_net scheduler path and is intentionally left in place.
 - Supabase Security Advisor reports Leaked Password Protection disabled; this remains a manual Auth setting.
 - Performance Advisor unused-index hints are informational for the current very small dataset; no indexes are being removed at this stage.
+
+## Latest safe-branch checkpoint — 2026-08-13
+
+This section supersedes the earlier VAT-status uncertainty in the remaining-work list above. Production `main` remains unchanged at `9671f2f00cfab4eba541092ef281bec29d5970d4`. Current work is isolated on `stripe-readiness-20260813` and draft PR #1.
+
+### Seller tax assumption confirmed by the operator
+- Lumino Games sp. z o.o. is currently not a Polish VAT-active taxpayer and intends to remain eligible for the Polish VAT exemption.
+- Do not enable Stripe automatic tax or add Polish output VAT while the exemption validly applies.
+- VAT-UE is a separate status: registering for VAT-UE for qualifying EU B2B services does not by itself convert Lumino Games into a Polish VAT-active taxpayer.
+- Current VAT-UE registration status is still to be confirmed before the first qualifying EU B2B sale.
+- EU B2C should evaluate the cross-border SME/EX procedure while eligible before defaulting to destination VAT/OSS.
+
+### Stripe sandbox tests completed
+- Existing Studio sandbox card payment for 64.50 PLN remains successful and the subscription remains active.
+- A 1.00 PLN partial sandbox refund was executed and verified end-to-end through Stripe webhook -> `billing_adjustment_records`.
+- The adjustment is recorded as `refund_total`, `partially_refunded`, amount `100` minor units, with `needs_accounting_review=true` by design.
+- An isolated 3DS-required sandbox subscription was created only for testing; it entered the expected incomplete/confirmation-required state and was immediately cancelled.
+- The isolated 3DS test did not carry a GameSignal workspace ID and did not mutate the real Studio test workspace.
+- Vercel production showed no runtime errors after the tests and scanning/notification cron jobs remained healthy.
+
+### Safe branch code added
+- `lib/billing-compliance.ts`: VAT-exempt seller profile plus neutral PL/EU/non-EU × Individual/Company routing without calculating a VAT rate.
+- `app/api/accounting/billing-export/route.ts`: accounting CSV now includes seller VAT status, tax route, VAT action, VAT-UE action, SME action, KSeF action, live readiness and accounting-review flag.
+- `app/api/accounting/compliance-summary/route.ts`: owner/admin-only summary of stored Stripe invoice records and their compliance routing.
+- `supabase/functions/stripe-billing/index.ts`: branch source requires individual/business name collection, keeps company tax-ID collection, records `seller_vat_status=exempt`, and hard-locks Stripe API calls to `sk_test_` / `rk_test_` credentials.
+- `lib/ksef/server.ts`: server-only TEST/DEMO/PRODUCTION endpoint configuration, KSeF disabled by default, with a separate production unlock because production KSeF invoices have legal effect.
+- `docs/STRIPE_READINESS_20260813.md`, `docs/VAT_TRANSACTION_MATRIX_DRAFT.md` and `docs/KSEF_AND_VIES_INTEGRATION.md` record the exact current decisions and test state.
+
+### Verification
+- Draft PR #1 exists only for review; it has not been merged.
+- CI for the Stripe/compliance changes passed TypeScript, ESLint and the production Next.js build.
+- No file, table, branch, scanner, notification channel or production deployment was deleted.
+- No Stripe LIVE payment was enabled.
+- Attempted deployment of the hardened `stripe-billing` Edge Function was blocked by the connected-tool safety layer, not by a code/test failure. The currently deployed Supabase `stripe-billing` remains version 10, and its source was retrieved as a rollback reference before attempting any update.
+
+### Current next steps
+1. Keep `main` untouched until branch verification is complete.
+2. Deploy/test the hardened `stripe-billing` function in sandbox when the connected deployment path permits it; do not bypass tool safety controls.
+3. Confirm whether Lumino Games already has VAT-UE registration; if not, register before the first qualifying EU B2B service.
+4. Decide EU B2C cross-border SME/EX vs ordinary destination VAT/OSS handling before allowing EU consumer LIVE checkout.
+5. Implement/test FA(3) generation, KSeF TEST authentication, encrypted online-session submission, status polling and UPO retrieval using anonymized data; only then consider DEMO.
+6. Add persistent VIES evidence for EU Company transactions using the official EC VIES service; a Company declaration alone is not enough for automatic reverse-charge treatment.
+7. Only after tax/KSeF/checkout tests pass: prepare Stripe LIVE products/prices/webhook/portal/secrets and explicitly remove the sandbox-only gate in a separate reviewed change.
