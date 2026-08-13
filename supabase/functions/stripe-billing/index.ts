@@ -182,6 +182,9 @@ async function runIntegrationHealthcheck() {
   params.set("line_items[0][quantity]", "1");
   params.set("success_url", `${SITE_URL}/dashboard/settings?billing=test-success`);
   params.set("cancel_url", `${SITE_URL}/dashboard/settings?billing=test-cancelled`);
+  params.set("billing_address_collection", "required");
+  params.set("tax_id_collection[enabled]", "true");
+  params.set("tax_id_collection[required]", "if_supported");
   params.set("metadata[gamesignal_test]", "true");
   const session = await stripeRequest("/checkout/sessions", { method: "POST", body: params });
   if (typeof session.id !== "string") throw new Error("Stripe did not create a test Checkout Session.");
@@ -191,7 +194,7 @@ async function runIntegrationHealthcheck() {
     ok: true,
     stripe: "authenticated",
     prices: found.size,
-    checkout: "created_and_expired",
+    checkout: "company_fields_created_and_expired",
     portal: typeof portalConfiguration === "string" ? "configured" : "error",
   };
 }
