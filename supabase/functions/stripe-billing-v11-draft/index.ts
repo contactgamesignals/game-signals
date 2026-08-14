@@ -13,6 +13,7 @@ const PRIVACY_VERSION = "2026-08-13-v2";
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
 const STRIPE_TEST_KEY_PATTERN = /^(sk|rk)_test_/;
 const MIN_CHECKOUT_LIFETIME_SECONDS = 30 * 60;
+const LAUNCH_BILLING_COUNTRY = "PL";
 
 const lookupKeys = {
   indie: { monthly: "gamesignal_indie_monthly", yearly: "gamesignal_indie_yearly" },
@@ -274,6 +275,7 @@ async function runIntegrationHealthcheck() {
   params.set("tax_id_collection[required]", "if_supported");
   params.set("metadata[gamesignal_test]", "true");
   params.set("metadata[seller_vat_status]", "active");
+  params.set("metadata[declared_billing_country]", LAUNCH_BILLING_COUNTRY);
   params.set("integration_identifier", integrationIdentifier(healthcheckId));
   params.set("expires_at", String(Math.floor(Date.now() / 1000) + 35 * 60));
   const session = await stripeRequest("/checkout/sessions", {
@@ -409,6 +411,7 @@ async function getOrCreateConsent(
 
   if (!inserted.error && inserted.data?.id) return String(inserted.data.id);
 
+  // Concurrent identical requests can race on the unique attempt link. Re-read the winner.
   if (inserted.error?.code === "23505") {
     const raced = await admin
       .from("billing_checkout_consents")
@@ -489,6 +492,7 @@ function checkoutParams(attempt: CheckoutAttempt, consentId: string) {
   params.set("metadata[checkout_attempt_id]", attempt.id);
   params.set("metadata[terms_version]", TERMS_VERSION);
   params.set("metadata[seller_vat_status]", "active");
+  params.set("metadata[declared_billing_country]", LAUNCH_BILLING_COUNTRY);
   params.set("subscription_data[metadata][workspace_id]", attempt.workspace_id);
   params.set("subscription_data[metadata][plan]", attempt.plan);
   params.set("subscription_data[metadata][billing_period]", attempt.billing_period);
@@ -496,6 +500,7 @@ function checkoutParams(attempt: CheckoutAttempt, consentId: string) {
   params.set("subscription_data[metadata][consent_id]", consentId);
   params.set("subscription_data[metadata][checkout_attempt_id]", attempt.id);
   params.set("subscription_data[metadata][seller_vat_status]", "active");
+  params.set("subscription_data[metadata][declared_billing_country]", LAUNCH_BILLING_COUNTRY);
 
   if (attempt.buyer_type === "company") {
     params.set("name_collection[business][enabled]", "true");
@@ -589,6 +594,9 @@ async function openOrResumeCheckout(args: {
       const expiryRejected = error instanceof StripeApiError &&
         (error.param === "expires_at" || /expires_at|expire/i.test(error.message));
 
+      // If an earlier request with this idempotency key had succeeded, Stripe would replay that
+      // success. An expires_at validation failure therefore means there is no successful Session
+      // to recover under this key, so it is safe to release the reservation and create a new one.
       if (expiryRejected && remainingSeconds < MIN_CHECKOUT_LIFETIME_SECONDS) {
         await markAttempt(admin, attempt.id, { status: "expired" });
         continue;
@@ -614,6 +622,7 @@ Deno.serve(async (request) => {
       plan?: unknown;
       period?: unknown;
       buyer_type?: unknown;
+      billing_country?: unknown;
       terms_accepted?: unknown;
       recurring_billing_accepted?: unknown;
       immediate_service_requested?: unknown;
@@ -699,6 +708,12 @@ Deno.serve(async (request) => {
     }
     if (!isBuyerType(body.buyer_type)) {
       return json({ error: "Choose whether you are buying as an individual or a company." }, 400);
+    }
+    if (body.billing_country !== LAUNCH_BILLING_COUNTRY) {
+      return json({
+        error: "Paid beta is currently available only for customers with a Polish billing address.",
+        supported_billing_country: LAUNCH_BILLING_COUNTRY,
+      }, 409);
     }
     if (body.terms_accepted !== true || body.recurring_billing_accepted !== true) {
       return json({ error: "Terms and recurring billing must be accepted before checkout." }, 400);
