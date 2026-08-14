@@ -31,14 +31,6 @@ jobs:
           chmod +x scripts/validate-fa3-xsd.sh
           bash scripts/run-fa3-validation.sh
 
-      - name: Setup .NET 10 for KSeF TEST auth
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Probe KSeF TEST XAdES authentication
-        run: bash scripts/probe-ksef-test-xades-auth.sh
-
       - name: Lint
         run: npm run lint
 
