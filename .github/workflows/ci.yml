@@ -27,7 +27,9 @@ jobs:
         run: npm run typecheck
 
       - name: Validate FA(3) against official MF XSD
-        run: bash scripts/run-fa3-validation.sh
+        run: |
+          chmod +x scripts/validate-fa3-xsd.sh
+          bash scripts/run-fa3-validation.sh
 
       - name: Lint
         run: npm run lint
