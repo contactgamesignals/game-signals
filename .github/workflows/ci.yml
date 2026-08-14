@@ -26,6 +26,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Validate FA(3) against official MF XSD
+        run: bash scripts/run-fa3-validation.sh
+
       - name: Lint
         run: npm run lint
 
