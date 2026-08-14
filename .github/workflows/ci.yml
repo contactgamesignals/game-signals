@@ -31,9 +31,6 @@ jobs:
           chmod +x scripts/validate-fa3-xsd.sh
           bash scripts/run-fa3-validation.sh
 
-      - name: Probe KSeF TEST public API
-        run: bash scripts/probe-ksef-test-public.sh
-
       - name: Lint
         run: npm run lint
 
