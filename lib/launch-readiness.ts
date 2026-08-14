@@ -67,6 +67,12 @@ export function getLaunchReadiness() {
       detail: `Current KSeF environment: ${ksef.environment}; submission enabled: ${ksef.enabled ? "yes" : "no"}. TEST auth, send, status and UPO must be verified first.`,
     },
     {
+      key: "supabase_auth",
+      label: "Supabase Auth security review",
+      ready: approved("GAMESIGNAL_SUPABASE_AUTH_READY"),
+      detail: "Enable Leaked Password Protection and re-run the Supabase security advisor before LIVE. Keep any remaining advisor warnings explicitly reviewed.",
+    },
+    {
       key: "stripe_account",
       label: "Stripe LIVE account onboarding",
       ready: approved("GAMESIGNAL_STRIPE_ACCOUNT_READY"),
