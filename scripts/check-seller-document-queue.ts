@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 const queue = readFileSync("supabase/migrations/20260814230000_add_seller_document_queue.sql", "utf8");
 const hardening = readFileSync("supabase/migrations/20260814230100_harden_seller_document_queue.sql", "utf8");
 const evidence = readFileSync("supabase/migrations/20260814230200_finalize_seller_document_queue_evidence.sql", "utf8");
+const sequenceFix = readFileSync("supabase/migrations/20260814230300_fix_seller_document_sequence_conflict.sql", "utf8");
 
-for (const [name, sql] of [["queue", queue], ["hardening", hardening], ["evidence", evidence]] as const) {
+for (const [name, sql] of [["queue", queue], ["hardening", hardening], ["evidence", evidence], ["sequence fix", sequenceFix]] as const) {
   assert.doesNotMatch(sql, /\bdrop\s+table\b|\bdrop\s+column\b|\btruncate\s+table\b|\bdelete\s+from\b/i, `${name}: destructive data/schema operation detected`);
 }
 
@@ -21,7 +22,6 @@ assert.match(queue, /Legal invoice numbers cannot be allocated to Stripe sandbox
 assert.match(queue, /doc\.source_livemode is not true/i);
 assert.match(queue, /create or replace function public\.reserve_seller_document_number/i);
 assert.match(queue, /for update/i);
-assert.match(queue, /on conflict \(seller_nip, sequence_year, series\)/i);
 assert.match(queue, /grant execute on function public\.reserve_seller_document_number[\s\S]*to service_role/i);
 assert.match(queue, /revoke all on function public\.reserve_seller_document_number[\s\S]*from public, anon, authenticated/i);
 assert.match(queue, /sandbox_preview_ready/i);
@@ -53,5 +53,12 @@ assert.match(evidence, /coalesce\(new\.finalized_at::date, new\.invoice_created_
 assert.match(evidence, /new\.period_start::date/i);
 assert.match(evidence, /new\.period_end::date/i);
 assert.match(evidence, /new\.billing_reason/i);
+
+assert.match(sequenceFix, /create or replace function public\.reserve_seller_document_number/i);
+assert.match(sequenceFix, /on conflict on constraint billing_document_sequences_seller_nip_sequence_year_series_key/i);
+assert.match(sequenceFix, /returning public\.billing_document_sequences\.last_number into next_number/i);
+assert.match(sequenceFix, /Legal invoice numbers cannot be allocated to Stripe sandbox documents/i);
+assert.match(sequenceFix, /grant execute on function public\.reserve_seller_document_number[\s\S]*to service_role/i);
+assert.match(sequenceFix, /revoke all on function public\.reserve_seller_document_number[\s\S]*from public, anon, authenticated/i);
 
 console.log("Seller document queue, seller isolation, RLS, buyer evidence and legal numbering invariants passed.");
