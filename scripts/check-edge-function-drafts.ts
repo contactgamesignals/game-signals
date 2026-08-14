@@ -5,6 +5,7 @@ import ts from "typescript";
 const drafts = [
   "supabase/functions/stripe-webhook-v8-draft/index.ts",
   "supabase/functions/stripe-billing-v11-draft/index.ts",
+  "supabase/functions/delete-account-v3-draft/index.ts",
 ] as const;
 
 for (const path of drafts) {
@@ -49,6 +50,17 @@ assert.match(billing, /checkout_attempt_id/);
 assert.doesNotMatch(billing, /sk_live_[A-Za-z0-9]/);
 assert.doesNotMatch(billing, /rk_live_[A-Za-z0-9]/);
 
+const deletion = readFileSync(drafts[2], "utf8");
+assert.match(deletion, /billing_accounts/);
+assert.match(deletion, /billing_archive_not_ready/);
+assert.match(deletion, /billing_archive_not_synced/);
+assert.match(deletion, /subscription\?\.stripe_subscription_id && subscription\.status !== "canceled"/);
+assert.match(deletion, /service\.auth\.admin\.deleteUser\(user\.id\)/);
+assert.match(deletion, /retained\.workspace_id !== null/);
+assert.match(deletion, /!retained\.account_deleted_at/);
+assert.match(deletion, /billing_records_retained_as_required/);
+assert.doesNotMatch(deletion, /SUPABASE_SERVICE_ROLE_KEY\s*=\s*["']/);
+
 const checkoutMigration = readFileSync(
   "supabase/migrations/20260814123300_prevent_duplicate_subscription_checkout.sql",
   "utf8",
@@ -60,4 +72,4 @@ assert.match(checkoutMigration, /security invoker/);
 assert.match(checkoutMigration, /grant execute[\s\S]*to service_role/);
 assert.match(checkoutMigration, /revoke all[\s\S]*from public, anon, authenticated/);
 
-console.log("Billing Edge Function drafts and checkout reservation invariants passed.");
+console.log("Billing Edge Function drafts, account deletion and checkout reservation invariants passed.");
