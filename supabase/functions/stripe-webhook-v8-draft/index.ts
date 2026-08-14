@@ -8,6 +8,7 @@ import {
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const STRIPE_TEST_KEY_PATTERN = /^(sk|rk)_test_/;
+const STRIPE_API_VERSION = "2026-06-24.dahlia";
 
 const EU_COUNTRIES = new Set([
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
@@ -139,17 +140,15 @@ async function workspaceFromInvoiceLedger(service: ReturnType<typeof createClien
 
 async function stripeGet(path: string) {
   const secret = Deno.env.get("STRIPE_SECRET_KEY");
-  const apiVersion = Deno.env.get("STRIPE_API_VERSION");
   if (!secret || !STRIPE_TEST_KEY_PATTERN.test(secret)) {
     throw new Error("Stripe webhook v8 draft is sandbox-only and requires a test secret key.");
   }
-  if (!apiVersion) throw new Error("STRIPE_API_VERSION must be pinned before webhook v8 can call Stripe.");
 
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${secret}`,
-      "Stripe-Version": apiVersion,
+      "Stripe-Version": STRIPE_API_VERSION,
     },
     cache: "no-store",
   });
