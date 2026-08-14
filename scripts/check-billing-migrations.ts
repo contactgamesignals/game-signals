@@ -12,6 +12,7 @@ const checkoutReconcile = read("supabase/migrations/20260814130500_reconcile_che
 const checkoutLifecycleFinal = read("supabase/migrations/20260814132000_return_recent_completed_checkout_attempt.sql");
 const archive = read("supabase/migrations/20260814140000_preserve_financial_records_after_account_deletion.sql");
 const archiveTriggerHardening = read("supabase/migrations/20260814140500_harden_billing_archive_internal_triggers.sql");
+const billingFkIndexes = read("supabase/migrations/20260814141000_add_billing_foreign_key_indexes.sql");
 
 for (const [name, sql] of [
   ["location evidence", location],
@@ -125,4 +126,8 @@ for (const fn of [
   );
 }
 
-console.log("Billing migration security, retention and lifecycle invariants passed.");
+assert.match(billingFkIndexes, /create index if not exists billing_checkout_consents_user_id_idx[\s\S]*billing_checkout_consents\(user_id\)/i);
+assert.match(billingFkIndexes, /create index if not exists billing_invoice_records_checkout_consent_id_idx[\s\S]*billing_invoice_records\(checkout_consent_id\)/i);
+assert.doesNotMatch(billingFkIndexes, /\bdrop\b|\bdelete\b|\btruncate\b/i);
+
+console.log("Billing migration security, retention, lifecycle and FK-index invariants passed.");
