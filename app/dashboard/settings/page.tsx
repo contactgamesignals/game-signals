@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import BillingRecoveryCard from "@/components/BillingRecoveryCard";
+import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
 import SettingsClient from "@/components/SettingsClient";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
   const [{ data: subscription }, { data: profile }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("plan, status, stripe_customer_id, stripe_subscription_id")
+      .select("plan, status, stripe_customer_id, stripe_subscription_id, tax_access_status, tax_access_reason")
       .eq("workspace_id", membership.workspace_id)
       .maybeSingle(),
     supabase
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
   const canManageBilling = membership.role === "owner" || membership.role === "admin";
   const subscriptionStatus = subscription?.status ?? "trialing";
   const paymentNeedsAttention = subscriptionStatus === "past_due" || subscriptionStatus === "incomplete";
+  const taxReviewRequired = subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review";
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -94,6 +96,15 @@ export default async function SettingsPage() {
             />
           </div>
         ) : null}
+        {canManageBilling && taxReviewRequired ? (
+          <div className="settings-grid" style={{ marginBottom: 16 }}>
+            <BillingTaxReviewCard
+              workspaceId={membership.workspace_id as string}
+              plan={normalizePlan(subscription?.plan)}
+              reason={subscription?.tax_access_reason ?? null}
+            />
+          </div>
+        ) : null}
         <div className="settings-grid" style={{ marginBottom: 16 }}>
           <WorkspaceSettings
             userId={data.user.id}
@@ -104,7 +115,7 @@ export default async function SettingsPage() {
             canManageBilling={canManageBilling}
           />
         </div>
-        {!paymentNeedsAttention ? (
+        {!paymentNeedsAttention && !taxReviewRequired ? (
           <SettingsClient
             workspaceId={membership.workspace_id as string}
             currentPlan={normalizePlan(subscription?.plan)}
