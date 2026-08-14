@@ -47,6 +47,17 @@ assert.match(billing, /STRIPE_API_VERSION = "2026-06-24\.dahlia"/);
 assert.match(billing, /STRIPE_TEST_KEY_PATTERN/);
 assert.match(billing, /stripe_price_id/);
 assert.match(billing, /checkout_attempt_id/);
+assert.match(billing, /LAUNCH_BILLING_COUNTRY = "PL"/);
+assert.match(billing, /automatic_tax\[enabled\].*true/);
+assert.match(billing, /metadata\[declared_billing_country\]/);
+assert.match(billing, /subscription_data\[metadata\]\[declared_billing_country\]/);
+assert.match(billing, /body\.billing_country !== LAUNCH_BILLING_COUNTRY/);
+assert.match(billing, /Paid beta is currently available only for customers with a Polish billing address/);
+const countryGatePosition = billing.indexOf("body.billing_country !== LAUNCH_BILLING_COUNTRY");
+const checkoutReservationPosition = billing.lastIndexOf("const admin = serviceClient();");
+assert.ok(countryGatePosition >= 0, "Poland-only billing country gate must exist.");
+assert.ok(checkoutReservationPosition >= 0, "Checkout reservation call site must exist.");
+assert.ok(countryGatePosition < checkoutReservationPosition, "Billing-country rejection must occur before Checkout reservation/Stripe creation.");
 assert.doesNotMatch(billing, /sk_live_[A-Za-z0-9]/);
 assert.doesNotMatch(billing, /rk_live_[A-Za-z0-9]/);
 
