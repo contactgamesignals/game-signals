@@ -12,6 +12,8 @@ type Props = {
   invoiceNumber: string | null;
   amountRemaining: number | null;
   currency: string | null;
+  attemptCount: number | null;
+  nextPaymentAttempt: string | null;
 };
 
 function formatMoney(amount: number | null, currency: string | null) {
@@ -26,6 +28,16 @@ function formatMoney(amount: number | null, currency: string | null) {
   }
 }
 
+function formatRetryDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function BillingRecoveryCard({
   workspaceId,
   plan,
@@ -34,10 +46,13 @@ export default function BillingRecoveryCard({
   invoiceNumber,
   amountRemaining,
   currency,
+  attemptCount,
+  nextPaymentAttempt,
 }: Props) {
   const [portalBusy, setPortalBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formattedAmount = formatMoney(amountRemaining, currency);
+  const retryDate = formatRetryDate(nextPaymentAttempt);
 
   async function openBillingPortal() {
     setPortalBusy(true);
@@ -71,7 +86,10 @@ export default function BillingRecoveryCard({
 
       <div className="status-message" style={{ marginBottom: 14 }}>
         {invoiceNumber ? `Outstanding invoice ${invoiceNumber}` : "The latest subscription invoice is still outstanding"}
-        {formattedAmount ? ` · ${formattedAmount}` : ""}. Stripe billing recovery can retry the saved payment method automatically. You can also pay the same invoice now or update your payment method. GameSignal restores paid access automatically after Stripe confirms payment.
+        {formattedAmount ? ` · ${formattedAmount}` : ""}.
+        {attemptCount && attemptCount > 0 ? ` Stripe has already attempted payment ${attemptCount} ${attemptCount === 1 ? "time" : "times"}.` : ""}
+        {retryDate ? ` The next automatic retry is scheduled for ${retryDate}.` : " Stripe billing recovery can retry the saved payment method automatically."}
+        {" "}You can also pay the same invoice now or update your payment method. GameSignal restores paid access automatically after Stripe confirms payment.
       </div>
 
       {error ? <div className="auth-error" style={{ marginBottom: 14 }}>{error}</div> : null}
