@@ -91,6 +91,12 @@ export function getLaunchReadiness() {
       detail: "Before LIVE, persist charge.dispute lifecycle events and approve a clear access/accounting policy for open, won and lost disputes. A refund is not a substitute for dispute handling.",
     },
     {
+      key: "stripe_api_version",
+      label: "Stripe API / webhook version",
+      ready: approved("GAMESIGNAL_STRIPE_API_VERSION_READY"),
+      detail: "Pin the final LIVE webhook/API payload version to a tested Stripe API version and review upgrades deliberately. Do not launch with an unreviewed account-default webhook schema.",
+    },
+    {
       key: "email_delivery",
       label: "Email alert promise",
       ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
