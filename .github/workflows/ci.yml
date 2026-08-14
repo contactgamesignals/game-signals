@@ -31,6 +31,9 @@ jobs:
           chmod +x scripts/validate-fa3-xsd.sh
           bash scripts/run-fa3-validation.sh
 
+      - name: Test financial retention cascade in isolated PostgreSQL 17
+        run: bash scripts/test-financial-retention-postgres.sh
+
       - name: Lint
         run: npm run lint
 
