@@ -96,7 +96,7 @@ for select
 to authenticated
 using (
   workspace_id is not null
-  and public.is_workspace_manager(workspace_id)
+  and private.can_manage_workspace(workspace_id)
 );
 
 create or replace function public.reserve_seller_document_number(
