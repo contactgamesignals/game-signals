@@ -67,10 +67,22 @@ export function getLaunchReadiness() {
       detail: `Current KSeF environment: ${ksef.environment}; submission enabled: ${ksef.enabled ? "yes" : "no"}. TEST auth, send, status and UPO must be verified first.`,
     },
     {
+      key: "stripe_account",
+      label: "Stripe LIVE account onboarding",
+      ready: approved("GAMESIGNAL_STRIPE_ACCOUNT_READY"),
+      detail: "Business profile, website/support details, terms acceptance, charge capability and payouts must all be ready on the final LIVE Stripe account.",
+    },
+    {
+      key: "email_delivery",
+      label: "Email alert promise",
+      ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
+      detail: "Either verify the sender domain and enable the tested email delivery path, or remove email-alert claims from paid-plan marketing before LIVE.",
+    },
+    {
       key: "stripe_review",
       label: "Final Stripe LIVE review",
       ready: approved("GAMESIGNAL_STRIPE_LIVE_APPROVED"),
-      detail: "Live products, prices, webhook, portal, payment methods and legal/tax configuration require a final explicit review.",
+      detail: "Live products, prices, webhook, portal legal links, payment methods and legal/tax configuration require a final explicit review.",
     },
   ];
 
