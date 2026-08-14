@@ -72,7 +72,7 @@ export default function WorkspaceSettings({
 
   async function deleteAccount() {
     if (deleteConfirmation !== "DELETE") return;
-    if (!window.confirm("Permanently delete your GameSignal account and workspace data? This cannot be undone.")) return;
+    if (!window.confirm("Permanently delete your GameSignal account and workspace data? Required billing/accounting records may be retained separately where legally required. This cannot be undone.")) return;
 
     setDeleteBusy(true);
     setDeleteError(null);
@@ -134,7 +134,7 @@ export default function WorkspaceSettings({
             <h2>Operator & legal</h2>
             <p>GameSignal is operated by {COMPANY.legalName}.</p>
           </div>
-          <span className="plan-pill">Lumino Games</span>
+          <span className="plan-pill">Operator</span>
         </div>
         <div className="settings-row">
           <span>Company</span>
@@ -188,7 +188,7 @@ export default function WorkspaceSettings({
         </div>
 
         <div className="status-message" style={{ marginBottom: 14 }}>
-          Paid subscriptions must be cancelled and fully ended before account deletion. If the workspace has other members, deletion is blocked to protect their data.
+          Paid subscriptions must be cancelled and fully ended before account deletion. If the workspace has other members, deletion is blocked to protect their data. Billing, tax, accounting, consent and dispute records that must be retained may remain in a separate seller-side archive after the product account is deleted, as described in the Privacy Policy.
         </div>
         {deleteError ? <div className="auth-error" style={{ marginBottom: 14 }}>{deleteError}</div> : null}
         <label>
