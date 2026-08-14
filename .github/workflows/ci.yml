@@ -31,9 +31,6 @@ jobs:
           chmod +x scripts/validate-fa3-xsd.sh
           bash scripts/run-fa3-validation.sh
 
-      - name: Probe official VIES REST test service
-        run: bash scripts/probe-vies-rest-test-service.sh
-
       - name: Lint
         run: npm run lint
 
