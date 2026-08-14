@@ -267,12 +267,13 @@ async function runIntegrationHealthcheck() {
   params.set("success_url", `${SITE_URL}/dashboard/settings?billing=test-success`);
   params.set("cancel_url", `${SITE_URL}/dashboard/settings?billing=test-cancelled`);
   params.set("billing_address_collection", "required");
+  params.set("automatic_tax[enabled]", "true");
   params.set("name_collection[business][enabled]", "true");
   params.set("name_collection[business][optional]", "false");
   params.set("tax_id_collection[enabled]", "true");
   params.set("tax_id_collection[required]", "if_supported");
   params.set("metadata[gamesignal_test]", "true");
-  params.set("metadata[seller_vat_status]", "exempt");
+  params.set("metadata[seller_vat_status]", "active");
   params.set("integration_identifier", integrationIdentifier(healthcheckId));
   params.set("expires_at", String(Math.floor(Date.now() / 1000) + 35 * 60));
   const session = await stripeRequest("/checkout/sessions", {
@@ -408,7 +409,6 @@ async function getOrCreateConsent(
 
   if (!inserted.error && inserted.data?.id) return String(inserted.data.id);
 
-  // Concurrent identical requests can race on the unique attempt link. Re-read the winner.
   if (inserted.error?.code === "23505") {
     const raced = await admin
       .from("billing_checkout_consents")
@@ -478,6 +478,7 @@ function checkoutParams(attempt: CheckoutAttempt, consentId: string) {
   params.set("client_reference_id", attempt.workspace_id);
   params.set("allow_promotion_codes", "true");
   params.set("billing_address_collection", "required");
+  params.set("automatic_tax[enabled]", "true");
   params.set("expires_at", String(expirySeconds));
   params.set("integration_identifier", integrationIdentifier(attempt.id));
   params.set("metadata[workspace_id]", attempt.workspace_id);
@@ -487,14 +488,14 @@ function checkoutParams(attempt: CheckoutAttempt, consentId: string) {
   params.set("metadata[consent_id]", consentId);
   params.set("metadata[checkout_attempt_id]", attempt.id);
   params.set("metadata[terms_version]", TERMS_VERSION);
-  params.set("metadata[seller_vat_status]", "exempt");
+  params.set("metadata[seller_vat_status]", "active");
   params.set("subscription_data[metadata][workspace_id]", attempt.workspace_id);
   params.set("subscription_data[metadata][plan]", attempt.plan);
   params.set("subscription_data[metadata][billing_period]", attempt.billing_period);
   params.set("subscription_data[metadata][buyer_type]", attempt.buyer_type);
   params.set("subscription_data[metadata][consent_id]", consentId);
   params.set("subscription_data[metadata][checkout_attempt_id]", attempt.id);
-  params.set("subscription_data[metadata][seller_vat_status]", "exempt");
+  params.set("subscription_data[metadata][seller_vat_status]", "active");
 
   if (attempt.buyer_type === "company") {
     params.set("name_collection[business][enabled]", "true");
@@ -588,9 +589,6 @@ async function openOrResumeCheckout(args: {
       const expiryRejected = error instanceof StripeApiError &&
         (error.param === "expires_at" || /expires_at|expire/i.test(error.message));
 
-      // If an earlier request with this idempotency key had succeeded, Stripe would replay that
-      // success. An expires_at validation failure therefore means there is no successful Session
-      // to recover under this key, so it is safe to release the reservation and create a new one.
       if (expiryRejected && remainingSeconds < MIN_CHECKOUT_LIFETIME_SECONDS) {
         await markAttempt(admin, attempt.id, { status: "expired" });
         continue;
