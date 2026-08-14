@@ -85,6 +85,12 @@ export function getLaunchReadiness() {
       detail: "Review Stripe Billing revenue-recovery settings before LIVE: Smart Retries, failed-payment customer emails, automatic card updates and the final subscription state after retries are exhausted.",
     },
     {
+      key: "stripe_disputes",
+      label: "Stripe disputes / chargebacks",
+      ready: approved("GAMESIGNAL_STRIPE_DISPUTES_READY"),
+      detail: "Before LIVE, persist charge.dispute lifecycle events and approve a clear access/accounting policy for open, won and lost disputes. A refund is not a substitute for dispute handling.",
+    },
+    {
       key: "email_delivery",
       label: "Email alert promise",
       ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
