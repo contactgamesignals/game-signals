@@ -44,8 +44,9 @@ PY
 
 node --experimental-strip-types "$TMP_DIR/check-fa3.ts" "$SAMPLE_PATH" >/dev/null
 
-# Remove all real seller identity from the generated XML and prepare the placeholders
-# expected by the official OnlineSession E2E harness.
+# Remove all real seller identity. Use a synthetic but schema-valid seller NIP for
+# the pre-send XSD check; the official MF harness placeholder is injected only after
+# that validation has passed.
 python3 - "$SAMPLE_PATH" <<'PY'
 from pathlib import Path
 import re
@@ -61,8 +62,8 @@ def replace_nth(pattern: str, replacement: str, value: str, occurrence: int) -> 
     match = matches[occurrence - 1]
     return value[:match.start()] + replacement + value[match.end():]
 
-# Podmiot1 seller: random TEST NIP will be injected by the pinned MF test harness.
-text = replace_nth(r"<NIP>[^<]+</NIP>", "<NIP>#nip#</NIP>", text, 1)
+# Podmiot1 seller: synthetic XSD-valid identity for the local validation step.
+text = replace_nth(r"<NIP>[^<]+</NIP>", "<NIP>9999999999</NIP>", text, 1)
 text = replace_nth(r"<Nazwa>[^<]+</Nazwa>", "<Nazwa>GameSignal KSeF TEST Seller</Nazwa>", text, 1)
 text = replace_nth(r"<AdresL1>[^<]+</AdresL1>", "<AdresL1>ul. Testowa 1, 00-001 Warszawa</AdresL1>", text, 1)
 
@@ -82,9 +83,27 @@ for forbidden in ("6762600090", "Lumino Games", "Ujastek"):
 path.write_text(text, encoding="utf-8")
 PY
 
-# Re-validate the anonymized XML against the official pinned XSD before it is sent.
+# Re-validate the fully anonymized, schema-valid XML before any external KSeF call.
 chmod +x "$ROOT_DIR/scripts/validate-fa3-xsd.sh"
 "$ROOT_DIR/scripts/validate-fa3-xsd.sh" "$SAMPLE_PATH" >/dev/null
+
+# The pinned official OnlineSession E2E harness replaces #nip# with its own random
+# TEST-only NIP immediately before encryption/send. Inject that placeholder only now,
+# after our independent XSD safety validation succeeded.
+python3 - "$SAMPLE_PATH" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+marker = "<NIP>9999999999</NIP>"
+if text.count(marker) != 1:
+    raise SystemExit("Expected exactly one synthetic TEST seller NIP before placeholder injection.")
+text = text.replace(marker, "<NIP>#nip#</NIP>", 1)
+if text.count("<NIP>#nip#</NIP>") != 1:
+    raise SystemExit("MF TEST seller NIP placeholder was not injected exactly once.")
+path.write_text(text, encoding="utf-8")
+PY
 
 git clone --quiet --no-tags "$OFFICIAL_REPO" "$TMP_DIR/ksef-client-csharp"
 cd "$TMP_DIR/ksef-client-csharp"
