@@ -7,7 +7,7 @@
     "build": "npm run lint && npm run typecheck && next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && node --experimental-strip-types scripts/check-stripe-event-parsers.ts && node --experimental-strip-types scripts/check-ksef-crypto.ts"
+    "typecheck": "tsc --noEmit && node --experimental-strip-types scripts/check-stripe-event-parsers.ts && node --experimental-strip-types scripts/check-ksef-crypto.ts && node --experimental-strip-types scripts/check-ksef-request-builders.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
