@@ -13,6 +13,8 @@ const checkoutLifecycleFinal = read("supabase/migrations/20260814132000_return_r
 const archive = read("supabase/migrations/20260814140000_preserve_financial_records_after_account_deletion.sql");
 const archiveTriggerHardening = read("supabase/migrations/20260814140500_harden_billing_archive_internal_triggers.sql");
 const billingFkIndexes = read("supabase/migrations/20260814141000_add_billing_foreign_key_indexes.sql");
+const checkoutAttemptUserIndex = read("supabase/migrations/20260814202500_add_checkout_attempt_user_index.sql");
+const invoiceRecovery = read("supabase/migrations/20260814205000_add_invoice_recovery_state.sql");
 
 for (const [name, sql] of [
   ["location evidence", location],
@@ -130,4 +132,13 @@ assert.match(billingFkIndexes, /create index if not exists billing_checkout_cons
 assert.match(billingFkIndexes, /create index if not exists billing_invoice_records_checkout_consent_id_idx[\s\S]*billing_invoice_records\(checkout_consent_id\)/i);
 assert.doesNotMatch(billingFkIndexes, /\bdrop\b|\bdelete\b|\btruncate\b/i);
 
-console.log("Billing migration security, retention, lifecycle and FK-index invariants passed.");
+assert.match(checkoutAttemptUserIndex, /create index if not exists billing_checkout_attempts_user_id_idx[\s\S]*billing_checkout_attempts\(user_id\)/i);
+assert.doesNotMatch(checkoutAttemptUserIndex, /\bdrop\b|\bdelete\b|\btruncate\b/i);
+
+assert.match(invoiceRecovery, /add column if not exists attempt_count integer/i);
+assert.match(invoiceRecovery, /add column if not exists next_payment_attempt timestamptz/i);
+assert.match(invoiceRecovery, /add column if not exists collection_method text/i);
+assert.match(invoiceRecovery, /create index if not exists billing_invoice_records_recovery_idx/i);
+assert.doesNotMatch(invoiceRecovery, /\bdrop\b|\bdelete\b|\btruncate\b/i);
+
+console.log("Billing migration security, retention, lifecycle, recovery and FK-index invariants passed.");
