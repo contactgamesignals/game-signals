@@ -64,7 +64,7 @@ if [[ $DOTNET_STATUS -ne 0 ]] || ! grep -Fq "$SUCCESS_MARKER" "$LOG_PATH"; then
   exit 1
 fi
 
-if grep -Eq 'AccessToken: (?!\[REDACTED\])|RefreshToken: (?!\[REDACTED\])' "$LOG_PATH" 2>/dev/null; then
+if grep -E '(AccessToken|RefreshToken):' "$LOG_PATH" | grep -Fv '[REDACTED]' >/dev/null; then
   echo "Unexpected unredacted token marker detected in local auth log."
   exit 1
 fi
