@@ -18,6 +18,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 SAMPLE_PATH="$TMP_DIR/gamesignal-fa3-test.xml"
 LOG_PATH="$TMP_DIR/ksef-fa3-e2e.log"
+RESULTS_DIR="$TMP_DIR/test-results"
+TRX_PATH="$RESULTS_DIR/ksef-gamesignal-fa3.trx"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 sanitize_log() {
@@ -25,7 +27,7 @@ sanitize_log() {
     -e 's/(AccessToken|RefreshToken|AuthenticationToken):[^[:space:]]*/\1:[REDACTED]/g' \
     -e 's/eyJ[A-Za-z0-9_.-]{20,}/[REDACTED-JWT]/g' \
     -e 's/6762600090/[REDACTED-REAL-NIP]/g' \
-    "$LOG_PATH" | tail -n 160
+    "$LOG_PATH" | tail -n 180
 }
 
 # Generate the exact current GameSignal FA(3) sample without adding a TS runner dependency.
@@ -141,30 +143,20 @@ text = text.replace(fa2, "", 1)
 path.write_text(text, encoding="utf-8")
 PY
 
+mkdir -p "$RESULTS_DIR"
+
+# Follow the official repository's documented test entry point: the solution on a
+# concrete framework. The filter selects the one full OnlineSession integration test;
+# FA2 InlineData was removed above, so exactly one FA3 test case should run.
 set +e
-dotnet test \
-  KSeF.Client.Tests.Core/KSeF.Client.Tests.Core.csproj \
+dotnet test KSeF.Client.sln \
   --framework net10.0 \
   --filter 'FullyQualifiedName~OnlineSessionAsync_FullIntegrationFlow_AllStepsSucceed' \
-  --no-restore \
+  --logger 'trx;LogFileName=ksef-gamesignal-fa3.trx' \
+  --results-directory "$RESULTS_DIR" \
   >"$LOG_PATH" 2>&1
-FIRST_STATUS=$?
+TEST_STATUS=$?
 set -e
-
-# The first invocation may need NuGet restore on a clean runner. Retry once with restore
-# while keeping all output private in /tmp.
-if [[ $FIRST_STATUS -ne 0 ]] && grep -Eqi 'assets file.*not found|run a NuGet package restore|project.assets.json' "$LOG_PATH"; then
-  set +e
-  dotnet test \
-    KSeF.Client.Tests.Core/KSeF.Client.Tests.Core.csproj \
-    --framework net10.0 \
-    --filter 'FullyQualifiedName~OnlineSessionAsync_FullIntegrationFlow_AllStepsSucceed' \
-    >"$LOG_PATH" 2>&1
-  TEST_STATUS=$?
-  set -e
-else
-  TEST_STATUS=$FIRST_STATUS
-fi
 
 if [[ $TEST_STATUS -ne 0 ]]; then
   echo "GameSignal FA(3) KSeF TEST online-session probe failed. Sanitized diagnostic follows:"
@@ -172,19 +164,34 @@ if [[ $TEST_STATUS -ne 0 ]]; then
   exit 1
 fi
 
-# The command returning 0 is not sufficient: some runners return success when a filter
-# selects zero tests. Require an explicit passed-test marker and expose only sanitized
-# diagnostics if the runner format/filter does not provide one.
-if ! grep -Eqi 'Passed!|Passed:|Passed [[:space:]]+[1-9]' "$LOG_PATH"; then
-  echo "KSeF TEST command exited 0 but no explicit passed-test marker was found. Sanitized diagnostic follows:"
+if [[ ! -f "$TRX_PATH" ]]; then
+  echo "KSeF TEST command exited 0 but did not produce the expected TRX result. Sanitized diagnostic follows:"
   sanitize_log
   exit 1
 fi
 
-if grep -Fq "6762600090" "$LOG_PATH"; then
+# Machine-check the test result instead of relying on runner-specific console wording.
+python3 - "$TRX_PATH" <<'PY'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+path = Path(sys.argv[1])
+root = ET.parse(path).getroot()
+results = [element for element in root.iter() if element.tag.endswith("UnitTestResult")]
+matching = [result for result in results if "OnlineSessionAsync_FullIntegrationFlow_AllStepsSucceed" in result.attrib.get("testName", "")]
+if len(matching) != 1:
+    raise SystemExit(f"Expected exactly one selected KSeF FA3 E2E result, found {len(matching)}.")
+outcome = matching[0].attrib.get("outcome")
+if outcome != "Passed":
+    raise SystemExit(f"Selected KSeF FA3 E2E result was {outcome!r}, not 'Passed'.")
+print("Pinned official MF FA3 OnlineSession E2E TRX result: Passed.")
+PY
+
+if grep -Fq "6762600090" "$LOG_PATH" || grep -Fq "6762600090" "$TRX_PATH"; then
   echo "Real seller NIP unexpectedly appeared in KSeF TEST output."
   exit 1
 fi
 
-# Session references, KSeF number and UPO remain only inside the ephemeral xUnit run/log.
+# Session references, KSeF number and UPO remain only inside the ephemeral official test run.
 echo "GameSignal FA(3) passed the pinned official MF KSeF TEST online-session + UPO flow."
