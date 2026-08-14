@@ -51,12 +51,14 @@ export default async function SettingsPage() {
     amount_remaining: number | null;
     currency: string | null;
     hosted_invoice_url: string | null;
+    attempt_count: number | null;
+    next_payment_attempt: string | null;
   } | null = null;
 
   if (canManageBilling && paymentNeedsAttention) {
     const { data: invoice } = await supabase
       .from("billing_invoice_records")
-      .select("invoice_number, amount_remaining, currency, hosted_invoice_url")
+      .select("invoice_number, amount_remaining, currency, hosted_invoice_url, attempt_count, next_payment_attempt")
       .eq("workspace_id", membership.workspace_id)
       .eq("stripe_status", "open")
       .gt("amount_remaining", 0)
@@ -87,6 +89,8 @@ export default async function SettingsPage() {
               invoiceNumber={recoveryInvoice?.invoice_number ?? null}
               amountRemaining={recoveryInvoice?.amount_remaining ?? null}
               currency={recoveryInvoice?.currency ?? null}
+              attemptCount={recoveryInvoice?.attempt_count ?? null}
+              nextPaymentAttempt={recoveryInvoice?.next_payment_attempt ?? null}
             />
           </div>
         ) : null}
