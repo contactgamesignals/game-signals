@@ -32,7 +32,23 @@ jobs:
           bash scripts/run-fa3-validation.sh
 
       - name: Test financial retention cascade in isolated PostgreSQL 17
-        run: bash scripts/test-financial-retention-postgres.sh
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_FILE="$(mktemp)"
+          set +e
+          bash scripts/test-financial-retention-postgres.sh 2>&1 | tee "$LOG_FILE"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$STATUS" -ne 0 ]; then
+            echo "Financial retention regression failed with exit code $STATUS. Last diagnostic lines follow."
+            while IFS= read -r line; do
+              line="${line//'%'/'%25'}"
+              line="${line//$'\r'/'%0D'}"
+              echo "::error title=Financial retention regression::${line}"
+            done < <(tail -n 12 "$LOG_FILE")
+            exit "$STATUS"
+          fi
 
       - name: Lint
         run: npm run lint
