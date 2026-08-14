@@ -79,6 +79,12 @@ export function getLaunchReadiness() {
       detail: "Business profile, website/support details, terms acceptance, charge capability and payouts must all be ready on the final LIVE Stripe account.",
     },
     {
+      key: "stripe_recovery",
+      label: "Stripe revenue recovery",
+      ready: approved("GAMESIGNAL_STRIPE_RECOVERY_READY"),
+      detail: "Review Stripe Billing revenue-recovery settings before LIVE: Smart Retries, failed-payment customer emails, automatic card updates and the final subscription state after retries are exhausted.",
+    },
+    {
       key: "email_delivery",
       label: "Email alert promise",
       ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
