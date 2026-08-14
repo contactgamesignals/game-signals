@@ -36,6 +36,9 @@ Apply all of the following in chronological order. Do not skip intermediate hard
 12. `20260814132000_return_recent_completed_checkout_attempt.sql`
 13. `20260814140000_preserve_financial_records_after_account_deletion.sql`
 14. `20260814140500_harden_billing_archive_internal_triggers.sql`
+15. `20260814141000_add_billing_foreign_key_indexes.sql`
+
+The final migration only adds covering indexes for two existing billing foreign keys reported by the Supabase performance advisor. It does not change data, foreign-key semantics or deletion behavior.
 
 These are forward-only migrations. Historical migrations already applied to production must not be edited or replayed manually.
 
@@ -53,9 +56,11 @@ Do not deploy the draft directory names as parallel customer-facing endpoints.
 
 ## Stripe API version gate
 
-Before deploying webhook v8, its outbound Stripe re-read must use the same explicitly reviewed Stripe API version as billing v11. The current draft billing v11 pins `2026-06-24.dahlia`.
+Webhook v8 and billing v11 both pin outgoing Stripe API calls to the same reviewed sandbox version:
 
-Do not deploy webhook v8 while it still depends on an unmanaged `STRIPE_API_VERSION` environment value. Resolve that dependency by a reviewed code/config change first. Do not silently fall back to the Stripe account default API version.
+- `2026-06-24.dahlia`
+
+Webhook v8 no longer depends on a separate `STRIPE_API_VERSION` environment value and does not fall back to the Stripe account default API schema. The webhook endpoint configuration in Stripe must still be reviewed against the same tested API version during the sandbox cutover.
 
 ## Database verification after migrations, before function cutover
 
@@ -68,7 +73,8 @@ Verify all of the following before replacing any live billing function:
 - reservation and subscription-event RPCs are executable only by the intended server role;
 - no retained financial record is missing `billing_account_id` after backfill;
 - the existing sandbox Studio subscription still resolves to its original workspace/billing account;
-- Supabase security advisor is re-run and any new warning is investigated before function cutover.
+- the two pre-existing unindexed billing foreign-key advisor findings are resolved;
+- Supabase security and performance advisors are re-run and any new warning is investigated before function cutover.
 
 ## Function verification immediately after cutover
 
