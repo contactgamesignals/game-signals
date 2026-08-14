@@ -100,12 +100,14 @@ export default async function SettingsPage() {
             canManageBilling={canManageBilling}
           />
         </div>
-        <SettingsClient
-          workspaceId={membership.workspace_id as string}
-          currentPlan={normalizePlan(subscription?.plan)}
-          subscriptionStatus={subscriptionStatus}
-          hasStripeCustomer={Boolean(subscription?.stripe_customer_id)}
-        />
+        {!paymentNeedsAttention ? (
+          <SettingsClient
+            workspaceId={membership.workspace_id as string}
+            currentPlan={normalizePlan(subscription?.plan)}
+            subscriptionStatus={subscriptionStatus}
+            hasStripeCustomer={Boolean(subscription?.stripe_customer_id)}
+          />
+        ) : null}
       </main>
     </div>
   );
