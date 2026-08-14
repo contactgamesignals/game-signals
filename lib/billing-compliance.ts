@@ -1,14 +1,20 @@
+import { ACTIVE_SELLER } from "@/lib/seller-profile";
+
 export type BillingBuyerType = "individual" | "company" | "unknown";
 export type BillingJurisdiction = "pl" | "eu" | "non_eu" | "unknown";
 
 export const SELLER_TAX_PROFILE = {
-  seller: "Lumino Games sp. z o.o.",
-  country: "PL",
-  vatStatus: "exempt",
-  vatExemptionGoal: "remain_exempt",
-  automaticStripeTax: false,
-  vatUeStatus: "verify_before_first_qualifying_eu_b2b_service",
-  crossBorderSmeStatus: "not_configured",
+  seller: ACTIVE_SELLER.legalName,
+  country: ACTIVE_SELLER.countryCode,
+  vatStatus: ACTIVE_SELLER.vatStatus,
+  automaticStripeTax: ACTIVE_SELLER.automaticStripeTax,
+  vatUeStatus: ACTIVE_SELLER.vatUeStatus,
+  vatStatusVerifiedAt: ACTIVE_SELLER.vatStatusVerifiedAt,
+  vatUeVerifiedAt: ACTIVE_SELLER.vatUeVerifiedAt,
+  stripeTaxPriceBehavior: ACTIVE_SELLER.stripeTaxPriceBehavior,
+  stripeTaxCode: ACTIVE_SELLER.stripeTaxCode,
+  euB2cRoute: ACTIVE_SELLER.euB2cRoute,
+  nonEuRoute: ACTIVE_SELLER.nonEuRoute,
 } as const;
 
 export type BillingComplianceRoute = {
@@ -34,10 +40,11 @@ function normalizeJurisdiction(value: unknown): BillingJurisdiction {
 /**
  * Classifies billing records for accounting/compliance routing only.
  *
- * This function deliberately does not calculate a VAT rate, decide that an
- * EU customer is a taxable person, or replace accounting/legal review. Stripe
- * automatic tax stays off while Lumino Games operates as a Polish VAT-exempt
- * seller and the cross-border SME/VAT-UE setup is not yet finalized.
+ * Lumino Games was verified as an active Polish VAT taxpayer and valid VAT-UE
+ * taxpayer on 2026-08-14. This function deliberately does not replace final
+ * transaction evidence checks: EU B2B still requires customer VAT-ID/VIES
+ * evidence, and EU/non-EU B2C stays fail-closed until the launch tax route is
+ * explicitly approved.
  */
 export function deriveBillingCompliance(input: {
   buyerType: unknown;
@@ -53,7 +60,7 @@ export function deriveBillingCompliance(input: {
       taxRoute: "unknown_manual_review",
       vatAction: "verify_customer_and_transaction",
       vatUeAction: "verify_if_relevant",
-      smeAction: "verify_if_relevant",
+      smeAction: "not_used_active_vat_seller",
       ksefAction: "scope_review_required",
       liveReadiness: "manual_review",
       accountingReviewRequired: true,
@@ -64,8 +71,8 @@ export function deriveBillingCompliance(input: {
     return {
       buyerType,
       jurisdiction,
-      taxRoute: "pl_b2c_vat_exempt",
-      vatAction: "domestic_vat_exemption_expected_no_vat_charge",
+      taxRoute: "pl_b2c_standard_vat",
+      vatAction: "charge_polish_vat_using_inclusive_price",
       vatUeAction: "not_applicable",
       smeAction: "not_applicable",
       ksefAction: "not_mandatory_for_b2c",
@@ -78,11 +85,11 @@ export function deriveBillingCompliance(input: {
     return {
       buyerType,
       jurisdiction,
-      taxRoute: "pl_b2b_vat_exempt",
-      vatAction: "domestic_vat_exemption_expected_no_vat_charge",
+      taxRoute: "pl_b2b_standard_vat",
+      vatAction: "charge_polish_vat_using_inclusive_price",
       vatUeAction: "not_applicable",
       smeAction: "not_applicable",
-      ksefAction: "2026_monthly_10000_pln_transition_threshold_review_if_invoice_required",
+      ksefAction: "issue_polish_vat_invoice_and_apply_current_ksef_rules",
       liveReadiness: "ready_after_document_flow",
       accountingReviewRequired: true,
     };
@@ -93,11 +100,11 @@ export function deriveBillingCompliance(input: {
       buyerType,
       jurisdiction,
       taxRoute: "eu_b2b_reverse_charge_candidate",
-      vatAction: "verify_b2b_place_of_supply_and_customer_taxable_person_status",
-      vatUeAction: "verify_or_register_vat_ue_before_first_qualifying_service_and_report_vat_ue",
-      smeAction: "not_primary_route_for_b2b_reverse_charge_candidate",
-      ksefAction: "cross_border_invoice_scope_review",
-      liveReadiness: "blocked_tax_setup",
+      vatAction: "use_stripe_tax_only_after_valid_business_tax_id_and_place_of_supply_evidence",
+      vatUeAction: "seller_vat_ue_valid_verify_customer_vat_id_in_vies_and_report_if_required",
+      smeAction: "not_applicable_to_standard_b2b_route",
+      ksefAction: "issue_cross_border_business_invoice_under_current_polish_ksef_rules",
+      liveReadiness: "ready_after_document_flow",
       accountingReviewRequired: true,
     };
   }
@@ -106,10 +113,10 @@ export function deriveBillingCompliance(input: {
     return {
       buyerType,
       jurisdiction,
-      taxRoute: "eu_b2c_sme_or_oss_review",
-      vatAction: "confirm_electronic_service_place_of_supply_before_live",
-      vatUeAction: "not_the_primary_b2c_registration_route",
-      smeAction: "configure_cross_border_sme_exemption_ex_number_or_choose_destination_vat_oss",
+      taxRoute: "eu_b2c_destination_vat_or_threshold_review",
+      vatAction: "blocked_until_eur_10000_threshold_and_oss_destination_vat_route_is_confirmed",
+      vatUeAction: "not_primary_b2c_route",
+      smeAction: "not_used_for_current_active_vat_launch_profile",
       ksefAction: "not_mandatory_for_b2c",
       liveReadiness: "blocked_tax_setup",
       accountingReviewRequired: true,
@@ -121,10 +128,10 @@ export function deriveBillingCompliance(input: {
       buyerType,
       jurisdiction,
       taxRoute: "non_eu_b2b_local_tax_review",
-      vatAction: "verify_place_of_supply_and_destination_rules",
+      vatAction: "verify_place_of_supply_and_destination_rules_before_live",
       vatUeAction: "not_applicable",
-      smeAction: "eu_sme_not_applicable",
-      ksefAction: "cross_border_invoice_scope_review",
+      smeAction: "not_applicable",
+      ksefAction: "cross_border_business_invoice_scope_review",
       liveReadiness: "blocked_tax_setup",
       accountingReviewRequired: true,
     };
@@ -134,9 +141,9 @@ export function deriveBillingCompliance(input: {
     buyerType,
     jurisdiction,
     taxRoute: "non_eu_b2c_local_tax_review",
-    vatAction: "verify_destination_country_indirect_tax_rules",
+    vatAction: "blocked_until_destination_country_indirect_tax_rules_are_approved",
     vatUeAction: "not_applicable",
-    smeAction: "eu_sme_not_applicable",
+    smeAction: "not_applicable",
     ksefAction: "not_mandatory_for_b2c",
     liveReadiness: "blocked_tax_setup",
     accountingReviewRequired: true,
