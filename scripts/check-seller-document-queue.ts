@@ -15,6 +15,8 @@ assert.match(queue, /create table if not exists public\.billing_seller_documents
 assert.match(queue, /unique \(seller_nip, stripe_invoice_id, document_type\)/i);
 assert.match(queue, /on delete set null/i);
 assert.match(queue, /on delete restrict/i);
+assert.match(queue, /private\.can_manage_workspace\(workspace_id\)/i);
+assert.doesNotMatch(queue, /public\.is_workspace_manager\(/i);
 assert.match(queue, /Legal invoice numbers cannot be allocated to Stripe sandbox documents/i);
 assert.match(queue, /doc\.source_livemode is not true/i);
 assert.match(queue, /create or replace function public\.reserve_seller_document_number/i);
@@ -52,4 +54,4 @@ assert.match(evidence, /new\.period_start::date/i);
 assert.match(evidence, /new\.period_end::date/i);
 assert.match(evidence, /new\.billing_reason/i);
 
-console.log("Seller document queue, seller isolation, buyer evidence and legal numbering invariants passed.");
+console.log("Seller document queue, seller isolation, RLS, buyer evidence and legal numbering invariants passed.");
