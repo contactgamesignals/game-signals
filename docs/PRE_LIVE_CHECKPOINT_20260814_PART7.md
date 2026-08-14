@@ -6,7 +6,7 @@ This checkpoint records the state immediately before any controlled Supabase/Str
 
 - Production `main` remains based on `9671f2f00cfab4eba541092ef281bec29d5970d4`.
 - Live Supabase migration history still ends at `20260813110545_add_billing_adjustment_ledger`.
-- None of the 14 new billing-readiness migrations has been applied to the live Supabase project.
+- None of the 15 new billing-readiness migrations has been applied to the live Supabase project.
 - Active billing functions remain `stripe-webhook` v7, `stripe-billing` v10 and `delete-account` v2.
 - Stripe remains sandbox/test only.
 - No Stripe LIVE or KSeF PRODUCTION call has been made.
@@ -37,7 +37,9 @@ The application test runtime remains Node 22. Automatic setup-node package-manag
 
 `docs/SANDBOX_BILLING_BUNDLE.md` now records the only approved order for the next billing sandbox cutover.
 
-The live baseline is followed by exactly 14 forward migrations, from the Stripe event-order guard through billing evidence, duplicate-checkout reservation and seller-side financial retention. The entire migration sequence must complete before any billing Edge Function is replaced.
+The live baseline is followed by exactly 15 forward migrations, from the Stripe event-order guard through billing evidence, duplicate-checkout reservation, seller-side financial retention and two additive covering indexes for existing billing foreign keys. The entire migration sequence must complete before any billing Edge Function is replaced.
+
+The two final covering indexes address the current Supabase performance-advisor findings for `billing_checkout_consents.user_id` and `billing_invoice_records.checkout_consent_id`. Their migration contains no DROP, DELETE or TRUNCATE operation and changes no data or FK semantics.
 
 After database verification, the function cutover is treated as one compatibility bundle:
 
@@ -57,6 +59,32 @@ Webhook v8 no longer requires a separate `STRIPE_API_VERSION` Supabase environme
 
 This removes the connector/env-management blocker documented in part 6 without falling back to the Stripe account default API schema.
 
+## Live-data preflight
+
+Read-only checks against the current Supabase runtime found:
+
+- 1 workspace and 1 subscription,
+- zero duplicate non-null Stripe customer IDs,
+- zero duplicate non-null Stripe subscription IDs,
+- 1 invoice-ledger row and 1 adjustment-ledger row,
+- zero invoice/adjustment rows pointing at a missing workspace.
+
+The current financial workspace foreign keys still use `ON DELETE CASCADE`, which is the exact behavior the retention migration intentionally replaces with durable `billing_accounts` ownership plus nullable product links using `ON DELETE SET NULL`.
+
+## Baseline advisors before any DDL
+
+Security baseline:
+
+- `pg_net` is installed in `public` (existing warning),
+- Supabase Auth Leaked Password Protection is disabled (existing warning).
+
+Performance baseline:
+
+- two billing foreign keys lack covering indexes; the new final migration addresses them,
+- remaining notices are unused-index INFO findings and are intentionally not acted on without workload evidence.
+
+Advisors must be run again after any eventual migration bundle and compared to this baseline.
+
 ## Technical external TEST status remains green
 
 Already verified before this checkpoint:
@@ -74,9 +102,9 @@ These technical successes do not approve final production tax treatment or legal
 
 Do not apply a partial bundle.
 
-After the current branch CI is green with the pinned webhook API version, the next controlled runtime step is either:
+After the current branch CI is green with the 15-migration manifest, the next controlled runtime step is either:
 
-1. test the entire 14-migration + v8/v11/v3 bundle on a Supabase development branch, if a development branch is explicitly approved/created, or
+1. test the entire 15-migration + v8/v11/v3 bundle on a Supabase development branch, if a development branch is explicitly approved/created, or
 2. apply the same bundle directly to the current sandbox-backed Supabase runtime only after an explicit pre-cutover verification of the live baseline and rollback versions.
 
 There is currently no Supabase development branch. Creating one may have a cost and therefore requires the separate Supabase cost-confirmation flow before creation.
