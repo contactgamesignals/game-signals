@@ -233,6 +233,9 @@ async function syncInvoiceRecord(
     ["total_amount", numberValue(invoice.total)],
     ["amount_paid", numberValue(invoice.amount_paid)],
     ["amount_remaining", numberValue(invoice.amount_remaining)],
+    ["attempt_count", numberValue(invoice.attempt_count)],
+    ["next_payment_attempt", timestampValue(invoice.next_payment_attempt)],
+    ["collection_method", stringValue(invoice.collection_method)],
     ["customer_email", stringValue(invoice.customer_email)],
     ["customer_name", stringValue(invoice.customer_name)],
     ["customer_country", country],
@@ -595,6 +598,8 @@ Deno.serve(async (request) => {
       event.type === "invoice.finalized" ||
       event.type === "invoice.paid" ||
       event.type === "invoice.payment_failed" ||
+      event.type === "invoice.payment_action_required" ||
+      event.type === "invoice.payment_attempt_required" ||
       event.type === "invoice.voided" ||
       event.type === "invoice.marked_uncollectible"
     ) {
