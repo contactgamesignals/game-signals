@@ -9,6 +9,7 @@ const vies = read("supabase/migrations/20260814015500_add_vies_evidence_ledger.s
 const checkout = read("supabase/migrations/20260814123300_prevent_duplicate_subscription_checkout.sql");
 const orderingFinal = read("supabase/migrations/20260814130000_harden_subscription_event_rpc_invoker.sql");
 const checkoutReconcile = read("supabase/migrations/20260814130500_reconcile_checkout_attempt_on_subscription.sql");
+const checkoutLifecycleFinal = read("supabase/migrations/20260814132000_return_recent_completed_checkout_attempt.sql");
 
 for (const [name, sql] of [
   ["location evidence", location],
@@ -46,5 +47,15 @@ assert.match(checkoutReconcile, /security invoker/i);
 assert.match(checkoutReconcile, /new\.stripe_subscription_id is not null/i);
 assert.match(checkoutReconcile, /'active'::public\.subscription_status, 'trialing'::public\.subscription_status/i);
 assert.match(checkoutReconcile, /a\.status in \('creating', 'open'\)/i);
+
+assert.match(checkoutLifecycleFinal, /create or replace function public\.reserve_subscription_checkout/);
+assert.match(checkoutLifecycleFinal, /security invoker/i);
+assert.match(checkoutLifecycleFinal, /a\.expires_at <= now\(\)/i);
+assert.match(checkoutLifecycleFinal, /set status = 'expired'/i);
+assert.match(checkoutLifecycleFinal, /a\.status = 'completed'/i);
+assert.match(checkoutLifecycleFinal, /interval '15 minutes'/i);
+assert.match(checkoutLifecycleFinal, /return query[\s\S]*v_attempt\.stripe_checkout_session_id/i);
+assert.match(checkoutLifecycleFinal, /from public, anon, authenticated/i);
+assert.match(checkoutLifecycleFinal, /to service_role/i);
 
 console.log("Billing migration security and lifecycle invariants passed.");
