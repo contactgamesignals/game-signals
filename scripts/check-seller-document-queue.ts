@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 
 const queue = readFileSync("supabase/migrations/20260814230000_add_seller_document_queue.sql", "utf8");
 const hardening = readFileSync("supabase/migrations/20260814230100_harden_seller_document_queue.sql", "utf8");
+const evidence = readFileSync("supabase/migrations/20260814230200_finalize_seller_document_queue_evidence.sql", "utf8");
 
-for (const [name, sql] of [["queue", queue], ["hardening", hardening]] as const) {
+for (const [name, sql] of [["queue", queue], ["hardening", hardening], ["evidence", evidence]] as const) {
   assert.doesNotMatch(sql, /\bdrop\s+table\b|\bdrop\s+column\b|\btruncate\s+table\b|\bdelete\s+from\b/i, `${name}: destructive data/schema operation detected`);
 }
 
@@ -38,4 +39,17 @@ assert.match(hardening, /seller\.registered_address/i);
 assert.match(hardening, /on conflict \(seller_nip, stripe_invoice_id, document_type\)/i);
 assert.doesNotMatch(hardening, /seller_nip constant|seller_name constant|seller_address constant/i);
 
-console.log("Seller document queue, seller isolation and legal numbering invariants passed.");
+assert.match(evidence, /add column if not exists service_period_start date/i);
+assert.match(evidence, /add column if not exists service_period_end date/i);
+assert.match(evidence, /create or replace function private\.billing_has_polish_tax_id/i);
+assert.match(evidence, /pl_nip', 'eu_vat/i);
+assert.match(evidence, /\^\[0-9\]\{10\}\$/i);
+assert.match(evidence, /new\.customer_name is not null/i);
+assert.match(evidence, /private\.billing_has_polish_tax_id\(new\.customer_tax_ids\)/i);
+assert.match(evidence, /coalesce\(new\.tax_amount, 0\) > 0 and buyer_evidence_ready/i);
+assert.match(evidence, /coalesce\(new\.finalized_at::date, new\.invoice_created_at::date, current_date\)/i);
+assert.match(evidence, /new\.period_start::date/i);
+assert.match(evidence, /new\.period_end::date/i);
+assert.match(evidence, /new\.billing_reason/i);
+
+console.log("Seller document queue, seller isolation, buyer evidence and legal numbering invariants passed.");
