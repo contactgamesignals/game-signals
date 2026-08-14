@@ -10,6 +10,8 @@ const checkout = read("supabase/migrations/20260814123300_prevent_duplicate_subs
 const orderingFinal = read("supabase/migrations/20260814130000_harden_subscription_event_rpc_invoker.sql");
 const checkoutReconcile = read("supabase/migrations/20260814130500_reconcile_checkout_attempt_on_subscription.sql");
 const checkoutLifecycleFinal = read("supabase/migrations/20260814132000_return_recent_completed_checkout_attempt.sql");
+const archive = read("supabase/migrations/20260814140000_preserve_financial_records_after_account_deletion.sql");
+const archiveTriggerHardening = read("supabase/migrations/20260814140500_harden_billing_archive_internal_triggers.sql");
 
 for (const [name, sql] of [
   ["location evidence", location],
@@ -58,4 +60,69 @@ assert.match(checkoutLifecycleFinal, /return query[\s\S]*v_attempt\.stripe_check
 assert.match(checkoutLifecycleFinal, /from public, anon, authenticated/i);
 assert.match(checkoutLifecycleFinal, /to service_role/i);
 
-console.log("Billing migration security and lifecycle invariants passed.");
+// Seller-side financial archive: product/account deletion must detach retained records,
+// never cascade-delete them. The immutable billing account itself is internal-only.
+assert.match(archive, /create table public\.billing_accounts/i);
+assert.match(archive, /workspace_reference uuid not null unique/i);
+assert.match(archive, /workspace_id uuid unique references public\.workspaces\(id\) on delete set null/i);
+assert.match(archive, /stripe_customer_id text unique/i);
+assert.match(archive, /latest_stripe_subscription_id text unique/i);
+assert.match(archive, /alter table public\.billing_accounts enable row level security/i);
+assert.match(archive, /revoke all on public\.billing_accounts from anon, authenticated/i);
+assert.match(archive, /grant select, insert, update, delete on public\.billing_accounts to service_role/i);
+
+for (const table of [
+  "billing_invoice_records",
+  "billing_adjustment_records",
+  "billing_checkout_consents",
+  "billing_location_evidence",
+  "billing_dispute_records",
+  "billing_vies_evidence",
+]) {
+  assert.match(
+    archive,
+    new RegExp(`alter table public\\.${table}[\\s\\S]*add column if not exists billing_account_id uuid references public\\.billing_accounts\\(id\\) on delete restrict`, "i"),
+    `${table}: durable billing_account_id must be added`,
+  );
+  assert.match(
+    archive,
+    new RegExp(`alter table public\\.${table} alter column billing_account_id set not null`, "i"),
+    `${table}: durable billing_account_id must become NOT NULL after backfill`,
+  );
+  assert.match(
+    archive,
+    new RegExp(`alter table public\\.${table}[\\s\\S]*foreign key \\(workspace_id\\) references public\\.workspaces\\(id\\) on delete set null`, "i"),
+    `${table}: workspace FK must detach with SET NULL`,
+  );
+}
+
+assert.match(archive, /billing_checkout_consents[\s\S]*alter column user_id drop not null/i);
+assert.match(archive, /billing_checkout_consents_user_id_fkey[\s\S]*references auth\.users\(id\) on delete set null/i);
+assert.match(archive, /attach_billing_account_to_financial_record/);
+assert.match(archive, /A durable billing account is required for retained financial evidence/);
+assert.match(archive, /archive_billing_account_before_workspace_delete/);
+assert.match(archive, /account_deleted_at = coalesce\(a\.account_deleted_at, now\(\)\)/i);
+assert.match(archive, /resolve_billing_account_from_stripe/);
+assert.match(archive, /from public, anon, authenticated/i);
+assert.match(archive, /to service_role/i);
+
+// Only the narrowly scoped trigger-only maintenance functions are SECURITY DEFINER;
+// their final definitions live in private schema with fixed search_path and no browser EXECUTE.
+for (const fn of [
+  "ensure_billing_account_for_workspace",
+  "sync_billing_account_from_subscription",
+  "archive_billing_account_before_workspace_delete",
+]) {
+  assert.match(
+    archiveTriggerHardening,
+    new RegExp(`create or replace function private\\.${fn}\\(\\)[\\s\\S]*security definer[\\s\\S]*set search_path = public, private, pg_temp`, "i"),
+    `${fn}: trigger-only final definition must be tightly scoped SECURITY DEFINER`,
+  );
+  assert.match(
+    archiveTriggerHardening,
+    new RegExp(`revoke all on function private\\.${fn}\\(\\) from public, anon, authenticated`, "i"),
+    `${fn}: browser EXECUTE must remain revoked`,
+  );
+}
+
+console.log("Billing migration security, retention and lifecycle invariants passed.");
