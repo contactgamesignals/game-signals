@@ -7,7 +7,7 @@ const headers = {
 };
 
 const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.vercel.app";
-const PORTAL_CONFIGURATION_VERSION = "2";
+const PORTAL_CONFIGURATION_VERSION = "3";
 const TERMS_VERSION = "2026-08-13-v2";
 const PRIVACY_VERSION = "2026-08-13-v2";
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -202,6 +202,8 @@ async function ensurePortalConfiguration() {
   const portalProducts = await getPortalProducts();
   const params = new URLSearchParams();
   params.set("business_profile[headline]", "Manage your GameSignal subscription");
+  params.set("business_profile[privacy_policy_url]", `${SITE_URL}/privacy`);
+  params.set("business_profile[terms_of_service_url]", `${SITE_URL}/terms`);
   params.set("default_return_url", `${SITE_URL}/dashboard/settings`);
   params.set("features[customer_update][enabled]", "true");
   params.append("features[customer_update][allowed_updates][]", "email");
