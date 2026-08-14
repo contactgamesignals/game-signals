@@ -34,6 +34,8 @@ type BillingResponse = {
 
 type BuyerType = "individual" | "company";
 
+const LAUNCH_BILLING_COUNTRY = "PL";
+
 const PAID_PLANS: Array<{
   plan: PaidPlanName;
   monthly: string;
@@ -246,6 +248,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         plan,
         period: billingPeriod,
         buyer_type: buyerType,
+        billing_country: LAUNCH_BILLING_COUNTRY,
         terms_accepted: termsAccepted,
         recurring_billing_accepted: recurringBillingAccepted,
         immediate_service_requested: buyerType === "individual" ? immediateServiceRequested : false,
@@ -303,6 +306,10 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
         {!hasPaidPlan ? (
           <div className="form-grid" style={{ marginBottom: 18 }}>
+            <div className="status-message">
+              Paid beta checkout is currently available only for customers with a Polish billing address. Prices shown in PLN are customer-facing totals and Polish VAT is calculated inside the displayed price where applicable. Do not continue if your billing address is outside Poland yet.
+            </div>
+
             <div>
               <strong>Who is buying?</strong>
               <p className="form-help" style={{ marginTop: 5 }}>Choose how the subscription should be purchased and documented.</p>
@@ -328,8 +335,8 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
             <div className="status-message">
               {buyerType === "company"
-                ? "Stripe Checkout will collect the billing address and, where supported for the selected country, require the company legal name and VAT/tax ID."
-                : "Stripe Checkout will collect your billing address as an individual. Company VAT/tax fields will not be required."}
+                ? "Stripe Checkout will collect the Polish billing address and require the company legal name and supported VAT/tax ID fields."
+                : "Stripe Checkout will collect your Polish billing address as an individual. Company VAT/tax fields will not be required."}
             </div>
 
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
