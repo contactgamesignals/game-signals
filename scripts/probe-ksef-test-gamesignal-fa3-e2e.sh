@@ -20,6 +20,14 @@ SAMPLE_PATH="$TMP_DIR/gamesignal-fa3-test.xml"
 LOG_PATH="$TMP_DIR/ksef-fa3-e2e.log"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+sanitize_log() {
+  sed -E \
+    -e 's/(AccessToken|RefreshToken|AuthenticationToken):[^[:space:]]*/\1:[REDACTED]/g' \
+    -e 's/eyJ[A-Za-z0-9_.-]{20,}/[REDACTED-JWT]/g' \
+    -e 's/6762600090/[REDACTED-REAL-NIP]/g' \
+    "$LOG_PATH" | tail -n 160
+}
+
 # Generate the exact current GameSignal FA(3) sample without adding a TS runner dependency.
 cp "$ROOT_DIR/lib/company.ts" "$TMP_DIR/company.ts"
 cp "$ROOT_DIR/lib/ksef/fa3.ts" "$TMP_DIR/fa3.ts"
@@ -160,17 +168,16 @@ fi
 
 if [[ $TEST_STATUS -ne 0 ]]; then
   echo "GameSignal FA(3) KSeF TEST online-session probe failed. Sanitized diagnostic follows:"
-  sed -E \
-    -e 's/(AccessToken|RefreshToken|AuthenticationToken):[^[:space:]]*/\1:[REDACTED]/g' \
-    -e 's/eyJ[A-Za-z0-9_.-]{20,}/[REDACTED-JWT]/g' \
-    -e 's/6762600090/[REDACTED-REAL-NIP]/g' \
-    "$LOG_PATH" | tail -n 120
+  sanitize_log
   exit 1
 fi
 
-# xUnit must report the selected integration test as passed.
-if ! grep -Eqi 'Passed!|Passed:' "$LOG_PATH"; then
-  echo "KSeF TEST command exited successfully but no xUnit pass marker was found."
+# The command returning 0 is not sufficient: some runners return success when a filter
+# selects zero tests. Require an explicit passed-test marker and expose only sanitized
+# diagnostics if the runner format/filter does not provide one.
+if ! grep -Eqi 'Passed!|Passed:|Passed [[:space:]]+[1-9]' "$LOG_PATH"; then
+  echo "KSeF TEST command exited 0 but no explicit passed-test marker was found. Sanitized diagnostic follows:"
+  sanitize_log
   exit 1
 fi
 
