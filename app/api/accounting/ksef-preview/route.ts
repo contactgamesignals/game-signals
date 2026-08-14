@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildFa3VatExemptPolishB2bInvoice } from "@/lib/ksef/fa3";
+import { buildFa3StandardVatPolishB2bInvoice } from "@/lib/ksef/fa3-active-vat";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -57,19 +57,14 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null) as {
     billing_invoice_record_id?: unknown;
-    exemption_legal_basis?: unknown;
   } | null;
 
   const recordId = typeof body?.billing_invoice_record_id === "string" ? body.billing_invoice_record_id : "";
-  const exemptionLegalBasis = typeof body?.exemption_legal_basis === "string" ? body.exemption_legal_basis.trim() : "";
   if (!recordId) return NextResponse.json({ error: "billing_invoice_record_id is required." }, { status: 400 });
-  if (!exemptionLegalBasis) {
-    return NextResponse.json({ error: "A reviewed VAT-exemption legal basis is required for the preview." }, { status: 400 });
-  }
 
   const { data: record, error } = await supabase
     .from("billing_invoice_records")
-    .select("id, stripe_invoice_id, buyer_type, jurisdiction_bucket, customer_name, customer_country, customer_address, customer_tax_ids, currency, total_amount, invoice_created_at, period_start, period_end, livemode")
+    .select("id, stripe_invoice_id, buyer_type, jurisdiction_bucket, customer_name, customer_country, customer_address, customer_tax_ids, currency, subtotal_amount, tax_amount, total_amount, invoice_created_at, period_start, period_end, livemode")
     .eq("id", recordId)
     .eq("workspace_id", membership.workspace_id)
     .maybeSingle();
@@ -83,10 +78,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "KSeF preview is locked for Stripe LIVE records." }, { status: 409 });
   }
   if (record.buyer_type !== "company" || record.jurisdiction_bucket !== "pl") {
-    return NextResponse.json({ error: "The first FA(3) preview supports only Polish Company records." }, { status: 409 });
+    return NextResponse.json({ error: "The first active-VAT FA(3) preview supports only Polish Company records." }, { status: 409 });
   }
   if (String(record.currency ?? "").toLowerCase() !== "pln") {
-    return NextResponse.json({ error: "The first FA(3) preview supports only PLN records." }, { status: 409 });
+    return NextResponse.json({ error: "The first active-VAT FA(3) preview supports only PLN records." }, { status: 409 });
   }
   if (!record.customer_name) {
     return NextResponse.json({ error: "Company legal name is missing from the Stripe billing record." }, { status: 409 });
@@ -97,9 +92,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A Polish NIP is required before a domestic B2B FA(3) preview can be generated." }, { status: 409 });
   }
 
-  const amountMinor = Number(record.total_amount);
-  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+  const grossAmountMinor = Number(record.total_amount);
+  const stripeTaxAmountMinor = Number(record.tax_amount);
+  if (!Number.isSafeInteger(grossAmountMinor) || grossAmountMinor <= 0) {
     return NextResponse.json({ error: "The Stripe billing amount is not valid for an invoice preview." }, { status: 409 });
+  }
+  if (!Number.isSafeInteger(stripeTaxAmountMinor) || stripeTaxAmountMinor <= 0) {
+    return NextResponse.json({ error: "A positive Stripe VAT amount is required for the active-VAT domestic preview." }, { status: 409 });
   }
 
   const issueDate = typeof record.invoice_created_at === "string"
@@ -109,7 +108,7 @@ export async function POST(request: NextRequest) {
   const buyerAddress = stripeAddress(record.customer_address);
 
   try {
-    const draft = buildFa3VatExemptPolishB2bInvoice({
+    const draft = buildFa3StandardVatPolishB2bInvoice({
       invoiceNumber: safePreviewNumber(record.stripe_invoice_id, issueDate),
       issueDate,
       createdAt,
@@ -119,14 +118,24 @@ export async function POST(request: NextRequest) {
         address: buyerAddress,
       },
       serviceName: "GameSignal subscription",
-      amountMinor,
+      grossAmountMinor,
       currency: "PLN",
       servicePeriod: record.period_start && record.period_end
         ? { from: String(record.period_start).slice(0, 10), to: String(record.period_end).slice(0, 10) }
         : null,
-      exemptionLegalBasis,
       stripeInvoiceId: record.stripe_invoice_id,
     });
+
+    if (draft.vatAmountMinor !== stripeTaxAmountMinor) {
+      return NextResponse.json(
+        {
+          error: "Stripe VAT and FA(3) VAT do not match. Document generation is blocked for accounting review.",
+          stripe_vat_amount_minor: stripeTaxAmountMinor,
+          fa3_vat_amount_minor: draft.vatAmountMinor,
+        },
+        { status: 409 },
+      );
+    }
 
     return new NextResponse(draft.xml, {
       status: 200,
