@@ -126,7 +126,7 @@ async function requestJson(input: {
   return parseJson(response, input.label);
 }
 
-function normalizeCertificates(value: unknown): KsefPublicKeyCertificate[] {
+export function parseKsefPublicKeyCertificates(value: unknown): KsefPublicKeyCertificate[] {
   if (!Array.isArray(value)) throw new Error("KSeF public-key response is invalid.");
   return value.map((item, index) => {
     const object = requireObject(item, `public certificate ${index}`);
@@ -235,7 +235,7 @@ export async function authenticateWithKsefToken(input: {
     timeoutMs: requestTimeoutMs,
   });
   const certificate = selectKsefPublicKeyCertificate(
-    normalizeCertificates(certificatesPayload),
+    parseKsefPublicKeyCertificates(certificatesPayload),
     "KsefTokenEncryption",
     nowMs(),
   );
@@ -296,9 +296,6 @@ export async function authenticateWithKsefToken(input: {
       timeoutMs: requestTimeoutMs,
     });
   } catch {
-    // Redeem is one-shot. We deliberately do not retry the same temporary
-    // authentication token after a transport/HTTP ambiguity. A caller may
-    // safely restart the whole KSeF-token auth flow with a fresh challenge.
     throw new KsefTokenRedeemAmbiguousError();
   }
 
