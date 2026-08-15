@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getKsefProductionReadiness } from "@/lib/ksef/production-readiness";
+import { legalSupportPhoneConfigured, LEGAL_VERSIONS } from "@/lib/legal";
 import { ACTIVE_SELLER } from "@/lib/seller-profile";
 
 export type LaunchCheck = {
@@ -33,6 +34,24 @@ export function getLaunchReadiness() {
       label: "Final legal seller",
       ready: approved("GAMESIGNAL_LIVE_SELLER_APPROVED"),
       detail: `Current working seller: ${ACTIVE_SELLER.legalName}. Final operator decision is still required immediately before LIVE.`,
+    },
+    {
+      key: "legal_contact",
+      label: "Paid-consumer legal contact",
+      ready: legalSupportPhoneConfigured(),
+      detail: "A direct support phone number must be configured as GAMESIGNAL_SUPPORT_PHONE before paid consumer distance checkout is enabled. The number is intentionally not guessed or hard-coded.",
+    },
+    {
+      key: "legal_documents",
+      label: "Current legal document versions",
+      ready: approved("GAMESIGNAL_LEGAL_DOCUMENTS_APPROVED"),
+      detail: `Final legal/accounting review must approve Terms ${LEGAL_VERSIONS.terms}, Privacy ${LEGAL_VERSIONS.privacy} and Withdrawal ${LEGAL_VERSIONS.withdrawal}.`,
+    },
+    {
+      key: "contract_confirmation",
+      label: "Durable contract confirmation",
+      ready: approved("GAMESIGNAL_CONTRACT_CONFIRMATION_READY"),
+      detail: "Paid consumer launch remains blocked until the exact concluded-contract information is frozen and successfully delivered on a durable medium through a separately verified transactional channel.",
     },
     {
       key: "domestic_vat",
@@ -89,7 +108,7 @@ export function getLaunchReadiness() {
       key: "supabase_auth",
       label: "Supabase Auth security review",
       ready: approved("GAMESIGNAL_SUPABASE_AUTH_READY"),
-      detail: "Enable Leaked Password Protection and re-run the Supabase security advisor before LIVE. Keep any remaining advisor warnings explicitly reviewed.",
+      detail: "Enable Leaked Password Protection through Supabase Auth configuration and re-run the security advisor before LIVE. Do not simulate this setting through SQL.",
     },
     {
       key: "stripe_account",
@@ -117,9 +136,9 @@ export function getLaunchReadiness() {
     },
     {
       key: "email_delivery",
-      label: "Email alert promise",
+      label: "Product email alert promise",
       ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
-      detail: "Current marketing says email is coming soon, so paid launch may proceed without email only while that wording remains accurate. Do not enable sending until the sender domain is verified.",
+      detail: "Current marketing says product alert email is coming soon, so paid launch may proceed without optional alert email only while that wording remains accurate. This is separate from the mandatory transactional contract-confirmation channel.",
     },
     {
       key: "stripe_review",
