@@ -27,7 +27,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test KSeF issuance and authentication safeguards
+      - name: Test KSeF issuance and billing safeguards
         run: |
           node --experimental-strip-types scripts/check-ksef-submission-state-machine.ts
           node --experimental-strip-types scripts/check-ksef-token-auth.ts
@@ -36,6 +36,7 @@ jobs:
           node --experimental-strip-types scripts/check-ksef-duplicate-reconciliation.ts
           node --experimental-strip-types scripts/check-seller-snapshot-lock.ts
           node --experimental-strip-types scripts/check-ksef-production-inertness.ts
+          node --experimental-strip-types scripts/check-stripe-tax-id-reconciliation.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
           bash scripts/run-ksef-issuance-orchestrator-check.sh
 
