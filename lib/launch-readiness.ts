@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getKsefServerConfig } from "@/lib/ksef/server";
+import { getKsefProductionReadiness } from "@/lib/ksef/production-readiness";
 import { ACTIVE_SELLER } from "@/lib/seller-profile";
 
 export type LaunchCheck = {
@@ -19,9 +19,13 @@ function approved(name: string) {
  *
  * This is intentionally separate from Stripe credentials: even a future
  * Stripe LIVE key must not be treated as permission to start charging users.
+ * KSeF is additionally split into prerequisite readiness and final production
+ * arming so a manual approval flag can never bypass missing seller/token/
+ * InvoiceWrite evidence or the legal-effect production unlock.
  */
 export function getLaunchReadiness() {
-  const ksef = getKsefServerConfig();
+  const ksef = getKsefProductionReadiness();
+  const ksefBlockers = ksef.blockers.length ? ksef.blockers.join(", ") : "none";
 
   const checks: LaunchCheck[] = [
     {
@@ -71,9 +75,15 @@ export function getLaunchReadiness() {
     },
     {
       key: "ksef",
-      label: "KSeF active-VAT document lifecycle",
-      ready: approved("GAMESIGNAL_KSEF_FLOW_READY"),
-      detail: `Current KSeF environment: ${ksef.environment}; submission enabled: ${ksef.enabled ? "yes" : "no"}; production unlocked: ${ksef.productionUnlocked ? "yes" : "no"}. Numbering, freeze-once payloads, token-auth transport, persist-before-send, reconciliation and UPO storage are implemented. Final seller production credentials and an explicit production authorization remain required.`,
+      label: "KSeF production prerequisites",
+      ready: approved("GAMESIGNAL_KSEF_FLOW_READY") && ksef.prerequisitesReady,
+      detail: `Read-only production preflight: environment=${ksef.ksef.environment}; prerequisites ready=${ksef.prerequisitesReady ? "yes" : "no"}; blockers=${ksefBlockers}. Numbering, immutable FA(3), token-auth transport, persist-before-send, reconciliation and UPO storage are implemented, but the final seller/token/InvoiceWrite evidence must all pass the preflight.`,
+    },
+    {
+      key: "ksef_production_arm",
+      label: "KSeF production legal-effect arm",
+      ready: ksef.submissionArmed,
+      detail: `Production submission armed=${ksef.submissionArmed ? "yes" : "no"}; KSeF PROD still locked=${ksef.productionStillLocked ? "yes" : "no"}. This must stay false until the separately authorized go-live step sets the production environment, KSEF_ENABLED and the exact legal-effect unlock phrase after prerequisites pass.`,
     },
     {
       key: "supabase_auth",
