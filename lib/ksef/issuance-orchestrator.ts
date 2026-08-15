@@ -39,7 +39,7 @@ export type KsefIssuanceDependencies = {
     invoiceReference: string | null;
     statusCode: number;
   }) => Promise<boolean>;
-  recordFailure: (input: {
+  recordReconciliationError: (input: {
     documentId: string;
     expectedSha256: string;
     error: string;
@@ -70,6 +70,14 @@ function safeError(error: unknown) {
   return raw.trim().slice(0, 4000) || "Unknown KSeF submission error.";
 }
 
+/**
+ * Runs one submission attempt for an already numbered and frozen FA(3).
+ *
+ * Any unexpected error after the attempt starts is treated as ambiguous. The
+ * durable document must remain ksef_pending until the existing KSeF session is
+ * reconciled. Only an authoritative KSeF rejection may move the document to a
+ * retryable failed state through the reconciliation adapter.
+ */
 export async function issueFrozenSellerDocumentToKsef(
   document: FrozenSellerDocumentForKsef,
   deps: KsefIssuanceDependencies,
@@ -111,7 +119,7 @@ export async function issueFrozenSellerDocumentToKsef(
       invoiceReference: result.invoiceReference,
       statusCode: result.statusCode,
     });
-    if (!refsRecorded) throw new Error("KSeF references could not be persisted for the current attempt.");
+    if (!refsRecorded) throw new Error("KSeF references could not be persisted; reconciliation is required.");
 
     const upoSha256 = await sha256Utf8(result.upoXml);
     const accepted = await deps.recordAcceptance({
@@ -123,7 +131,7 @@ export async function issueFrozenSellerDocumentToKsef(
       upoSha256,
       acceptedAt: result.acceptedAt,
     });
-    if (!accepted) throw new Error("KSeF acceptance could not be persisted for the current attempt.");
+    if (!accepted) throw new Error("KSeF acceptance could not be persisted; reconciliation is required.");
 
     return {
       ...result,
@@ -135,15 +143,15 @@ export async function issueFrozenSellerDocumentToKsef(
   } catch (error) {
     const message = safeError(error);
     try {
-      await deps.recordFailure({
+      await deps.recordReconciliationError({
         documentId: document.id,
         expectedSha256: document.fa3_sha256,
         error: message,
         statusCode: null,
       });
     } catch {
-      // The original KSeF/persistence error remains primary. A failed failure-log
-      // write must not hide it or trigger generation of a replacement document.
+      // Keep the original failure primary. Never turn an ambiguous post-send
+      // failure into a retryable failed state merely because logging failed.
     }
     throw error;
   }
