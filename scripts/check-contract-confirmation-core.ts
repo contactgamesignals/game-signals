@@ -33,8 +33,10 @@ const base: ContractConfirmationInput = {
     billingPeriod: "monthly",
     currency: "pln",
     subtotalAmount: 1992,
+    discountAmount: 0,
     taxAmount: 458,
     totalAmount: 2450,
+    paymentStatus: "paid",
   },
   consent: {
     termsAccepted: true,
@@ -63,9 +65,11 @@ for (const requiredText of [
   "Billing country: PL",
   "Plan: indie",
   "Billing period: monthly",
-  "Subtotal: 19.92 PLN",
+  "Subtotal before discounts and tax: 19.92 PLN",
+  "Discount: 0.00 PLN",
   "Tax: 4.58 PLN",
-  "Total charged for the initial billing period: 24.50 PLN",
+  "Total for the initial billing period: 24.50 PLN",
+  "Checkout payment status at contract confirmation: paid",
   "Recurring billing accepted: YES",
   "Terms accepted: YES",
   "Immediate service requested: YES",
@@ -79,15 +83,32 @@ for (const requiredText of [
   assert.ok(first.includes(requiredText), `confirmation is missing: ${requiredText}`);
 }
 
+const discountedUnpaid = buildContractConfirmationText({
+  ...base,
+  subscription: {
+    ...base.subscription,
+    subtotalAmount: 3000,
+    discountAmount: 500,
+    taxAmount: 575,
+    totalAmount: 3075,
+    paymentStatus: "unpaid",
+  },
+});
+assert.match(discountedUnpaid, /Discount: 5\.00 PLN/);
+assert.match(discountedUnpaid, /Total for the initial billing period: 30\.75 PLN/);
+assert.match(discountedUnpaid, /Checkout payment status at contract confirmation: unpaid/);
+assert.doesNotMatch(discountedUnpaid, /Total charged for the initial billing period/);
+
 const company = buildContractConfirmationText({
   ...base,
   buyer: { ...base.buyer, type: "company", name: "Example Studio sp. z o.o." },
   consent: { ...base.consent, immediateServiceRequested: false },
-  subscription: { ...base.subscription, plan: "studio", billingPeriod: "yearly" },
+  subscription: { ...base.subscription, plan: "studio", billingPeriod: "yearly", paymentStatus: "no_payment_required" },
 });
 assert.match(company, /Buyer route: Company \/ business route/);
 assert.match(company, /Immediate service requested: NO/);
 assert.match(company, /Billing period: yearly/);
+assert.match(company, /Checkout payment status at contract confirmation: no_payment_required/);
 assert.match(company, /No additional contractual 14-day consumer withdrawal right/);
 
 assert.throws(
@@ -111,7 +132,7 @@ assert.throws(
 assert.throws(
   () => buildContractConfirmationText({
     ...base,
-    subscription: { ...base.subscription, taxAmount: -1 },
+    subscription: { ...base.subscription, discountAmount: -1 },
   }),
   /non-negative integer in minor units/,
 );
@@ -127,9 +148,6 @@ assert.throws(
   /valid date-time/,
 );
 
-// The Supabase-side legal version constants and the public Next.js legal pages
-// must advance together. The script deliberately compares source-level constants
-// so importing the server-only Next.js module is unnecessary.
 for (const [key, value] of Object.entries({
   terms: CONTRACT_LEGAL_VERSIONS.terms,
   privacy: CONTRACT_LEGAL_VERSIONS.privacy,
@@ -138,12 +156,10 @@ for (const [key, value] of Object.entries({
   assert.match(legalSource, new RegExp(`${key}: "${value.replaceAll(".", "\\.")}"`));
 }
 
-// Determinism: this builder cannot read environment, make network/database calls
-// or depend on wall-clock time. All changing inputs must be supplied explicitly.
 assert.doesNotMatch(coreSource, /Deno\.env|process\.env/);
 assert.doesNotMatch(coreSource, /\bfetch\s*\(/);
 assert.doesNotMatch(coreSource, /createClient|supabase/i);
 assert.doesNotMatch(coreSource, /Date\.now\s*\(/);
 assert.doesNotMatch(coreSource, /new Date\(\s*\)/);
 
-console.log("Contract confirmation builder is deterministic, version-locked and fail-closed.");
+console.log("Contract confirmation builder is deterministic, amount-complete, version-locked and fail-closed.");
