@@ -31,12 +31,20 @@ const webhook = readFileSync(drafts[0], "utf8");
 assert.match(webhook, /verifyStripeSignature/);
 assert.match(webhook, /apply_subscription_stripe_event/);
 assert.match(webhook, /\/subscriptions\//);
-assert.match(webhook, /STRIPE_TEST_KEY_PATTERN/);
+assert.match(webhook, /requireStripeRuntimeMode/);
+assert.match(webhook, /assertStripePayloadMode/);
+assert.match(webhook, /stripeMode\.webhookVaultSecretName/);
+assert.match(webhook, /typeof event\.livemode !== "boolean"/);
+assert.match(webhook, /typeof object\.livemode !== "boolean"/);
+assert.doesNotMatch(webhook, /STRIPE_TEST_KEY_PATTERN/);
 assert.match(webhook, /charge\.dispute\.created/);
 assert.match(webhook, /billing_location_evidence/);
 assert.doesNotMatch(webhook, /sk_live_[A-Za-z0-9]/);
 assert.doesNotMatch(webhook, /rk_live_[A-Za-z0-9]/);
 
+// Billing-v11 has not yet been migrated to the shared runtime helper. Keep its
+// existing sandbox-only gate until that dedicated step is implemented and
+// separately regression-tested.
 const billing = readFileSync(drafts[1], "utf8");
 assert.match(billing, /reserve_subscription_checkout/);
 assert.match(billing, /Idempotency-Key/);
@@ -45,6 +53,7 @@ assert.match(billing, /expires_at/);
 assert.match(billing, /integration_identifier/);
 assert.match(billing, /STRIPE_API_VERSION = "2026-06-24\.dahlia"/);
 assert.match(billing, /STRIPE_TEST_KEY_PATTERN/);
+assert.doesNotMatch(billing, /requireStripeRuntimeMode/);
 assert.match(billing, /stripe_price_id/);
 assert.match(billing, /checkout_attempt_id/);
 assert.match(billing, /LAUNCH_BILLING_COUNTRY = "PL"/);
