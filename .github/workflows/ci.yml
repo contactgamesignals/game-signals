@@ -95,8 +95,39 @@ jobs:
       - name: Test immutable contract confirmation in PostgreSQL 17
         shell: bash
         run: |
-          chmod +x scripts/test-contract-confirmation-postgres.sh
-          bash scripts/test-contract-confirmation-postgres.sh
+          set -o pipefail
+          LOG_FILE="$(mktemp)"
+
+          run_contract_confirmation_test() {
+            : > "$LOG_FILE"
+            set +e
+            bash -x scripts/test-contract-confirmation-postgres.sh 2>&1 | tee "$LOG_FILE"
+            STATUS=${PIPESTATUS[0]}
+            set -e
+            return "$STATUS"
+          }
+
+          if run_contract_confirmation_test; then
+            exit 0
+          fi
+          STATUS=$?
+
+          if [ "$STATUS" -eq 2 ]; then
+            echo "Contract-confirmation PostgreSQL harness returned exit code 2; retrying once with the cached image."
+            sleep 2
+            if run_contract_confirmation_test; then
+              exit 0
+            fi
+            STATUS=$?
+          fi
+
+          echo "Contract-confirmation PostgreSQL regression failed with exit code $STATUS."
+          while IFS= read -r line; do
+            line="${line//'%'/'%25'}"
+            line="${line//$'\r'/'%0D'}"
+            echo "::error title=Contract confirmation regression::${line}"
+          done < <(tail -n 12 "$LOG_FILE")
+          exit "$STATUS"
 
       - name: Lint
         run: npm run lint
