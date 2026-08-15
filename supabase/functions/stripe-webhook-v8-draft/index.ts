@@ -5,10 +5,13 @@ import {
   parseCheckoutSubscriptionLink,
   parseDisputeRecord,
 } from "../_shared/stripe-event-parsers.ts";
+import {
+  assertStripePayloadMode,
+  requireStripeRuntimeMode,
+  STRIPE_RUNTIME_API_VERSION,
+} from "../_shared/stripe-runtime-mode.ts";
 
 const jsonHeaders = { "Content-Type": "application/json" };
-const STRIPE_TEST_KEY_PATTERN = /^(sk|rk)_test_/;
-const STRIPE_API_VERSION = "2026-06-24.dahlia";
 
 const EU_COUNTRIES = new Set([
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
@@ -139,21 +142,18 @@ async function workspaceFromInvoiceLedger(service: ReturnType<typeof createClien
 }
 
 async function stripeGet(path: string) {
-  const secret = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!secret || !STRIPE_TEST_KEY_PATTERN.test(secret)) {
-    throw new Error("Stripe webhook v8 draft is sandbox-only and requires a test secret key.");
-  }
-
+  const stripeMode = requireStripeRuntimeMode();
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${secret}`,
-      "Stripe-Version": STRIPE_API_VERSION,
+      Authorization: `Bearer ${stripeMode.secretKey}`,
+      "Stripe-Version": STRIPE_RUNTIME_API_VERSION,
     },
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (!response.ok || !payload) throw new Error(`Stripe API GET ${path} failed with HTTP ${response.status}.`);
+  assertStripePayloadMode(payload, stripeMode.livemode, `Stripe API GET ${path}`);
   return payload;
 }
 
@@ -553,9 +553,10 @@ Deno.serve(async (request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceKey) return json({ error: "Server configuration missing." }, 503);
 
+    const stripeMode = requireStripeRuntimeMode();
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const { data: webhookSecret, error: secretError } = await service.rpc("get_internal_vault_secret", {
-      secret_name: "gamesignal_stripe_webhook_secret",
+      secret_name: stripeMode.webhookVaultSecretName,
     });
     if (secretError || typeof webhookSecret !== "string" || !webhookSecret) {
       console.error("Could not load Stripe webhook secret", secretError);
@@ -574,9 +575,14 @@ Deno.serve(async (request) => {
       type: string;
       created?: number;
       api_version?: string | null;
+      livemode?: boolean;
       data: { object: Record<string, unknown> };
     };
     const object = event.data.object;
+    if (typeof event.livemode !== "boolean") throw new Error("Stripe event is missing livemode evidence.");
+    if (typeof object.livemode !== "boolean") throw new Error("Stripe event object is missing livemode evidence.");
+    assertStripePayloadMode(event, stripeMode.livemode, "Stripe event");
+    assertStripePayloadMode(object, stripeMode.livemode, "Stripe event object");
     const eventCreated = numberValue(event.created);
 
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
@@ -632,9 +638,11 @@ Deno.serve(async (request) => {
       await syncDisputeRecord(service, event.id, event.type, eventCreated, object);
     }
 
-    return json({ received: true, handler: "stripe-webhook-v8-draft" });
+    return json({ received: true, handler: "stripe-webhook-v8-draft", livemode: stripeMode.livemode });
   } catch (error) {
     console.error(error);
-    return json({ error: "Webhook processing failed." }, 500);
+    const message = error instanceof Error ? error.message : "Webhook processing failed.";
+    const status = /Stripe LIVE billing is locked|Stripe secret/.test(message) ? 503 : 500;
+    return json({ error: "Webhook processing failed." }, status);
   }
 });
