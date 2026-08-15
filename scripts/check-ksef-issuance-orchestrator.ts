@@ -21,6 +21,7 @@ const order: string[] = [];
 let attempt = 0;
 let accepted = 0;
 let reconcileErrors = 0;
+let preSubmitFailures = 0;
 
 const success = await issueFrozenSellerDocumentToKsef(document, {
   async startAttempt(_documentId, expectedHash) {
@@ -69,6 +70,10 @@ const success = await issueFrozenSellerDocumentToKsef(document, {
       acceptedAt: "2026-08-14T22:00:00Z",
     };
   },
+  async recordPreSubmitFailure() {
+    preSubmitFailures += 1;
+    return true;
+  },
   async recordReconciliationError() {
     reconcileErrors += 1;
     return true;
@@ -86,6 +91,7 @@ assert.equal(success.sessionReference, "SESSION-1");
 assert.equal(success.invoiceReference, "INVOICE-1");
 assert.equal(accepted, 1);
 assert.equal(reconcileErrors, 0);
+assert.equal(preSubmitFailures, 0);
 assert.deepEqual(order, [
   "start",
   "open",
@@ -97,24 +103,65 @@ assert.deepEqual(order, [
   "accept",
 ]);
 
-// If persisting the session reference fails, the legal invoice must never be sent.
-let submitAfterSessionPersistenceFailure = false;
-let persistenceFailureReconciliations = 0;
+// Opening a session can fail after startAttempt, but before invoice POST begins.
+// That is retryable and must not enter ambiguous reconciliation.
+let openFailurePreSubmit = 0;
+let openFailureReconcile = 0;
 await assert.rejects(
   () => issueFrozenSellerDocumentToKsef(
     { ...document, lifecycle_status: "failed" },
     {
       async startAttempt() { return 2; },
+      async openSession() { throw new Error("synthetic open-session transport failure"); },
+      async recordReferences() { throw new Error("must not run"); },
+      async submitFrozenFa3() { throw new Error("must not run"); },
+      async closeSession() { throw new Error("must not run"); },
+      async waitForAcceptance() { throw new Error("must not run"); },
+      async recordPreSubmitFailure(input) {
+        assert.match(input.error, /open-session transport failure/i);
+        openFailurePreSubmit += 1;
+        return true;
+      },
+      async recordReconciliationError() {
+        openFailureReconcile += 1;
+        return true;
+      },
+      async recordAcceptance() { throw new Error("must not run"); },
+    },
+  ),
+  /open-session transport failure/,
+);
+assert.equal(openFailurePreSubmit, 1);
+assert.equal(openFailureReconcile, 0);
+
+// If persisting the session reference fails, the legal invoice must never be
+// sent. The empty session is closed best-effort and the attempt is retryable.
+let submitAfterSessionPersistenceFailure = false;
+let persistenceFailurePreSubmit = 0;
+let persistenceFailureReconciliations = 0;
+let emptySessionCloseAttempts = 0;
+await assert.rejects(
+  () => issueFrozenSellerDocumentToKsef(
+    { ...document, lifecycle_status: "failed" },
+    {
+      async startAttempt() { return 3; },
       async openSession() { return { sessionReference: "SESSION-PERSIST-FAIL", sessionHandle: {} }; },
       async recordReferences() { return false; },
       async submitFrozenFa3() {
         submitAfterSessionPersistenceFailure = true;
         return { invoiceReference: "MUST-NOT-HAPPEN" };
       },
-      async closeSession() { throw new Error("must not run"); },
+      async closeSession(input) {
+        assert.equal(input.sessionReference, "SESSION-PERSIST-FAIL");
+        emptySessionCloseAttempts += 1;
+      },
       async waitForAcceptance() { throw new Error("must not run"); },
-      async recordReconciliationError(input) {
+      async recordPreSubmitFailure(input) {
         assert.match(input.error, /session reference could not be persisted/i);
+        persistenceFailurePreSubmit += 1;
+        return true;
+      },
+      async recordReconciliationError() {
         persistenceFailureReconciliations += 1;
         return true;
       },
@@ -124,17 +171,20 @@ await assert.rejects(
   /invoice was not submitted/i,
 );
 assert.equal(submitAfterSessionPersistenceFailure, false);
-assert.equal(persistenceFailureReconciliations, 1);
+assert.equal(emptySessionCloseAttempts, 1);
+assert.equal(persistenceFailurePreSubmit, 1);
+assert.equal(persistenceFailureReconciliations, 0);
 
-// If the invoice POST is ambiguous, the already-persisted session reference
-// remains the durable anchor for later reconciliation and no automatic retry occurs.
+// Once invoice POST begins, every thrown error is ambiguous. The already
+// persisted session reference is the durable anchor and automatic retry is forbidden.
 const ambiguousOrder: string[] = [];
 let ambiguousReconcileErrors = 0;
+let ambiguousPreSubmitFailures = 0;
 await assert.rejects(
   () => issueFrozenSellerDocumentToKsef(
     { ...document, lifecycle_status: "failed" },
     {
-      async startAttempt() { ambiguousOrder.push("start"); return 3; },
+      async startAttempt() { ambiguousOrder.push("start"); return 4; },
       async openSession() {
         ambiguousOrder.push("open");
         return { sessionReference: "SESSION-AMBIGUOUS", sessionHandle: { key: "memory-only" } };
@@ -153,6 +203,10 @@ await assert.rejects(
       },
       async closeSession() { throw new Error("must not run"); },
       async waitForAcceptance() { throw new Error("must not run"); },
+      async recordPreSubmitFailure() {
+        ambiguousPreSubmitFailures += 1;
+        return true;
+      },
       async recordReconciliationError(input) {
         assert.match(input.error, /ambiguous network timeout/);
         ambiguousOrder.push("reconcile");
@@ -165,6 +219,7 @@ await assert.rejects(
   /ambiguous network timeout/,
 );
 assert.equal(ambiguousReconcileErrors, 1);
+assert.equal(ambiguousPreSubmitFailures, 0);
 assert.deepEqual(ambiguousOrder, ["start", "open", "record-session", "submit-timeout", "reconcile"]);
 
 await assert.rejects(
@@ -172,4 +227,4 @@ await assert.rejects(
   /not ready for a KSeF issuance attempt/,
 );
 
-console.log("KSeF issuance persist-before-send and ambiguity regressions passed.");
+console.log("KSeF issuance safe pre-submit boundary, persist-before-send and ambiguity regressions passed.");
