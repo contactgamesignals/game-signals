@@ -11,6 +11,13 @@ export type Fa3ActiveVatPostalAddress = {
   line2?: string | null;
 };
 
+export type Fa3ActiveVatSeller = {
+  nip: string;
+  name: string;
+  address: Fa3ActiveVatPostalAddress;
+  systemInfo?: string | null;
+};
+
 export type Fa3ActiveVatPolishBusinessBuyer = {
   nip: string;
   name: string;
@@ -22,6 +29,8 @@ export type Fa3StandardVatInvoiceInput = {
   invoiceNumber: string;
   issueDate: string;
   createdAt: string;
+  /** Optional immutable seller snapshot. Existing callers default to ACTIVE_SELLER. */
+  seller?: Fa3ActiveVatSeller;
   buyer: Fa3ActiveVatPolishBusinessBuyer;
   serviceName: string;
   /** Customer-facing gross amount, including 23% Polish VAT. */
@@ -134,7 +143,15 @@ export function buildFa3StandardVatPolishB2bInvoice(input: Fa3StandardVatInvoice
   const invoiceNumber = requireText(input.invoiceNumber, "invoiceNumber", 256);
   const issueDate = requireDate(input.issueDate, "issueDate");
   const createdAt = requireIsoUtc(input.createdAt, "createdAt");
-  const sellerNip = requirePolishNip(ACTIVE_SELLER.nip, "seller NIP");
+  const seller: Fa3ActiveVatSeller = input.seller ?? {
+    nip: ACTIVE_SELLER.nip,
+    name: ACTIVE_SELLER.legalName,
+    address: ACTIVE_SELLER.structuredAddress,
+    systemInfo: `${ACTIVE_SELLER.productName} / ${ACTIVE_SELLER.legalName}`,
+  };
+  const sellerNip = requirePolishNip(seller.nip, "seller NIP");
+  const sellerName = requireText(seller.name, "seller.name");
+  const sellerSystemInfo = requireText(seller.systemInfo ?? `GameSignal / ${sellerName}`, "seller.systemInfo");
   const buyerNip = requirePolishNip(input.buyer.nip, "buyer NIP");
   const buyerName = requireText(input.buyer.name, "buyer.name");
   const serviceName = requireText(input.serviceName, "serviceName");
@@ -170,14 +187,14 @@ export function buildFa3StandardVatPolishB2bInvoice(input: Fa3StandardVatInvoice
     `<KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza>`,
     "<WariantFormularza>3</WariantFormularza>",
     `<DataWytworzeniaFa>${createdAt}</DataWytworzeniaFa>`,
-    `<SystemInfo>${escapeXml(`${ACTIVE_SELLER.productName} / ${ACTIVE_SELLER.legalName}`)}</SystemInfo>`,
+    `<SystemInfo>${escapeXml(sellerSystemInfo)}</SystemInfo>`,
     "</Naglowek>",
     "<Podmiot1>",
     "<DaneIdentyfikacyjne>",
     `<NIP>${sellerNip}</NIP>`,
-    `<Nazwa>${escapeXml(ACTIVE_SELLER.legalName)}</Nazwa>`,
+    `<Nazwa>${escapeXml(sellerName)}</Nazwa>`,
     "</DaneIdentyfikacyjne>",
-    addressXml(ACTIVE_SELLER.structuredAddress),
+    addressXml(seller.address),
     "</Podmiot1>",
     "<Podmiot2>",
     "<DaneIdentyfikacyjne>",
