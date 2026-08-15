@@ -24,10 +24,31 @@ type StripeTaxId = {
   verification?: { status?: string | null } | null;
 };
 
+type StripeMode = {
+  livemode: boolean;
+  label: "stripe_sandbox" | "stripe_live_explicitly_unlocked";
+};
+
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
 const STRIPE_TEST_KEY_PATTERN = /^sk_test_[A-Za-z0-9_]+$/;
+const STRIPE_LIVE_KEY_PATTERN = /^sk_live_[A-Za-z0-9_]+$/;
+const LIVE_UNLOCK_ENV = "GAMESIGNAL_STRIPE_LIVE_TAX_ID_RECONCILER_UNLOCK";
+const LIVE_UNLOCK_PHRASE = "I_UNDERSTAND_STRIPE_LIVE_TAX_ID_RECONCILIATION_HAS_ACCOUNTING_EFFECT";
 const MAX_INVOICES_PER_RUN = 50;
 const MAX_TAX_ID_PAGES = 10;
+
+function resolveStripeMode(secretKey: string): StripeMode {
+  if (STRIPE_TEST_KEY_PATTERN.test(secretKey)) {
+    return { livemode: false, label: "stripe_sandbox" };
+  }
+  if (STRIPE_LIVE_KEY_PATTERN.test(secretKey)) {
+    if (Deno.env.get(LIVE_UNLOCK_ENV) !== LIVE_UNLOCK_PHRASE) {
+      throw new Error("Stripe LIVE Tax ID reconciliation is locked pending explicit accounting approval.");
+    }
+    return { livemode: true, label: "stripe_live_explicitly_unlocked" };
+  }
+  throw new Error("Stripe Tax ID reconciler requires a recognized restricted test or live secret key.");
+}
 
 function taxIdKey(type: unknown, value: unknown) {
   if (typeof type !== "string" || typeof value !== "string") return null;
@@ -125,9 +146,7 @@ Deno.serve(async (request) => {
     if (!auth.internal) return json({ error: "Forbidden" }, 403);
 
     const secretKey = Deno.env.get("STRIPE_SECRET_KEY")?.trim() ?? "";
-    if (!STRIPE_TEST_KEY_PATTERN.test(secretKey)) {
-      return json({ error: "Stripe Tax ID reconciler is sandbox-locked." }, 503);
-    }
+    const stripeMode = resolveStripeMode(secretKey);
 
     const supabase = serviceClient();
     const { data, error } = await supabase
@@ -136,7 +155,7 @@ Deno.serve(async (request) => {
       .eq("buyer_type", "company")
       .eq("customer_country", "PL")
       .eq("stripe_status", "paid")
-      .eq("livemode", false)
+      .eq("livemode", stripeMode.livemode)
       .not("stripe_customer_id", "is", null)
       .order("updated_at", { ascending: true })
       .limit(MAX_INVOICES_PER_RUN);
@@ -169,7 +188,7 @@ Deno.serve(async (request) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", invoice.id)
-          .eq("livemode", false);
+          .eq("livemode", stripeMode.livemode);
         if (updateError) throw updateError;
         updated += 1;
       } catch {
@@ -179,7 +198,8 @@ Deno.serve(async (request) => {
 
     return json({
       ok: true,
-      mode: "stripe_sandbox_only",
+      mode: stripeMode.label,
+      livemode: stripeMode.livemode,
       inspected,
       candidates,
       updated,
@@ -189,6 +209,13 @@ Deno.serve(async (request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stripe Tax ID reconciliation failed.";
-    return json({ error: message.slice(0, 500) }, /Unauthorized/.test(message) ? 401 : /Forbidden/.test(message) ? 403 : 500);
+    const status = /Unauthorized/.test(message)
+      ? 401
+      : /Forbidden/.test(message)
+        ? 403
+        : /LIVE Tax ID reconciliation is locked/.test(message)
+          ? 503
+          : 500;
+    return json({ error: message.slice(0, 500) }, status);
   }
 });
