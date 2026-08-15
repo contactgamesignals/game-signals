@@ -63,6 +63,11 @@ export type KsefIssuanceDependencies = {
     invoiceReference: string | null;
     statusCode: number | null;
   }) => Promise<boolean>;
+  recordPreSubmitFailure: (input: {
+    documentId: string;
+    expectedSha256: string;
+    error: string;
+  }) => Promise<boolean>;
   recordReconciliationError: (input: {
     documentId: string;
     expectedSha256: string;
@@ -97,16 +102,10 @@ function safeError(error: unknown) {
 /**
  * Runs one KSeF issuance attempt for an already numbered and frozen FA(3).
  *
- * Persistence order is deliberate:
- * 1. mark attempt pending,
- * 2. open KSeF session,
- * 3. persist session reference,
- * 4. only then submit the legal invoice,
- * 5. persist invoice reference before close/poll/UPO.
- *
- * Therefore an ambiguous network failure after invoice submission still leaves
- * enough durable state to reconcile the existing KSeF session instead of
- * blindly creating another legal submission.
+ * Before submitFrozenFa3 is invoked, invoice bytes provably have not been POSTed
+ * by this attempt. Failures in that phase are safe to mark retryable after a
+ * best-effort empty-session close. From the instant submitFrozenFa3 is invoked,
+ * every failure is ambiguous and must remain pending until reconciliation.
  */
 export async function issueFrozenSellerDocumentToKsef(
   document: FrozenSellerDocumentForKsef,
@@ -131,9 +130,11 @@ export async function issueFrozenSellerDocumentToKsef(
   });
 
   const attemptNumber = await deps.startAttempt(document.id, document.fa3_sha256);
+  let opened: KsefOpenedSession | null = null;
+  let invoiceSubmissionStarted = false;
 
   try {
-    const opened = await deps.openSession({
+    opened = await deps.openSession({
       documentId: document.id,
       legalDocumentNumber: document.legal_document_number,
       sha256: document.fa3_sha256,
@@ -152,6 +153,10 @@ export async function issueFrozenSellerDocumentToKsef(
       throw new Error("KSeF session reference could not be persisted; invoice was not submitted.");
     }
 
+    // The ambiguity boundary is immediately before calling the transport. From
+    // this point a thrown error can mean the invoice reached KSeF even if no
+    // response reached us.
+    invoiceSubmissionStarted = true;
     const submitted = await deps.submitFrozenFa3({
       documentId: document.id,
       legalDocumentNumber: document.legal_document_number,
@@ -212,6 +217,33 @@ export async function issueFrozenSellerDocumentToKsef(
     };
   } catch (error) {
     const message = safeError(error);
+
+    if (!invoiceSubmissionStarted) {
+      if (opened) {
+        try {
+          await deps.closeSession({
+            documentId: document.id,
+            sessionReference: opened.sessionReference,
+            sessionHandle: opened.sessionHandle,
+          });
+        } catch {
+          // No invoice was submitted. Closing the empty/orphaned session is
+          // best-effort; retry safety does not depend on close succeeding.
+        }
+      }
+      try {
+        await deps.recordPreSubmitFailure({
+          documentId: document.id,
+          expectedSha256: document.fa3_sha256,
+          error: message,
+        });
+      } catch {
+        // Preserve the original error. Failure to persist retryability should
+        // fail closed rather than accidentally trigger another submission.
+      }
+      throw error;
+    }
+
     try {
       await deps.recordReconciliationError({
         documentId: document.id,
