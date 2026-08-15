@@ -58,7 +58,14 @@ assert.deepEqual(buildSendOnlineInvoiceRequest({
 assert.throws(() => buildOpenFa3OnlineSessionRequest({
   encryptedSymmetricKey: "",
   initializationVector: "iv",
+  publicKeyId: "public-key-id",
 }), /encryptedSymmetricKey/);
+
+assert.throws(() => buildOpenFa3OnlineSessionRequest({
+  encryptedSymmetricKey: "encrypted-key",
+  initializationVector: "iv",
+  publicKeyId: "",
+}), /publicKeyId/);
 
 assert.throws(() => buildSendOnlineInvoiceRequest({
   invoiceHash: "hash",
