@@ -45,6 +45,12 @@ function normalizeJurisdiction(value: unknown): BillingJurisdiction {
  * transaction evidence checks: EU B2B still requires customer VAT-ID/VIES
  * evidence, and EU/non-EU B2C stays fail-closed until the launch tax route is
  * explicitly approved.
+ *
+ * For PL Company launch we deliberately do not auto-use the temporary 2026
+ * KSeF <=10,000 PLN monthly transition. That threshold depends on seller-wide
+ * invoice activity, including activity outside GameSignal, and therefore cannot
+ * be safely inferred by this application. PL Company LIVE remains blocked until
+ * the production KSeF path is explicitly prepared and authorized.
  */
 export function deriveBillingCompliance(input: {
   buyerType: unknown;
@@ -89,8 +95,8 @@ export function deriveBillingCompliance(input: {
       vatAction: "charge_polish_vat_using_inclusive_price",
       vatUeAction: "not_applicable",
       smeAction: "not_applicable",
-      ksefAction: "issue_polish_vat_invoice_and_apply_current_ksef_rules",
-      liveReadiness: "ready_after_document_flow",
+      ksefAction: "require_ksef_prod_before_live_do_not_auto_use_2026_10k_transition",
+      liveReadiness: "blocked_tax_setup",
       accountingReviewRequired: true,
     };
   }
