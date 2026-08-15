@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const readiness = readFileSync(join(root, "lib/ksef/production-readiness.ts"), "utf8");
+const launchReadiness = readFileSync(join(root, "lib/launch-readiness.ts"), "utf8");
 const serverGuard = readFileSync(join(root, "lib/ksef/server.ts"), "utf8");
 const envExample = readFileSync(join(root, ".env.example"), "utf8");
 
@@ -44,6 +45,17 @@ assert.match(readiness, /config\.environment === "production"/);
 assert.match(readiness, /config\.enabled/);
 assert.match(readiness, /config\.productionUnlocked/);
 
+// The central LIVE gate must consume the real preflight. A manual
+// GAMESIGNAL_KSEF_FLOW_READY=true flag is necessary but not sufficient, and the
+// final legal-effect arm remains a separate blocking check.
+assert.match(launchReadiness, /getKsefProductionReadiness/);
+assert.match(launchReadiness, /approved\("GAMESIGNAL_KSEF_FLOW_READY"\) && ksef\.prerequisitesReady/);
+assert.match(launchReadiness, /key: "ksef_production_arm"/);
+assert.match(launchReadiness, /ready: ksef\.submissionArmed/);
+assert.match(launchReadiness, /productionStillLocked/);
+assert.match(launchReadiness, /pending\.length === 0 \? "ready_for_explicit_live_cutover" : "sandbox_only"/);
+assert.doesNotMatch(launchReadiness, /key: "ksef"[\s\S]{0,300}ready: approved\("GAMESIGNAL_KSEF_FLOW_READY"\),/);
+
 for (const key of [
   "KSEF_ENV=test",
   "KSEF_ENABLED=false",
@@ -57,4 +69,4 @@ for (const key of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_KSEF_/);
 
-console.log("KSeF production readiness remains read-only, secret-safe and separately armed.");
+console.log("KSeF production readiness remains read-only, secret-safe, launch-gated and separately armed.");
