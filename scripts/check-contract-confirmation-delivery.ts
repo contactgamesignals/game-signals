@@ -30,12 +30,13 @@ const fetchAt = worker.indexOf("response = await fetch(RESEND_ENDPOINT");
 const successAt = worker.indexOf('await transition(supabase, row, "delivered"');
 assert.ok(fetchAt >= 0 && successAt > fetchAt, "delivery may be marked successful only after the provider response");
 
-// Delivery may only transmit the already-frozen evidence. It cannot build,
-// rewrite or update the immutable contract/seller/legal snapshot.
+// Delivery may only transmit the already-frozen evidence. It can type/read the
+// stored confirmation_text field, but it must never build, rewrite or persist a
+// replacement contract/seller/legal snapshot.
 assert.doesNotMatch(worker, /buildContractConfirmationText/);
 assert.doesNotMatch(worker, /CONTRACT_LEGAL_VERSIONS/);
-assert.doesNotMatch(worker, /confirmation_text\s*:/);
 assert.doesNotMatch(worker, /\.update\([\s\S]{0,200}confirmation_text/);
+assert.doesNotMatch(worker, /\.upsert\([\s\S]{0,200}confirmation_text/);
 assert.doesNotMatch(worker, /billing_seller_profiles/);
 assert.doesNotMatch(worker, /checkout\/sessions/);
 assert.doesNotMatch(worker, /subscriptions\//);
