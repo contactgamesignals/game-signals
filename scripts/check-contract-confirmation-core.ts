@@ -32,7 +32,7 @@ const base: ContractConfirmationInput = {
     plan: "indie",
     billingPeriod: "monthly",
     currency: "pln",
-    subtotalAmount: 1992,
+    subtotalAmount: 2450,
     discountAmount: 0,
     taxAmount: 458,
     totalAmount: 2450,
@@ -65,9 +65,9 @@ for (const requiredText of [
   "Billing country: PL",
   "Plan: indie",
   "Billing period: monthly",
-  "Subtotal before discounts and tax: 19.92 PLN",
+  "Checkout subtotal: 24.50 PLN",
   "Discount: 0.00 PLN",
-  "Tax: 4.58 PLN",
+  "Tax included or charged by Checkout: 4.58 PLN",
   "Total for the initial billing period: 24.50 PLN",
   "Checkout payment status at contract confirmation: paid",
   "Recurring billing accepted: YES",
@@ -94,10 +94,13 @@ const discountedUnpaid = buildContractConfirmationText({
     paymentStatus: "unpaid",
   },
 });
+assert.match(discountedUnpaid, /Checkout subtotal: 30\.00 PLN/);
 assert.match(discountedUnpaid, /Discount: 5\.00 PLN/);
+assert.match(discountedUnpaid, /Tax included or charged by Checkout: 5\.75 PLN/);
 assert.match(discountedUnpaid, /Total for the initial billing period: 30\.75 PLN/);
 assert.match(discountedUnpaid, /Checkout payment status at contract confirmation: unpaid/);
 assert.doesNotMatch(discountedUnpaid, /Total charged for the initial billing period/);
+assert.doesNotMatch(discountedUnpaid, /Subtotal before discounts and tax/);
 
 const company = buildContractConfirmationText({
   ...base,
