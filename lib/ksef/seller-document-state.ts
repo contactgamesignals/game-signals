@@ -96,6 +96,40 @@ export function createSellerDocumentKsefStateAdapter(): Pick<
   };
 }
 
+export async function recordDuplicateKsefAcceptance(input: {
+  documentId: string;
+  expectedSha256: string;
+  originalSessionReference: string;
+  originalInvoiceReference: string;
+  ksefReferenceNumber: string;
+  duplicateStatusCode: number;
+  acceptedStatusCode: number;
+  upoXml: string;
+  upoSha256: string;
+  acceptedAt: string;
+}) {
+  if (input.duplicateStatusCode !== 440) {
+    throw new Error("KSeF duplicate acceptance requires status 440.");
+  }
+  if (input.acceptedStatusCode !== 200) {
+    throw new Error("Original KSeF invoice must have accepted status 200.");
+  }
+
+  const updated = await rpc<unknown>("accept_seller_document_ksef_duplicate", {
+    p_document_id: requiredText(input.documentId, "documentId"),
+    p_expected_fa3_sha256: requiredText(input.expectedSha256, "expectedSha256").toLowerCase(),
+    p_original_session_reference: requiredText(input.originalSessionReference, "originalSessionReference"),
+    p_original_invoice_reference: requiredText(input.originalInvoiceReference, "originalInvoiceReference"),
+    p_ksef_reference_number: requiredText(input.ksefReferenceNumber, "ksefReferenceNumber"),
+    p_duplicate_status_code: input.duplicateStatusCode,
+    p_accepted_status_code: input.acceptedStatusCode,
+    p_upo_xml: requiredText(input.upoXml, "upoXml"),
+    p_upo_sha256: requiredText(input.upoSha256, "upoSha256").toLowerCase(),
+    p_accepted_at: requiredText(input.acceptedAt, "acceptedAt"),
+  });
+  return requireBoolean(updated, "KSeF duplicate acceptance persistence");
+}
+
 /**
  * This is intentionally separate from the generic issuance adapter. Call it
  * only after KSeF has returned an authoritative rejection that proves a retry
