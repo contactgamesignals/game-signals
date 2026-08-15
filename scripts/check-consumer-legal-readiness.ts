@@ -50,6 +50,11 @@ assert.match(withdrawal, /Starting the service does not by itself mean/i);
 assert.match(migration, /create table public\.billing_contract_confirmations/);
 assert.match(migration, /billing_account_id uuid not null references public\.billing_accounts\(id\) on delete restrict/);
 assert.match(migration, /checkout_consent_id uuid not null unique references public\.billing_checkout_consents\(id\) on delete restrict/);
+assert.match(migration, /seller_profile_key text not null/);
+assert.match(migration, /seller_legal_name text not null/);
+assert.match(migration, /seller_nip text not null/);
+assert.match(migration, /seller_registered_address text not null/);
+assert.match(migration, /seller_country_code text not null/);
 assert.match(migration, /confirmation_text text not null/);
 assert.match(migration, /confirmation_sha256 text not null/);
 assert.match(migration, /extensions\.digest\(convert_to\(new\.confirmation_text, 'UTF8'\), 'sha256'\)/);
@@ -69,4 +74,4 @@ for (const line of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_GAMESIGNAL_SUPPORT_PHONE/);
 
-console.log("Consumer legal documents, launch blockers and immutable confirmation evidence are fail-closed.");
+console.log("Consumer legal documents, launch blockers and immutable seller/contract confirmation evidence are fail-closed.");
