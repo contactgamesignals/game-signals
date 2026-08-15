@@ -37,6 +37,7 @@ jobs:
           node --experimental-strip-types scripts/check-seller-snapshot-lock.ts
           node --experimental-strip-types scripts/check-ksef-production-inertness.ts
           node --experimental-strip-types scripts/check-ksef-production-readiness.ts
+          node --experimental-strip-types scripts/check-stripe-runtime-mode.ts
           node --experimental-strip-types scripts/check-stripe-tax-id-reconciliation.ts
           node --experimental-strip-types scripts/check-operator-launch-readiness-access.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
