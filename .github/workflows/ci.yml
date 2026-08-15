@@ -32,6 +32,7 @@ jobs:
           node --experimental-strip-types scripts/check-ksef-submission-state-machine.ts
           node --experimental-strip-types scripts/check-ksef-token-auth.ts
           node --experimental-strip-types scripts/check-ksef-submission-status.ts
+          node --experimental-strip-types scripts/check-ksef-reconciliation-core.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
           bash scripts/run-ksef-issuance-orchestrator-check.sh
 
