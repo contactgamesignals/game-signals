@@ -14,6 +14,7 @@ import {
 import {
   createSellerDocumentKsefStateAdapter,
   recordAuthoritativeKsefRejection,
+  recordDuplicateKsefAcceptance,
 } from "@/lib/ksef/seller-document-state";
 import { classifyKsefInvoiceStatus } from "@/lib/ksef/submission-status-core";
 import { getKsefAccessTokenForSeller } from "@/lib/ksef/token-auth";
@@ -34,8 +35,21 @@ export type PendingSellerDocumentForKsefReconciliation = {
 export type KsefReconciliationResult =
   | { kind: "processing"; invoiceReference: string }
   | { kind: "accepted"; invoiceReference: string; ksefReferenceNumber: string }
+  | {
+      kind: "accepted_duplicate";
+      invoiceReference: string;
+      originalSessionReference: string;
+      originalInvoiceReference: string;
+      ksefReferenceNumber: string;
+    }
   | { kind: "rejected"; invoiceReference: string; statusCode: number }
-  | { kind: "duplicate"; invoiceReference: string; originalKsefNumber: string | null }
+  | {
+      kind: "duplicate";
+      invoiceReference: string;
+      originalSessionReference: string | null;
+      originalKsefNumber: string | null;
+      reason: string;
+    }
   | { kind: "invoice_reference_not_found" }
   | { kind: "invoice_reference_ambiguous"; matchingReferenceNumbers: string[] }
   | { kind: "unknown_status"; invoiceReference: string; statusCode: number };
@@ -192,16 +206,87 @@ export async function reconcilePendingSellerDocument(
   }
 
   if (status.kind === "duplicate") {
-    await state.recordReconciliationError({
+    const originalSessionReference = status.originalSessionReferenceNumber?.trim() || null;
+    const originalKsefNumber = status.originalKsefNumber?.trim() || null;
+
+    const unresolvedDuplicate = async (reason: string): Promise<KsefReconciliationResult> => {
+      await state.recordReconciliationError({
+        documentId,
+        expectedSha256,
+        error: `KSeF duplicate status 440 requires manual reconciliation: ${reason}`,
+        statusCode: status.statusCode,
+      });
+      return {
+        kind: "duplicate",
+        invoiceReference,
+        originalSessionReference,
+        originalKsefNumber,
+        reason,
+      };
+    };
+
+    if (!originalSessionReference || !originalKsefNumber) {
+      return unresolvedDuplicate("the response did not include both originalSessionReferenceNumber and originalKsefNumber.");
+    }
+
+    const originalRecovery = await recoverKsefInvoiceReference({
+      accessToken,
+      sessionReference: originalSessionReference,
+      legalDocumentNumber,
+      frozenFa3Sha256Hex: expectedSha256,
+    });
+
+    if (originalRecovery.kind === "not_found") {
+      return unresolvedDuplicate("the original session does not contain an invoice matching both the legal number and frozen FA(3) hash.");
+    }
+    if (originalRecovery.kind === "ambiguous") {
+      return unresolvedDuplicate("the original session contains more than one invoice matching both the legal number and frozen FA(3) hash.");
+    }
+
+    const originalInvoiceReference = originalRecovery.referenceNumber;
+    const rawOriginalStatus = await getKsefSessionInvoiceStatus({
+      accessToken,
+      sessionReferenceNumber: originalSessionReference,
+      invoiceReferenceNumber: originalInvoiceReference,
+    });
+    const originalStatus = classifyKsefInvoiceStatus(rawOriginalStatus);
+
+    if (originalStatus.kind !== "accepted") {
+      return unresolvedDuplicate(`the matched original invoice is not authoritatively accepted (status kind: ${originalStatus.kind}).`);
+    }
+    if (originalStatus.ksefNumber !== originalKsefNumber) {
+      return unresolvedDuplicate("the KSeF number of the matched original invoice does not equal originalKsefNumber from status 440.");
+    }
+
+    const upoXml = await getKsefInvoiceUpo({
+      accessToken,
+      sessionReferenceNumber: originalSessionReference,
+      invoiceReferenceNumber: originalInvoiceReference,
+    });
+    if (!upoXml.trim()) {
+      return unresolvedDuplicate("KSeF returned an empty UPO for the matched original invoice.");
+    }
+    const upoSha256 = createHash("sha256").update(Buffer.from(upoXml, "utf8")).digest("hex");
+
+    await recordDuplicateKsefAcceptance({
       documentId,
       expectedSha256,
-      error: `KSeF duplicate status 440. Original session=${status.originalSessionReferenceNumber ?? "unknown"}; original KSeF number=${status.originalKsefNumber ?? "unknown"}.`,
-      statusCode: status.statusCode,
+      originalSessionReference,
+      originalInvoiceReference,
+      ksefReferenceNumber: originalStatus.ksefNumber,
+      duplicateStatusCode: status.statusCode,
+      acceptedStatusCode: originalStatus.statusCode,
+      upoXml,
+      upoSha256,
+      acceptedAt: originalStatus.acquisitionDate,
     });
+
     return {
-      kind: "duplicate",
+      kind: "accepted_duplicate",
       invoiceReference,
-      originalKsefNumber: status.originalKsefNumber,
+      originalSessionReference,
+      originalInvoiceReference,
+      ksefReferenceNumber: originalStatus.ksefNumber,
     };
   }
 
