@@ -14,9 +14,22 @@ function safeErrorText(value: string) {
   return (normalized || "Unknown KSeF error.").slice(0, 4000);
 }
 
+type UntypedRpcResponse = {
+  data: unknown;
+  error: { message: string } | null;
+};
+
 async function rpc<T>(name: string, params: Record<string, unknown>): Promise<T> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase.rpc(name, params);
+  // The admin client is intentionally schema-untyped. Supabase therefore
+  // infers RPC args as `undefined` even though these service-role-only
+  // functions take named arguments. Keep this escape hatch local to the RPC
+  // boundary instead of weakening types throughout the billing/KSeF code.
+  const callRpc = supabase.rpc as unknown as (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => Promise<UntypedRpcResponse>;
+  const { data, error } = await callRpc(name, params);
   if (error) throw new Error(`Supabase ${name} failed: ${error.message}`);
   return data as T;
 }
