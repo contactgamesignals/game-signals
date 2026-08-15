@@ -20,19 +20,23 @@ assert.match(webhook, /assertStripePayloadMode\(object, stripeMode\.livemode, "S
 assert.match(webhook, /assertStripePayloadMode\(payload, stripeMode\.livemode, `Stripe API GET \$\{path\}`\)/);
 assert.match(webhook, /Authorization:\s*`Bearer \$\{stripeMode\.secretKey\}`/);
 
-const verifySignatureAt = webhook.indexOf("verifyStripeSignature(rawBody, signature, webhookSecret)");
-const parseEventAt = webhook.indexOf("const event = JSON.parse(rawBody)");
-const assertEventAt = webhook.indexOf('assertStripePayloadMode(event, stripeMode.livemode, "Stripe event")');
-const assertObjectAt = webhook.indexOf('assertStripePayloadMode(object, stripeMode.livemode, "Stripe event object")');
+const handlerStart = webhook.indexOf("Deno.serve(async (request) => {");
+assert.ok(handlerStart >= 0, "webhook handler missing");
+const handler = webhook.slice(handlerStart);
+
+const verifySignatureAt = handler.indexOf("verifyStripeSignature(rawBody, signature, webhookSecret)");
+const parseEventAt = handler.indexOf("const event = JSON.parse(rawBody)");
+const assertEventAt = handler.indexOf('assertStripePayloadMode(event, stripeMode.livemode, "Stripe event")');
+const assertObjectAt = handler.indexOf('assertStripePayloadMode(object, stripeMode.livemode, "Stripe event object")');
 const firstMutationAt = Math.min(
   ...[
-    webhook.indexOf("await linkCheckoutObjects(service, object)"),
-    webhook.indexOf("await syncAuthoritativeSubscription(service"),
-    webhook.indexOf("await syncInvoiceRecord(service"),
-    webhook.indexOf("await syncCreditNote(service"),
-    webhook.indexOf("await syncChargeLocationEvidence(service"),
-    webhook.indexOf("await syncChargeRefundTotal(service"),
-    webhook.indexOf("await syncDisputeRecord(service"),
+    handler.indexOf("await linkCheckoutObjects(service, object)"),
+    handler.indexOf("await syncAuthoritativeSubscription(service"),
+    handler.indexOf("await syncInvoiceRecord(service"),
+    handler.indexOf("await syncCreditNote(service"),
+    handler.indexOf("await syncChargeLocationEvidence(service"),
+    handler.indexOf("await syncChargeRefundTotal(service"),
+    handler.indexOf("await syncDisputeRecord(service"),
   ].filter((value) => value >= 0),
 );
 
@@ -40,7 +44,7 @@ assert.ok(verifySignatureAt >= 0, "webhook signature verification missing");
 assert.ok(parseEventAt > verifySignatureAt, "event must be parsed only after signature verification");
 assert.ok(assertEventAt > parseEventAt, "event livemode must be checked after verified parsing");
 assert.ok(assertObjectAt > assertEventAt, "object livemode must be checked after event livemode");
-assert.ok(firstMutationAt > assertObjectAt, "no billing/accounting mutation may run before livemode checks");
+assert.ok(Number.isFinite(firstMutationAt) && firstMutationAt > assertObjectAt, "no billing/accounting mutation may run before livemode checks");
 
 assert.match(webhook, /stripeGet\(`\/subscriptions\/\$\{encodeURIComponent\(subscriptionId\)\}`\)/);
 assert.match(webhook, /stripeGet\(`\/charges\/\$\{encodeURIComponent\(chargeId\)\}`\)/);
