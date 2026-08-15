@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const worker = readFileSync("supabase/functions/reconcile-stripe-tax-ids/index.ts", "utf8");
 const runtime = readFileSync("supabase/functions/_shared/stripe-runtime-mode.ts", "utf8");
+const runtimeCore = readFileSync("supabase/functions/_shared/stripe-runtime-mode-core.ts", "utf8");
 const migration = readFileSync("supabase/migrations/20260815014500_reconcile_stripe_tax_id_verification.sql", "utf8");
 
 assert.match(worker, /requireStripeRuntimeMode/);
@@ -32,9 +33,12 @@ assert.match(worker, /assertStripePayloadMode\(payload, runtime\.livemode/);
 // accounting-effect arm. The worker must not recreate a separate key-mode
 // parser that could drift from checkout/webhook runtime selection.
 assert.match(runtime, /GAMESIGNAL_STRIPE_LIVE_BILLING_UNLOCK/);
-assert.match(runtime, /I_UNDERSTAND_STRIPE_LIVE_BILLING_CAN_CHARGE_REAL_CUSTOMERS/);
+assert.match(runtime, /inspectStripeRuntimeModeCore/);
 assert.match(runtime, /export function requireStripeRuntimeMode/);
 assert.match(runtime, /export function assertStripePayloadMode/);
+assert.match(runtimeCore, /I_UNDERSTAND_STRIPE_LIVE_BILLING_CAN_CHARGE_REAL_CUSTOMERS/);
+assert.match(runtimeCore, /STRIPE_TEST_KEY_PATTERN/);
+assert.match(runtimeCore, /STRIPE_LIVE_KEY_PATTERN/);
 assert.doesNotMatch(worker, /STRIPE_TEST_KEY_PATTERN/);
 assert.doesNotMatch(worker, /STRIPE_LIVE_KEY_PATTERN/);
 
