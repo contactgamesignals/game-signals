@@ -1,5 +1,7 @@
 -- Durable KSeF submission state machine for already-numbered, frozen LIVE FA(3)
 -- documents. Credentials/tokens are intentionally never stored here.
+-- This branch artifact mirrors the SQL actually applied to Supabase; the
+-- preflight-only invalid marker was never part of the live migration.
 
 alter table public.billing_seller_documents
   add column if not exists ksef_attempt_count integer not null default 0,
@@ -205,4 +207,16 @@ begin
 end;
 $$;
 
-forbidden_marker_DO_NOT_EXECUTE_as_sql;
+revoke all on function public.start_seller_document_ksef_attempt(uuid, text)
+from public, anon, authenticated;
+revoke all on function public.record_seller_document_ksef_references(uuid, text, text, text, integer)
+from public, anon, authenticated;
+revoke all on function public.fail_seller_document_ksef_attempt(uuid, text, text, integer)
+from public, anon, authenticated;
+revoke all on function public.accept_seller_document_ksef(uuid, text, text, integer, text, text, timestamptz)
+from public, anon, authenticated;
+
+grant execute on function public.start_seller_document_ksef_attempt(uuid, text) to service_role;
+grant execute on function public.record_seller_document_ksef_references(uuid, text, text, text, integer) to service_role;
+grant execute on function public.fail_seller_document_ksef_attempt(uuid, text, text, integer) to service_role;
+grant execute on function public.accept_seller_document_ksef(uuid, text, text, integer, text, text, timestamptz) to service_role;
