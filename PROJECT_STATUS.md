@@ -2,6 +2,8 @@
 
 Last verified: 2026-08-15.
 
+Repository alignment: the verified readiness branch was merged into `main` on 2026-08-15; this file now describes the `main` source of truth and the live Supabase runtime.
+
 This file is the compact source of truth for the current product state. Historical readiness/checkpoint documents remain useful as audit history, but if an older note conflicts with this file or the current runtime, use the current runtime and current code.
 
 ## Product
