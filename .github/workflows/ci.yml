@@ -44,6 +44,7 @@ jobs:
           node --experimental-strip-types scripts/check-stripe-runtime-smoke.ts
           node --experimental-strip-types scripts/check-stripe-webhook-runtime-smoke.ts
           node --experimental-strip-types scripts/check-operator-launch-readiness-access.ts
+          node --experimental-strip-types scripts/check-consumer-legal-readiness.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
           bash scripts/run-ksef-issuance-orchestrator-check.sh
 
@@ -90,6 +91,12 @@ jobs:
             echo "::error title=Financial retention regression::${line}"
           done < <(tail -n 8 "$LOG_FILE")
           exit "$STATUS"
+
+      - name: Test immutable contract confirmation in PostgreSQL 17
+        shell: bash
+        run: |
+          chmod +x scripts/test-contract-confirmation-postgres.sh
+          bash scripts/test-contract-confirmation-postgres.sh
 
       - name: Lint
         run: npm run lint
