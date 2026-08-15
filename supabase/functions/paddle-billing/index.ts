@@ -179,9 +179,11 @@ Deno.serve(async (request) => {
       return json({ error: "Individuals must explicitly request immediate service before checkout." }, 400);
     }
 
+    const existingPaddleSubscriptionNeedsPortal = subscription.billing_provider === "paddle" &&
+      Boolean(subscription.billing_subscription_id) && subscription.status !== "canceled";
     const alreadyPaid = subscription.plan !== "free" &&
       (subscription.status === "active" || subscription.status === "trialing");
-    if (alreadyPaid) {
+    if (existingPaddleSubscriptionNeedsPortal || alreadyPaid) {
       return json({ error: "This workspace already has a paid subscription. Use Manage billing to change it.", usePortal: true }, 409);
     }
 
