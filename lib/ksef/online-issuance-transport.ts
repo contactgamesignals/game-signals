@@ -142,35 +142,40 @@ export function createKsefOnlineIssuanceTransport(input?: {
       const certificate = await fetchCurrentSymmetricEncryptionCertificate();
       const key = generateKsefSessionKey();
       const iv = generateKsefSessionIv();
-      const encryptedKey = encryptKsefSessionKeyWithCertificate({
-        sessionKey: key,
-        certificateDerBase64: certificate.certificate,
-      });
 
-      const opened = await openFa3OnlineSession({
-        accessToken,
-        encryption: {
-          encryptedSymmetricKey: encryptedKey.toString("base64"),
-          initializationVector: iv.toString("base64"),
-          publicKeyId: certificate.publicKeyId,
-        },
-      });
+      try {
+        const encryptedKey = encryptKsefSessionKeyWithCertificate({
+          sessionKey: key,
+          certificateDerBase64: certificate.certificate,
+        });
 
-      if (!opened.referenceNumber?.trim()) {
+        const opened = await openFa3OnlineSession({
+          accessToken,
+          encryption: {
+            encryptedSymmetricKey: encryptedKey.toString("base64"),
+            initializationVector: iv.toString("base64"),
+            publicKeyId: certificate.publicKeyId,
+          },
+        });
+
+        if (!opened.referenceNumber?.trim()) {
+          throw new Error("KSeF open-session response did not contain a reference number.");
+        }
+
+        return {
+          sessionReference: opened.referenceNumber,
+          sessionHandle: {
+            accessToken,
+            key,
+            iv,
+            keyCleared: false,
+          } satisfies OnlineSessionHandle,
+        };
+      } catch (error) {
         key.fill(0);
         iv.fill(0);
-        throw new Error("KSeF open-session response did not contain a reference number.");
+        throw error;
       }
-
-      return {
-        sessionReference: opened.referenceNumber,
-        sessionHandle: {
-          accessToken,
-          key,
-          iv,
-          keyCleared: false,
-        } satisfies OnlineSessionHandle,
-      };
     },
 
     async submitFrozenFa3(input) {
@@ -199,8 +204,6 @@ export function createKsefOnlineIssuanceTransport(input?: {
           sessionReferenceNumber: input.sessionReference,
         });
       } finally {
-        // AES material is no longer needed after invoice submission. Wipe it
-        // even if close is ambiguous; reconciliation uses persisted references.
         clearHandleEncryption(handle);
       }
     },
