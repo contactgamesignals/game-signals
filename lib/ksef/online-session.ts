@@ -19,29 +19,41 @@ async function ksefRequest<T>(input: {
   accessToken: string;
   body?: unknown;
   responseType?: "json" | "text";
+  extraHeaders?: Record<string, string>;
 }): Promise<T> {
   const config = assertKsefSubmissionAllowed();
   const accessToken = required(input.accessToken, "KSeF accessToken");
-  const response = await fetch(`${config.baseUrl}${input.path}`, {
-    method: input.method,
-    headers: {
-      Accept: input.responseType === "text" ? "application/xml, text/xml, */*" : "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
-    },
-    body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${input.path}`, {
+      method: input.method,
+      headers: {
+        Accept: input.responseType === "text" ? "application/xml, text/xml, */*" : "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...input.extraHeaders,
+      },
+      body: input.body === undefined ? undefined : JSON.stringify(input.body),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new Error(`KSeF ${input.method} ${input.path} failed before a response was received.`);
+  }
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`KSeF ${input.method} ${input.path} failed with HTTP ${response.status}${body ? `: ${body.slice(0, 600)}` : "."}`);
+    // Do not copy KSeF response bodies into exceptions. They may contain
+    // invoice/business data and exceptions can later reach centralized logs.
+    throw new Error(`KSeF ${input.method} ${input.path} failed with HTTP ${response.status}.`);
   }
 
   if (input.responseType === "text") return await response.text() as T;
   if (response.status === 204) return undefined as T;
-  return await response.json() as T;
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error(`KSeF ${input.method} ${input.path} returned invalid JSON.`);
+  }
 }
 
 export type OpenOnlineSessionResponse = {
@@ -51,6 +63,11 @@ export type OpenOnlineSessionResponse = {
 
 export type SendOnlineInvoiceResponse = {
   referenceNumber: string;
+};
+
+export type SessionInvoicesPageResponse = {
+  continuationToken?: string | null;
+  invoices?: unknown[] | null;
 };
 
 export function openFa3OnlineSession(input: {
@@ -94,6 +111,26 @@ export function getKsefSessionStatus(input: {
     method: "GET",
     path: `/sessions/${referenceNumber}`,
     accessToken: input.accessToken,
+  });
+}
+
+export function getKsefSessionInvoicesPage(input: {
+  accessToken: string;
+  sessionReferenceNumber: string;
+  continuationToken?: string | null;
+  pageSize?: number;
+}) {
+  const referenceNumber = encodeURIComponent(required(input.sessionReferenceNumber, "sessionReferenceNumber"));
+  const pageSize = input.pageSize ?? 100;
+  if (!Number.isSafeInteger(pageSize) || pageSize <= 0 || pageSize > 1000) {
+    throw new Error("KSeF session invoice pageSize is invalid.");
+  }
+  const continuationToken = input.continuationToken?.trim() || null;
+  return ksefRequest<SessionInvoicesPageResponse>({
+    method: "GET",
+    path: `/sessions/${referenceNumber}/invoices?pageSize=${pageSize}`,
+    accessToken: input.accessToken,
+    extraHeaders: continuationToken ? { "x-continuation-token": continuationToken } : undefined,
   });
 }
 
