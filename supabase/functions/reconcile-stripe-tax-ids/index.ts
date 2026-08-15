@@ -1,4 +1,9 @@
 import { authorizeRequest, json, jsonHeaders, serviceClient } from "../_shared/core.ts";
+import {
+  assertStripePayloadMode,
+  requireStripeRuntimeMode,
+  type StripeRuntimeMode,
+} from "../_shared/stripe-runtime-mode.ts";
 
 type InvoiceRow = {
   id: string;
@@ -21,33 +26,22 @@ type StripeTaxId = {
   id?: string;
   type?: string;
   value?: string;
+  livemode?: boolean;
   verification?: { status?: string | null } | null;
 };
 
-type StripeMode = {
-  livemode: boolean;
-  label: "stripe_sandbox" | "stripe_live_explicitly_unlocked";
-};
-
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
-const STRIPE_TEST_KEY_PATTERN = /^sk_test_[A-Za-z0-9_]+$/;
-const STRIPE_LIVE_KEY_PATTERN = /^sk_live_[A-Za-z0-9_]+$/;
 const LIVE_UNLOCK_ENV = "GAMESIGNAL_STRIPE_LIVE_TAX_ID_RECONCILER_UNLOCK";
 const LIVE_UNLOCK_PHRASE = "I_UNDERSTAND_STRIPE_LIVE_TAX_ID_RECONCILIATION_HAS_ACCOUNTING_EFFECT";
 const MAX_INVOICES_PER_RUN = 50;
 const MAX_TAX_ID_PAGES = 10;
 
-function resolveStripeMode(secretKey: string): StripeMode {
-  if (STRIPE_TEST_KEY_PATTERN.test(secretKey)) {
-    return { livemode: false, label: "stripe_sandbox" };
+function requireTaxIdRuntimeMode() {
+  const runtime = requireStripeRuntimeMode();
+  if (runtime.livemode && Deno.env.get(LIVE_UNLOCK_ENV) !== LIVE_UNLOCK_PHRASE) {
+    throw new Error("Stripe LIVE Tax ID reconciliation is locked pending explicit accounting approval.");
   }
-  if (STRIPE_LIVE_KEY_PATTERN.test(secretKey)) {
-    if (Deno.env.get(LIVE_UNLOCK_ENV) !== LIVE_UNLOCK_PHRASE) {
-      throw new Error("Stripe LIVE Tax ID reconciliation is locked pending explicit accounting approval.");
-    }
-    return { livemode: true, label: "stripe_live_explicitly_unlocked" };
-  }
-  throw new Error("Stripe Tax ID reconciler requires a recognized restricted test or live secret key.");
+  return runtime;
 }
 
 function taxIdKey(type: unknown, value: unknown) {
@@ -70,13 +64,13 @@ function needsVerificationRefresh(items: SnapshotTaxId[]) {
   });
 }
 
-async function stripeRequest(path: string, secretKey: string) {
+async function stripeRequest(path: string, runtime: StripeRuntimeMode) {
   let response: Response;
   try {
     response = await fetch(`https://api.stripe.com${path}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${secretKey}`,
+        Authorization: `Bearer ${runtime.secretKey}`,
         "Stripe-Version": STRIPE_API_VERSION,
       },
       signal: AbortSignal.timeout(15_000),
@@ -86,13 +80,16 @@ async function stripeRequest(path: string, secretKey: string) {
   }
   if (!response.ok) throw new Error(`Stripe Tax ID request failed with HTTP ${response.status}.`);
   try {
-    return await response.json() as { data?: StripeTaxId[]; has_more?: boolean };
-  } catch {
+    const payload = await response.json() as { data?: StripeTaxId[]; has_more?: boolean };
+    assertStripePayloadMode(payload, runtime.livemode, "Stripe Tax ID response");
+    return payload;
+  } catch (error) {
+    if (error instanceof Error && /livemode does not match/.test(error.message)) throw error;
     throw new Error("Stripe Tax ID response is not valid JSON.");
   }
 }
 
-async function customerTaxIds(customerId: string, secretKey: string) {
+async function customerTaxIds(customerId: string, runtime: StripeRuntimeMode) {
   const result: StripeTaxId[] = [];
   let startingAfter: string | null = null;
 
@@ -101,7 +98,7 @@ async function customerTaxIds(customerId: string, secretKey: string) {
     if (startingAfter) params.set("starting_after", startingAfter);
     const payload = await stripeRequest(
       `/v1/customers/${encodeURIComponent(customerId)}/tax_ids?${params.toString()}`,
-      secretKey,
+      runtime,
     );
     const items = Array.isArray(payload.data) ? payload.data : [];
     result.push(...items);
@@ -145,8 +142,7 @@ Deno.serve(async (request) => {
     const auth = await authorizeRequest(request);
     if (!auth.internal) return json({ error: "Forbidden" }, 403);
 
-    const secretKey = Deno.env.get("STRIPE_SECRET_KEY")?.trim() ?? "";
-    const stripeMode = resolveStripeMode(secretKey);
+    const stripeMode = requireTaxIdRuntimeMode();
 
     const supabase = serviceClient();
     const { data, error } = await supabase
@@ -175,7 +171,7 @@ Deno.serve(async (request) => {
       candidates += 1;
 
       try {
-        const current = await customerTaxIds(invoice.stripe_customer_id, secretKey);
+        const current = await customerTaxIds(invoice.stripe_customer_id, stripeMode);
         const result = enrichSnapshot(snapshot, current);
         exactMatches += result.matched;
         if (!result.matched) unmatched += 1;
@@ -198,7 +194,7 @@ Deno.serve(async (request) => {
 
     return json({
       ok: true,
-      mode: stripeMode.label,
+      mode: stripeMode.livemode ? "stripe_live_explicitly_unlocked" : "stripe_sandbox",
       livemode: stripeMode.livemode,
       inspected,
       candidates,
@@ -213,9 +209,11 @@ Deno.serve(async (request) => {
       ? 401
       : /Forbidden/.test(message)
         ? 403
-        : /LIVE Tax ID reconciliation is locked/.test(message)
+        : /LIVE (billing|Tax ID reconciliation) is locked/.test(message)
           ? 503
-          : 500;
+          : /Stripe secret/.test(message)
+            ? 503
+            : 500;
     return json({ error: message.slice(0, 500) }, status);
   }
 });
