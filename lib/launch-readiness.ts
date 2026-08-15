@@ -40,6 +40,12 @@ export function getLaunchReadiness() {
       detail: "Seller is verified as active Polish VAT. Stripe Tax sandbox is configured for inclusive SaaS pricing; re-check the official VAT register and mirror the configuration on the final LIVE Stripe account before charging.",
     },
     {
+      key: "pl_company_tax_id",
+      label: "PL Company Tax ID verification reconciliation",
+      ready: approved("GAMESIGNAL_PL_COMPANY_TAX_ID_LIVE_READY"),
+      detail: "Sandbox reconciliation is deployed and matches only the exact Tax ID type+value snapshotted on the invoice. Before LIVE, verify one real LIVE Company Tax ID flow and explicitly unlock the Supabase reconciler for sk_live using its separate accounting-effect unlock phrase.",
+    },
+    {
       key: "vat_ue",
       label: "EU B2B / VAT-UE readiness",
       ready: ACTIVE_SELLER.vatUeStatus === "valid" && approved("GAMESIGNAL_VAT_UE_READY"),
@@ -61,13 +67,13 @@ export function getLaunchReadiness() {
       key: "fa3",
       label: "Active-VAT FA(3) schema validation",
       ready: approved("GAMESIGNAL_FA3_VALIDATED"),
-      detail: "The domestic active-VAT FA(3) generator must pass the pinned official MF schema. The earlier VAT-exempt FA(3) proof is not sufficient for the now-verified active-VAT seller.",
+      detail: "The domestic 23% VAT-inclusive FA(3) generator passes the pinned official MF XSD and has completed an anonymized official KSeF TEST OnlineSession/UPO regression. Keep this approval explicit so a later seller/schema change forces review.",
     },
     {
       key: "ksef",
       label: "KSeF active-VAT document lifecycle",
       ready: approved("GAMESIGNAL_KSEF_FLOW_READY"),
-      detail: `Current KSeF environment: ${ksef.environment}; submission enabled: ${ksef.enabled ? "yes" : "no"}. TEST auth/send/status/UPO plumbing is proven, but the active-VAT invoice payload and final seller credentials/numbering still require approval before PROD.`,
+      detail: `Current KSeF environment: ${ksef.environment}; submission enabled: ${ksef.enabled ? "yes" : "no"}; production unlocked: ${ksef.productionUnlocked ? "yes" : "no"}. Numbering, freeze-once payloads, token-auth transport, persist-before-send, reconciliation and UPO storage are implemented. Final seller production credentials and an explicit production authorization remain required.`,
     },
     {
       key: "supabase_auth",
