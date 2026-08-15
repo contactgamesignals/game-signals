@@ -1,4 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  assertStripePayloadMode,
+  inspectStripeRuntimeMode,
+  requireStripeRuntimeMode,
+  STRIPE_RUNTIME_API_VERSION,
+} from "../_shared/stripe-runtime-mode.ts";
 
 const headers = {
   "Content-Type": "application/json",
@@ -10,8 +16,6 @@ const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.ve
 const PORTAL_CONFIGURATION_VERSION = "3";
 const TERMS_VERSION = "2026-08-13-v2";
 const PRIVACY_VERSION = "2026-08-13-v2";
-const STRIPE_API_VERSION = "2026-06-24.dahlia";
-const STRIPE_TEST_KEY_PATTERN = /^(sk|rk)_test_/;
 const MIN_CHECKOUT_LIFETIME_SECONDS = 30 * 60;
 const LAUNCH_BILLING_COUNTRY = "PL";
 
@@ -122,19 +126,15 @@ async function stripeRequest(
   path: string,
   options: { method?: "GET" | "POST"; body?: URLSearchParams; idempotencyKey?: string } = {},
 ) {
-  const secret = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!secret) throw new Error("Stripe secret is not configured.");
-  if (!STRIPE_TEST_KEY_PATTERN.test(secret)) {
-    throw new Error("Stripe LIVE is locked until the launch compliance review is completed.");
-  }
+  const stripeMode = requireStripeRuntimeMode();
 
   let response: Response;
   try {
     response = await fetch(`https://api.stripe.com/v1${path}`, {
       method: options.method ?? "GET",
       headers: {
-        Authorization: `Bearer ${secret}`,
-        "Stripe-Version": STRIPE_API_VERSION,
+        Authorization: `Bearer ${stripeMode.secretKey}`,
+        "Stripe-Version": STRIPE_RUNTIME_API_VERSION,
         ...(options.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
         ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
       },
@@ -154,6 +154,7 @@ async function stripeRequest(
       typeof stripeError?.param === "string" ? stripeError.param : null,
     );
   }
+  assertStripePayloadMode(payload, stripeMode.livemode, `Stripe API ${options.method ?? "GET"} ${path}`);
   return payload;
 }
 
@@ -241,6 +242,14 @@ async function ensurePortalConfiguration() {
 }
 
 async function runIntegrationHealthcheck() {
+  const stripeMode = requireStripeRuntimeMode();
+  if (stripeMode.livemode) {
+    throw new HttpError(409, {
+      error: "The destructive Stripe integration healthcheck is sandbox-only and is never run against LIVE.",
+      stripe_mode: stripeMode.label,
+    });
+  }
+
   await stripeRequest("/account");
 
   const found = new Set<string>();
@@ -293,8 +302,8 @@ async function runIntegrationHealthcheck() {
   return {
     ok: true,
     stripe: "authenticated",
-    stripe_api_version: STRIPE_API_VERSION,
-    stripe_mode: "sandbox_locked",
+    stripe_api_version: STRIPE_RUNTIME_API_VERSION,
+    stripe_mode: stripeMode.label,
     prices: found.size,
     checkout: "company_identity_tax_fields_created_and_expired",
     portal: typeof portalConfiguration === "string" ? "configured" : "error",
@@ -411,7 +420,6 @@ async function getOrCreateConsent(
 
   if (!inserted.error && inserted.data?.id) return String(inserted.data.id);
 
-  // Concurrent identical requests can race on the unique attempt link. Re-read the winner.
   if (inserted.error?.code === "23505") {
     const raced = await admin
       .from("billing_checkout_consents")
@@ -594,9 +602,6 @@ async function openOrResumeCheckout(args: {
       const expiryRejected = error instanceof StripeApiError &&
         (error.param === "expires_at" || /expires_at|expire/i.test(error.message));
 
-      // If an earlier request with this idempotency key had succeeded, Stripe would replay that
-      // success. An expires_at validation failure therefore means there is no successful Session
-      // to recover under this key, so it is safe to release the reservation and create a new one.
       if (expiryRejected && remainingSeconds < MIN_CHECKOUT_LIFETIME_SECONDS) {
         await markAttempt(admin, attempt.id, { status: "expired" });
         continue;
@@ -632,14 +637,23 @@ Deno.serve(async (request) => {
       if (!(await validCronSecret(request.headers.get("x-cron-secret")))) {
         return json({ error: "Forbidden." }, 403);
       }
-      if (!Deno.env.get("STRIPE_SECRET_KEY")) return json({ error: "Stripe secret is not configured." }, 503);
+      const runtime = inspectStripeRuntimeMode();
+      if (!runtime.configured) return json({ error: "Stripe secret is not configured." }, 503);
+      if (!runtime.allowed) {
+        return json({
+          error: runtime.label === "live_locked"
+            ? "Stripe LIVE billing is locked pending explicit final launch approval."
+            : "Stripe runtime configuration is invalid.",
+          stripe_mode: runtime.label,
+        }, 503);
+      }
       if (body.action === "integration_healthcheck") return json(await runIntegrationHealthcheck());
       await stripeRequest("/account");
       return json({
         ok: true,
         stripe: "authenticated",
-        stripe_api_version: STRIPE_API_VERSION,
-        stripe_mode: "sandbox_locked",
+        stripe_api_version: STRIPE_RUNTIME_API_VERSION,
+        stripe_mode: runtime.label,
       });
     }
 
@@ -673,12 +687,14 @@ Deno.serve(async (request) => {
     if (membershipError || !membership) return json({ error: "Forbidden." }, 403);
     if (subscriptionError || !subscription) return json({ error: "Subscription record not found." }, 404);
 
-    const configured = Boolean(Deno.env.get("STRIPE_SECRET_KEY"));
+    const runtime = inspectStripeRuntimeMode();
+    const configured = runtime.configured;
     if (body.action === "status") {
       return json({
         configured,
-        stripe_api_version: STRIPE_API_VERSION,
-        stripe_mode: "sandbox_locked",
+        stripe_api_version: STRIPE_RUNTIME_API_VERSION,
+        stripe_mode: runtime.label,
+        live_allowed: runtime.allowed && runtime.livemode === true,
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
         has_customer: Boolean(subscription.stripe_customer_id),
@@ -690,6 +706,14 @@ Deno.serve(async (request) => {
       return json({ error: "Only workspace owners and admins can manage billing." }, 403);
     }
     if (!configured) return json({ error: "Stripe billing is not configured yet." }, 503);
+    if (!runtime.allowed) {
+      return json({
+        error: runtime.label === "live_locked"
+          ? "Stripe LIVE billing is locked pending explicit final launch approval."
+          : "Stripe billing runtime configuration is invalid.",
+        stripe_mode: runtime.label,
+      }, 503);
+    }
 
     if (body.action === "portal") {
       if (!subscription.stripe_customer_id) return json({ error: "No Stripe customer exists for this workspace yet." }, 409);
@@ -753,6 +777,8 @@ Deno.serve(async (request) => {
   } catch (error) {
     if (error instanceof HttpError) return json(error.payload, error.status);
     console.error(error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected billing error." }, 500);
+    const message = error instanceof Error ? error.message : "Unexpected billing error.";
+    const status = /Stripe LIVE billing is locked|Stripe secret|runtime configuration/.test(message) ? 503 : 500;
+    return json({ error: message }, status);
   }
 });
