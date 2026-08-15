@@ -15,6 +15,7 @@ assert.match(adapter, /prepareCheckoutContractConfirmation/);
 assert.match(adapter, /crypto\.subtle\.digest\("SHA-256"/);
 assert.match(adapter, /billing_contract_confirmations/);
 assert.match(adapter, /\.insert\(row\)/);
+assert.match(adapter, /confirmation_text:\s*prepared\.confirmationText/);
 assert.match(adapter, /inserted\.error\?\.code !== "23505"/);
 assert.match(adapter, /existing\.data\.confirmation_sha256 !== digest/);
 assert.match(adapter, /existing\.data\.stripe_checkout_session_id !== prepared\.stripeCheckoutSessionId/);
@@ -25,7 +26,6 @@ assert.match(adapter, /manual review is required/);
 // already-identical row; it may never upsert/patch the frozen contract payload.
 assert.doesNotMatch(adapter, /\.upsert\(/);
 assert.doesNotMatch(adapter, /\.update\(/);
-assert.doesNotMatch(adapter, /confirmation_text\s*:\s*[^p]/);
 assert.doesNotMatch(adapter, /RESEND_API_KEY|api\.resend\.com/);
 assert.doesNotMatch(adapter, /claim_billing_contract_confirmations_for_delivery/);
 assert.doesNotMatch(adapter, /transition_billing_contract_confirmation_delivery/);
