@@ -3,8 +3,13 @@ import { readFileSync } from "node:fs";
 
 const migration = readFileSync("supabase/migrations/20260814231200_add_ksef_submission_state_machine.sql", "utf8");
 const ambiguityHardening = readFileSync("supabase/migrations/20260814231300_harden_ksef_ambiguous_failures.sql", "utf8");
+const preSubmitFailure = readFileSync("supabase/migrations/20260815013500_add_ksef_pre_submit_failure.sql", "utf8");
 
-for (const [name, sql] of [["state machine", migration], ["ambiguity hardening", ambiguityHardening]] as const) {
+for (const [name, sql] of [
+  ["state machine", migration],
+  ["ambiguity hardening", ambiguityHardening],
+  ["pre-submit failure", preSubmitFailure],
+] as const) {
   assert.doesNotMatch(sql, /forbidden_marker|DO_NOT_EXECUTE/i, `${name}: preflight marker detected`);
   assert.doesNotMatch(sql, /\bdrop\s+table\b|\bdrop\s+column\b|\btruncate\s+table\b|\bdelete\s+from\b/i, `${name}: destructive data/schema operation detected`);
   assert.doesNotMatch(sql, /access[_ ]?token|refresh[_ ]?token|private[_ ]?key|certificate[_ ]?password/i, `${name}: credential material must not be stored in billing state`);
@@ -36,4 +41,13 @@ assert.match(ambiguityHardening, /Use only after an authoritative KSeF rejection
 assert.match(ambiguityHardening, /revoke all on function public\.record_seller_document_ksef_reconciliation_error[\s\S]*from public, anon, authenticated/i);
 assert.match(ambiguityHardening, /grant execute on function public\.record_seller_document_ksef_reconciliation_error[\s\S]*to service_role/i);
 
-console.log("KSeF submission and ambiguous-failure reconciliation invariants passed.");
+assert.match(preSubmitFailure, /create or replace function public\.fail_seller_document_ksef_pre_submit/i);
+assert.match(preSubmitFailure, /and d\.lifecycle_status = 'ksef_pending'/i);
+assert.match(preSubmitFailure, /and d\.ksef_invoice_reference is null/i);
+assert.match(preSubmitFailure, /and d\.ksef_reference_number is null/i);
+assert.match(preSubmitFailure, /and d\.ksef_accepted_at is null/i);
+assert.match(preSubmitFailure, /set lifecycle_status = 'failed'/i);
+assert.match(preSubmitFailure, /revoke all on function public\.fail_seller_document_ksef_pre_submit[\s\S]*from public, anon, authenticated/i);
+assert.match(preSubmitFailure, /grant execute on function public\.fail_seller_document_ksef_pre_submit[\s\S]*to service_role/i);
+
+console.log("KSeF submission, safe pre-submit retry and ambiguous-failure reconciliation invariants passed.");
