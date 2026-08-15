@@ -90,7 +90,7 @@ begin
 end;
 $$;
 
--- Insert one valid frozen confirmation.
+-- Insert one valid frozen confirmation including the exact seller snapshot.
 with payload as (
   select repeat('GameSignal immutable contract confirmation. ', 5) as body
 )
@@ -99,6 +99,11 @@ insert into public.billing_contract_confirmations(
   billing_account_id,
   checkout_consent_id,
   stripe_checkout_session_id,
+  seller_profile_key,
+  seller_legal_name,
+  seller_nip,
+  seller_registered_address,
+  seller_country_code,
   buyer_type,
   plan,
   billing_period,
@@ -117,6 +122,11 @@ select
   '00000000-0000-4000-8000-000000000101',
   '00000000-0000-4000-8000-000000000201',
   'cs_test_contract_confirmation',
+  'lumino_games_20260814',
+  'Lumino Games sp. z o.o.',
+  '6762600090',
+  'ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Poland',
+  'PL',
   'individual',
   'indie',
   'monthly',
@@ -136,13 +146,18 @@ do $$
 begin
   begin
     insert into public.billing_contract_confirmations(
-      billing_account_id, checkout_consent_id, buyer_type, plan, billing_period,
+      billing_account_id, checkout_consent_id,
+      seller_profile_key, seller_legal_name, seller_nip,
+      seller_registered_address, seller_country_code,
+      buyer_type, plan, billing_period,
       recipient_email, terms_version, privacy_version, withdrawal_version,
       confirmation_version, confirmation_text, confirmation_sha256,
       contract_concluded_at
     ) values (
       '00000000-0000-4000-8000-000000000101',
       extensions.gen_random_uuid(),
+      'seller_test', 'Seller Test sp. z o.o.', '6762600090',
+      'Test address 1, Kraków, Poland', 'PL',
       'company', 'studio', 'yearly',
       'other@example.test', 't', 'p', 'w', 'c',
       repeat('Wrong hash confirmation text. ', 5), repeat('0', 64), now()
@@ -174,6 +189,22 @@ begin
 end;
 $$;
 
+-- Seller identity is part of the frozen evidence and cannot be rewritten.
+do $$
+begin
+  begin
+    update public.billing_contract_confirmations
+    set seller_legal_name = 'Different seller sp. z o.o.'
+    where id = '00000000-0000-4000-8000-000000000301';
+    raise exception 'Frozen seller snapshot was mutable.';
+  exception
+    when others then
+      if sqlerrm = 'Frozen seller snapshot was mutable.' then raise; end if;
+      if position('immutable' in lower(sqlerrm)) = 0 then raise; end if;
+  end;
+end;
+$$;
+
 -- Delivery metadata may advance without changing the frozen payload.
 update public.billing_contract_confirmations
 set delivery_status = 'delivered',
@@ -196,6 +227,9 @@ begin
   where id = '00000000-0000-4000-8000-000000000301';
 
   if stored_hash <> actual_hash then raise exception 'Stored confirmation hash changed.'; end if;
+  if (select seller_legal_name from public.billing_contract_confirmations where id = '00000000-0000-4000-8000-000000000301') <> 'Lumino Games sp. z o.o.' then
+    raise exception 'Seller snapshot changed.';
+  end if;
   if (select delivery_status from public.billing_contract_confirmations where id = '00000000-0000-4000-8000-000000000301') <> 'delivered' then
     raise exception 'Delivery status did not advance.';
   end if;
