@@ -47,6 +47,7 @@ jobs:
           node --experimental-strip-types scripts/check-consumer-legal-readiness.ts
           node --experimental-strip-types scripts/check-contract-confirmation-core.ts
           node --experimental-strip-types scripts/check-contract-confirmation-checkout-core.ts
+          node --experimental-strip-types scripts/check-contract-confirmation-persistence.ts
           node --experimental-strip-types scripts/check-contract-confirmation-delivery.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
           bash scripts/run-ksef-issuance-orchestrator-check.sh
