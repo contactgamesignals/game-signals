@@ -42,18 +42,18 @@ assert.match(webhook, /billing_location_evidence/);
 assert.doesNotMatch(webhook, /sk_live_[A-Za-z0-9]/);
 assert.doesNotMatch(webhook, /rk_live_[A-Za-z0-9]/);
 
-// Billing-v11 has not yet been migrated to the shared runtime helper. Keep its
-// existing sandbox-only gate until that dedicated step is implemented and
-// separately regression-tested.
 const billing = readFileSync(drafts[1], "utf8");
 assert.match(billing, /reserve_subscription_checkout/);
 assert.match(billing, /Idempotency-Key/);
 assert.match(billing, /gamesignal-checkout-/);
 assert.match(billing, /expires_at/);
 assert.match(billing, /integration_identifier/);
-assert.match(billing, /STRIPE_API_VERSION = "2026-06-24\.dahlia"/);
-assert.match(billing, /STRIPE_TEST_KEY_PATTERN/);
-assert.doesNotMatch(billing, /requireStripeRuntimeMode/);
+assert.match(billing, /requireStripeRuntimeMode/);
+assert.match(billing, /inspectStripeRuntimeMode/);
+assert.match(billing, /assertStripePayloadMode/);
+assert.match(billing, /STRIPE_RUNTIME_API_VERSION/);
+assert.doesNotMatch(billing, /STRIPE_TEST_KEY_PATTERN/);
+assert.doesNotMatch(billing, /STRIPE_LIVE_KEY_PATTERN/);
 assert.match(billing, /stripe_price_id/);
 assert.match(billing, /checkout_attempt_id/);
 assert.match(billing, /LAUNCH_BILLING_COUNTRY = "PL"/);
@@ -62,6 +62,7 @@ assert.match(billing, /metadata\[declared_billing_country\]/);
 assert.match(billing, /subscription_data\[metadata\]\[declared_billing_country\]/);
 assert.match(billing, /body\.billing_country !== LAUNCH_BILLING_COUNTRY/);
 assert.match(billing, /Paid beta is currently available only for customers with a Polish billing address/);
+assert.match(billing, /sandbox-only and is never run against LIVE/);
 const countryGatePosition = billing.indexOf("body.billing_country !== LAUNCH_BILLING_COUNTRY");
 const checkoutReservationPosition = billing.lastIndexOf("const admin = serviceClient();");
 assert.ok(countryGatePosition >= 0, "Poland-only billing country gate must exist.");
