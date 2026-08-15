@@ -28,8 +28,10 @@ export type ContractConfirmationInput = {
     billingPeriod: "monthly" | "yearly";
     currency: string;
     subtotalAmount: number;
+    discountAmount: number;
     taxAmount: number;
     totalAmount: number;
+    paymentStatus: "paid" | "unpaid" | "no_payment_required";
   };
   consent: {
     termsAccepted: boolean;
@@ -124,9 +126,11 @@ export function buildContractConfirmationText(input: ContractConfirmationInput) 
     "SUBSCRIPTION ORDER",
     `Plan: ${input.subscription.plan}`,
     `Billing period: ${periodLabel}`,
-    `Subtotal: ${money(input.subscription.subtotalAmount, currency)}`,
+    `Subtotal before discounts and tax: ${money(input.subscription.subtotalAmount, currency)}`,
+    `Discount: ${money(input.subscription.discountAmount, currency)}`,
     `Tax: ${money(input.subscription.taxAmount, currency)}`,
-    `Total charged for the initial billing period: ${money(input.subscription.totalAmount, currency)}`,
+    `Total for the initial billing period: ${money(input.subscription.totalAmount, currency)}`,
+    `Checkout payment status at contract confirmation: ${input.subscription.paymentStatus}`,
     `Currency: ${currency}`,
     `Recurring billing accepted: ${yesNo(input.consent.recurringBillingAccepted)}`,
     `Terms accepted: ${yesNo(input.consent.termsAccepted)}`,
