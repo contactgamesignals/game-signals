@@ -54,12 +54,29 @@ const SELLER_DOCUMENT_SELECT = [
   "ksef_reference_number",
 ].join(",");
 
+type UntypedRpcResponse = {
+  data: unknown;
+  error: { message: string } | null;
+};
+
 function requiredId(value: string) {
   const normalized = value.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
     throw new Error("sellerDocumentId must be a UUID.");
   }
   return normalized;
+}
+
+async function adminRpc(name: string, params: Record<string, unknown>): Promise<UntypedRpcResponse> {
+  const supabase = getSupabaseAdminClient();
+  // The service-role client is intentionally schema-untyped. Keep the escape
+  // hatch at this private RPC boundary so the rest of the KSeF workflow stays
+  // strongly typed while still calling service-role-only PostgreSQL functions.
+  const callRpc = supabase.rpc as unknown as (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => Promise<UntypedRpcResponse>;
+  return callRpc(name, params);
 }
 
 async function loadSellerDocument(documentId: string): Promise<DurableSellerDocument> {
@@ -77,8 +94,7 @@ async function loadSellerDocument(documentId: string): Promise<DurableSellerDocu
 async function reserveLegalNumber(documentId: string, series: string) {
   const normalizedSeries = series.trim().toUpperCase();
   if (!/^[A-Z0-9_-]{1,16}$/.test(normalizedSeries)) throw new Error("Invalid seller-document number series.");
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase.rpc("reserve_seller_document_number", {
+  const { data, error } = await adminRpc("reserve_seller_document_number", {
     p_document_id: documentId,
     p_series: normalizedSeries,
   });
@@ -139,8 +155,7 @@ export async function prepareSellerDocumentForKsef(
     throw new Error("Prepared FA(3) invoice number does not match the reserved seller-document number.");
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase.rpc("freeze_seller_document_fa3", {
+  const { data, error } = await adminRpc("freeze_seller_document_fa3", {
     p_document_id: documentId,
     p_fa3_xml: prepared.xml,
     p_fa3_sha256: prepared.sha256,
