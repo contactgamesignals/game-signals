@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getLaunchReadiness } from "@/lib/launch-readiness";
+import { isGameSignalOperator } from "@/lib/operator-access";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,23 +16,17 @@ export async function GET() {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("user_id", data.user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (!membership) return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
-  if (membership.role !== "owner" && membership.role !== "admin") {
-    return NextResponse.json({ error: "Only workspace owners and admins can view launch readiness." }, { status: 403 });
+  // Launch readiness is global operator/accounting state, not customer-workspace
+  // state. A workspace owner/admin role therefore must never grant access.
+  if (!isGameSignalOperator(data.user.id)) {
+    return NextResponse.json({ error: "Operator access required." }, { status: 403 });
   }
 
   return NextResponse.json(getLaunchReadiness(), {
     headers: {
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
-      "X-GameSignal-Live-Gate": "administrative-read-only",
+      "X-GameSignal-Live-Gate": "operator-read-only",
     },
   });
 }
