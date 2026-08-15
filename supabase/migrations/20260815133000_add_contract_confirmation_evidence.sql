@@ -7,12 +7,19 @@
 --
 -- The record is attached to the seller-side billing account so it survives
 -- deletion of the product workspace/Auth user where legal retention requires it.
+-- Seller identity is copied into immutable snapshot columns because the active
+-- seller profile may legitimately change for future transactions.
 
 create table public.billing_contract_confirmations (
   id uuid primary key default gen_random_uuid(),
   billing_account_id uuid not null references public.billing_accounts(id) on delete restrict,
   checkout_consent_id uuid not null unique references public.billing_checkout_consents(id) on delete restrict,
   stripe_checkout_session_id text unique,
+  seller_profile_key text not null check (char_length(btrim(seller_profile_key)) between 1 and 120),
+  seller_legal_name text not null check (char_length(btrim(seller_legal_name)) between 1 and 300),
+  seller_nip text not null check (seller_nip ~ '^[0-9]{10}$'),
+  seller_registered_address text not null check (char_length(btrim(seller_registered_address)) between 5 and 500),
+  seller_country_code text not null check (seller_country_code ~ '^[A-Z]{2}$'),
   buyer_type public.billing_buyer_type not null,
   plan public.subscription_plan not null,
   billing_period text not null check (billing_period in ('monthly', 'yearly')),
@@ -143,6 +150,8 @@ for each row execute function private.guard_billing_contract_confirmation_update
 
 comment on table public.billing_contract_confirmations is
   'Immutable seller-side snapshot of one concluded paid contract/legal confirmation plus durable-medium delivery evidence. Product clients have no direct access.';
+comment on column public.billing_contract_confirmations.seller_profile_key is
+  'Identifier of the seller profile selected at contract conclusion; seller identity is additionally frozen in snapshot columns.';
 comment on column public.billing_contract_confirmations.confirmation_sha256 is
   'SHA-256 of exact UTF-8 confirmation_text bytes, independently verified by PostgreSQL.';
 comment on column public.billing_contract_confirmations.delivery_status is
