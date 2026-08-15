@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const worker = readFileSync("supabase/functions/reconcile-stripe-tax-ids/index.ts", "utf8");
+const runtime = readFileSync("supabase/functions/_shared/stripe-runtime-mode.ts", "utf8");
 const migration = readFileSync("supabase/migrations/20260815014500_reconcile_stripe_tax_id_verification.sql", "utf8");
 
-assert.match(worker, /STRIPE_TEST_KEY_PATTERN\s*=\s*\/\^sk_test_/);
-assert.match(worker, /STRIPE_LIVE_KEY_PATTERN\s*=\s*\/\^sk_live_/);
+assert.match(worker, /requireStripeRuntimeMode/);
+assert.match(worker, /assertStripePayloadMode/);
+assert.match(worker, /type StripeRuntimeMode/);
 assert.match(worker, /GAMESIGNAL_STRIPE_LIVE_TAX_ID_RECONCILER_UNLOCK/);
 assert.match(worker, /I_UNDERSTAND_STRIPE_LIVE_TAX_ID_RECONCILIATION_HAS_ACCOUNTING_EFFECT/);
-assert.match(worker, /if \(STRIPE_LIVE_KEY_PATTERN\.test\(secretKey\)\)[\s\S]*Deno\.env\.get\(LIVE_UNLOCK_ENV\) !== LIVE_UNLOCK_PHRASE[\s\S]*throw new Error/i);
+assert.match(worker, /runtime\.livemode[\s\S]*Deno\.env\.get\(LIVE_UNLOCK_ENV\) !== LIVE_UNLOCK_PHRASE[\s\S]*throw new Error/i);
 assert.match(worker, /\.eq\("buyer_type", "company"\)/);
 assert.match(worker, /\.eq\("customer_country", "PL"\)/);
 assert.match(worker, /\.eq\("stripe_status", "paid"\)/);
@@ -22,8 +24,19 @@ assert.doesNotMatch(worker, /customer_tax_ids:\s*current/);
 assert.doesNotMatch(worker, /\.insert\([\s\S]*customer_tax_ids/i);
 assert.doesNotMatch(worker, /sk_live_[A-Za-z0-9]{8,}/);
 assert.doesNotMatch(worker, /sk_test_[A-Za-z0-9]{8,}/);
-assert.match(worker, /mode:\s*stripeMode\.label/);
+assert.match(worker, /mode:\s*stripeMode\.livemode \? "stripe_live_explicitly_unlocked" : "stripe_sandbox"/);
 assert.match(worker, /livemode:\s*stripeMode\.livemode/);
+assert.match(worker, /assertStripePayloadMode\(payload, runtime\.livemode/);
+
+// LIVE Tax-ID reconciliation requires both the global billing arm and its own
+// accounting-effect arm. The worker must not recreate a separate key-mode
+// parser that could drift from checkout/webhook runtime selection.
+assert.match(runtime, /GAMESIGNAL_STRIPE_LIVE_BILLING_UNLOCK/);
+assert.match(runtime, /I_UNDERSTAND_STRIPE_LIVE_BILLING_CAN_CHARGE_REAL_CUSTOMERS/);
+assert.match(runtime, /export function requireStripeRuntimeMode/);
+assert.match(runtime, /export function assertStripePayloadMode/);
+assert.doesNotMatch(worker, /STRIPE_TEST_KEY_PATTERN/);
+assert.doesNotMatch(worker, /STRIPE_LIVE_KEY_PATTERN/);
 
 assert.match(migration, /drop trigger if exists queue_paid_polish_company_document_after_write/i);
 assert.match(migration, /update of[\s\S]*customer_name[\s\S]*customer_tax_ids/i);
@@ -38,4 +51,4 @@ assert.match(migration, /gamesignal_cron_secret/i);
 assert.doesNotMatch(migration, /sk_live_|sk_test_/i);
 assert.doesNotMatch(migration, /\bdrop\s+table\b|\bdrop\s+column\b|\btruncate\s+table\b|\bdelete\s+from\b/i);
 
-console.log("Stripe Tax ID exact-snapshot enrichment, sandbox behavior, explicit LIVE lock, trigger and cron safeguards passed.");
+console.log("Stripe Tax ID exact-snapshot enrichment, shared runtime mode, dual LIVE locks, trigger and cron safeguards passed.");
