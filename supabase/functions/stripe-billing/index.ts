@@ -10,6 +10,7 @@ const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.ve
 const PORTAL_CONFIGURATION_VERSION = "2";
 const TERMS_VERSION = "2026-08-13-v2";
 const PRIVACY_VERSION = "2026-08-13-v2";
+const STRIPE_TEST_KEY_PATTERN = /^(sk|rk)_test_/;
 
 const lookupKeys = {
   indie: { monthly: "gamesignal_indie_monthly", yearly: "gamesignal_indie_yearly" },
@@ -72,6 +73,9 @@ function isBuyerType(value: unknown): value is BuyerType {
 async function stripeRequest(path: string, options: { method?: "GET" | "POST"; body?: URLSearchParams } = {}) {
   const secret = Deno.env.get("STRIPE_SECRET_KEY");
   if (!secret) throw new Error("Stripe secret is not configured.");
+  if (!STRIPE_TEST_KEY_PATTERN.test(secret)) {
+    throw new Error("Stripe LIVE is locked until the launch compliance review is completed.");
+  }
 
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: options.method ?? "GET",
@@ -183,9 +187,12 @@ async function runIntegrationHealthcheck() {
   params.set("success_url", `${SITE_URL}/dashboard/settings?billing=test-success`);
   params.set("cancel_url", `${SITE_URL}/dashboard/settings?billing=test-cancelled`);
   params.set("billing_address_collection", "required");
+  params.set("name_collection[business][enabled]", "true");
+  params.set("name_collection[business][optional]", "false");
   params.set("tax_id_collection[enabled]", "true");
   params.set("tax_id_collection[required]", "if_supported");
   params.set("metadata[gamesignal_test]", "true");
+  params.set("metadata[seller_vat_status]", "exempt");
   const session = await stripeRequest("/checkout/sessions", { method: "POST", body: params });
   if (typeof session.id !== "string") throw new Error("Stripe did not create a test Checkout Session.");
   await stripeRequest(`/checkout/sessions/${encodeURIComponent(session.id)}/expire`, { method: "POST", body: new URLSearchParams() });
@@ -193,8 +200,9 @@ async function runIntegrationHealthcheck() {
   return {
     ok: true,
     stripe: "authenticated",
+    stripe_mode: "sandbox_locked",
     prices: found.size,
-    checkout: "company_fields_created_and_expired",
+    checkout: "company_identity_tax_fields_created_and_expired",
     portal: typeof portalConfiguration === "string" ? "configured" : "error",
   };
 }
@@ -222,7 +230,7 @@ Deno.serve(async (request) => {
       if (!Deno.env.get("STRIPE_SECRET_KEY")) return json({ error: "Stripe secret is not configured." }, 503);
       if (body.action === "integration_healthcheck") return json(await runIntegrationHealthcheck());
       await stripeRequest("/account");
-      return json({ ok: true, stripe: "authenticated" });
+      return json({ ok: true, stripe: "authenticated", stripe_mode: "sandbox_locked" });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -259,6 +267,7 @@ Deno.serve(async (request) => {
     if (body.action === "status") {
       return json({
         configured,
+        stripe_mode: "sandbox_locked",
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
         has_customer: Boolean(subscription.stripe_customer_id),
@@ -344,21 +353,28 @@ Deno.serve(async (request) => {
     params.set("metadata[buyer_type]", body.buyer_type);
     params.set("metadata[consent_id]", String(consent.id));
     params.set("metadata[terms_version]", TERMS_VERSION);
+    params.set("metadata[seller_vat_status]", "exempt");
     params.set("subscription_data[metadata][workspace_id]", body.workspace_id);
     params.set("subscription_data[metadata][plan]", body.plan);
     params.set("subscription_data[metadata][billing_period]", body.period);
     params.set("subscription_data[metadata][buyer_type]", body.buyer_type);
     params.set("subscription_data[metadata][consent_id]", String(consent.id));
+    params.set("subscription_data[metadata][seller_vat_status]", "exempt");
 
     if (body.buyer_type === "company") {
+      params.set("name_collection[business][enabled]", "true");
+      params.set("name_collection[business][optional]", "false");
       params.set("tax_id_collection[enabled]", "true");
       params.set("tax_id_collection[required]", "if_supported");
+    } else {
+      params.set("name_collection[individual][enabled]", "true");
+      params.set("name_collection[individual][optional]", "false");
     }
 
     if (subscription.stripe_customer_id) {
       params.set("customer", String(subscription.stripe_customer_id));
       params.set("customer_update[address]", "auto");
-      if (body.buyer_type === "company") params.set("customer_update[name]", "auto");
+      params.set("customer_update[name]", "auto");
     } else if (authData.user.email) {
       params.set("customer_email", authData.user.email);
     }

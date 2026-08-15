@@ -123,10 +123,18 @@ export default function LandingPage() {
     );
 
     qsa<HTMLElement>(".source-check").forEach((button) =>
-      button.addEventListener("click", () => button.classList.toggle("selected"), { signal }),
+      button.addEventListener(
+        "click",
+        () => {
+          if (button.getAttribute("aria-disabled") === "true") return;
+          button.classList.toggle("selected");
+        },
+        { signal },
+      ),
     );
 
     const sourceEnabled = (source: Source) => {
+      if (source === "kick") return false;
       const toggle = qs<HTMLElement>(`[data-source-toggle="${source}"]`);
       return toggle ? toggle.classList.contains("on") : true;
     };
@@ -148,6 +156,7 @@ export default function LandingPage() {
       toggle.addEventListener(
         "click",
         () => {
+          if (toggle.getAttribute("aria-disabled") === "true") return;
           toggle.classList.toggle("on");
           applyFilters();
         },
@@ -165,9 +174,9 @@ export default function LandingPage() {
           title: inputs[0]?.value.trim() || "My game",
           aliases: inputs[1]?.value.trim() || "",
           steamUrl: inputs[2]?.value.trim() || "",
-          sources: qsa<HTMLElement>(".source-check.selected").map((item) =>
-            (item.textContent ?? "").trim().toLowerCase(),
-          ),
+          sources: qsa<HTMLElement>(".source-check.selected")
+            .filter((item) => item.getAttribute("aria-disabled") !== "true")
+            .map((item) => (item.textContent ?? "").trim().toLowerCase()),
         };
         localStorage.setItem("gamesignal-pending-game", JSON.stringify(payload));
         closeModals();
@@ -194,6 +203,7 @@ export default function LandingPage() {
       tab.addEventListener(
         "click",
         () => {
+          if (tab.getAttribute("aria-disabled") === "true" || tab.hasAttribute("disabled")) return;
           qsa<HTMLElement>(".tab").forEach((item) => item.classList.remove("active"));
           tab.classList.add("active");
           currentFilter = tab.dataset.filter ?? "all";
@@ -233,22 +243,12 @@ export default function LandingPage() {
               badgeClass: "live",
               viewers: 93,
             },
-            {
-              source: "kick" as const,
-              cls: "k",
-              short: "K",
-              title: `midnightbyte is testing ${game}`,
-              sub: "Kick · 121 viewers",
-              badge: "LIVE",
-              badgeClass: "live",
-              viewers: 121,
-            },
           ].filter((item) => sourceEnabled(item.source));
 
           if (!options.length) {
             button.classList.remove("loading");
             button.textContent = "Scan now";
-            showToast("Enable at least one source.");
+            showToast("Enable at least one available source.");
             return;
           }
 
@@ -339,7 +339,6 @@ export default function LandingPage() {
     const heroEvents = [
       ["t", "TW", "voidrunner started streaming", "Twitch · 93 viewers", "LIVE"],
       ["y", "YT", "“I found a hidden gem on Steam”", "YouTube · new upload", "VIDEO"],
-      ["k", "K", "midnightbyte is playing for the first time", "Kick · 121 viewers", "LIVE"],
     ];
     let heroEventIndex = 0;
     const feedTimer = window.setInterval(() => {

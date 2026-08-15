@@ -13,18 +13,125 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm install
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test KSeF issuance and billing safeguards
+        run: |
+          node --experimental-strip-types scripts/check-ksef-submission-state-machine.ts
+          node --experimental-strip-types scripts/check-ksef-token-auth.ts
+          node --experimental-strip-types scripts/check-ksef-submission-status.ts
+          node --experimental-strip-types scripts/check-ksef-reconciliation-core.ts
+          node --experimental-strip-types scripts/check-ksef-duplicate-reconciliation.ts
+          node --experimental-strip-types scripts/check-seller-snapshot-lock.ts
+          node --experimental-strip-types scripts/check-ksef-production-inertness.ts
+          node --experimental-strip-types scripts/check-ksef-production-readiness.ts
+          node --experimental-strip-types scripts/check-stripe-runtime-mode.ts
+          node --experimental-strip-types scripts/check-stripe-tax-id-reconciliation.ts
+          node --experimental-strip-types scripts/check-stripe-webhook-runtime.ts
+          node --experimental-strip-types scripts/check-stripe-billing-runtime.ts
+          node --experimental-strip-types scripts/check-stripe-runtime-smoke.ts
+          node --experimental-strip-types scripts/check-stripe-webhook-runtime-smoke.ts
+          node --experimental-strip-types scripts/check-operator-launch-readiness-access.ts
+          node --experimental-strip-types scripts/check-consumer-legal-readiness.ts
+          node --experimental-strip-types scripts/check-contract-confirmation-core.ts
+          node --experimental-strip-types scripts/check-contract-confirmation-checkout-core.ts
+          node --experimental-strip-types scripts/check-contract-confirmation-persistence.ts
+          node --experimental-strip-types scripts/check-contract-confirmation-delivery.ts
+          chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
+          bash scripts/run-ksef-issuance-orchestrator-check.sh
+
+      - name: Validate FA(3) against official MF XSD
+        run: |
+          chmod +x scripts/validate-fa3-xsd.sh
+          bash scripts/run-fa3-validation.sh
+          bash scripts/run-fa3-active-vat-validation.sh
+
+      - name: Test financial retention cascade in isolated PostgreSQL 17
+        shell: bash
+        run: |
+          set -o pipefail
+          docker pull postgres:17-alpine
+          LOG_FILE="$(mktemp)"
+
+          run_retention_test() {
+            : > "$LOG_FILE"
+            set +e
+            bash scripts/test-financial-retention-postgres.sh 2>&1 | tee "$LOG_FILE"
+            STATUS=${PIPESTATUS[0]}
+            set -e
+            return "$STATUS"
+          }
+
+          if run_retention_test; then
+            exit 0
+          fi
+          STATUS=$?
+
+          if [ "$STATUS" -eq 2 ]; then
+            echo "PostgreSQL harness returned exit code 2 before SQL verification; retrying once with the image already cached."
+            sleep 2
+            if run_retention_test; then
+              exit 0
+            fi
+            STATUS=$?
+          fi
+
+          echo "Financial retention regression failed with exit code $STATUS. Last diagnostic lines follow."
+          while IFS= read -r line; do
+            line="${line//'%'/'%25'}"
+            line="${line//$'\r'/'%0D'}"
+            echo "::error title=Financial retention regression::${line}"
+          done < <(tail -n 8 "$LOG_FILE")
+          exit "$STATUS"
+
+      - name: Test immutable contract confirmation in PostgreSQL 17
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_FILE="$(mktemp)"
+
+          run_contract_confirmation_test() {
+            : > "$LOG_FILE"
+            set +e
+            bash -x scripts/test-contract-confirmation-postgres.sh 2>&1 | tee "$LOG_FILE"
+            STATUS=${PIPESTATUS[0]}
+            set -e
+            return "$STATUS"
+          }
+
+          if run_contract_confirmation_test; then
+            exit 0
+          fi
+          STATUS=$?
+
+          if [ "$STATUS" -eq 2 ]; then
+            echo "Contract-confirmation PostgreSQL harness returned exit code 2; retrying once with the cached image."
+            sleep 2
+            if run_contract_confirmation_test; then
+              exit 0
+            fi
+            STATUS=$?
+          fi
+
+          echo "Contract-confirmation PostgreSQL regression failed with exit code $STATUS."
+          while IFS= read -r line; do
+            line="${line//'%'/'%25'}"
+            line="${line//$'\r'/'%0D'}"
+            echo "::error title=Contract confirmation regression::${line}"
+          done < <(tail -n 12 "$LOG_FILE")
+          exit "$STATUS"
 
       - name: Lint
         run: npm run lint
