@@ -1,7 +1,7 @@
 export type KsefEncryptionInfo = {
   encryptedSymmetricKey: string;
   initializationVector: string;
-  publicKeyId?: string | null;
+  publicKeyId: string;
 };
 
 function required(value: string, field: string) {
@@ -18,7 +18,7 @@ function nonNegativeInteger(value: number, field: string) {
 export function buildOpenFa3OnlineSessionRequest(encryption: KsefEncryptionInfo) {
   const encryptedSymmetricKey = required(encryption.encryptedSymmetricKey, "encryptedSymmetricKey");
   const initializationVector = required(encryption.initializationVector, "initializationVector");
-  const publicKeyId = encryption.publicKeyId ? required(encryption.publicKeyId, "publicKeyId") : null;
+  const publicKeyId = required(encryption.publicKeyId, "publicKeyId");
 
   return {
     formCode: {
@@ -29,7 +29,7 @@ export function buildOpenFa3OnlineSessionRequest(encryption: KsefEncryptionInfo)
     encryption: {
       encryptedSymmetricKey,
       initializationVector,
-      ...(publicKeyId ? { publicKeyId } : {}),
+      publicKeyId,
     },
   } as const;
 }
