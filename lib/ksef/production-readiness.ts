@@ -51,10 +51,12 @@ export function getKsefProductionReadiness(nowMs = Date.now()) {
   const config = getKsefServerConfig();
   const finalSellerNip = normalizedNip(process.env.KSEF_FINAL_SELLER_NIP);
   const systemTokenConfigured = configured(process.env.KSEF_SYSTEM_TOKEN);
+  const productionEnvironmentSelected = config.environment === "production";
+  const productionUnlockPresent = productionEnvironmentSelected && config.productionUnlocked;
 
   const prerequisiteChecks: ReadinessCheck[] = [
     check(
-      config.environment === "production",
+      productionEnvironmentSelected,
       "environment_is_production",
       "KSEF_ENV must be production for the final production deployment.",
     ),
@@ -97,19 +99,23 @@ export function getKsefProductionReadiness(nowMs = Date.now()) {
 
   const armingChecks: ReadinessCheck[] = [
     check(
-      config.enabled,
-      "ksef_submission_enabled",
+      productionEnvironmentSelected && config.enabled,
+      "ksef_production_submission_enabled",
       "KSEF_ENABLED must remain false until the separately authorized go-live step.",
     ),
     check(
-      config.productionUnlocked,
+      productionUnlockPresent,
       "ksef_production_unlock_present",
       "KSEF_PRODUCTION_UNLOCK must remain absent until the separately authorized go-live step.",
     ),
   ];
 
   const prerequisitesReady = prerequisiteChecks.every((item) => item.ok);
-  const submissionArmed = prerequisitesReady && config.canSubmit && systemTokenConfigured;
+  const submissionArmed = prerequisitesReady
+    && productionEnvironmentSelected
+    && config.enabled
+    && productionUnlockPresent
+    && systemTokenConfigured;
 
   return {
     mode: "read_only_no_network" as const,
@@ -125,14 +131,15 @@ export function getKsefProductionReadiness(nowMs = Date.now()) {
     ksef: {
       environment: config.environment,
       enabled: config.enabled,
-      productionUnlocked: config.productionUnlocked,
+      productionEnvironmentSelected,
+      productionUnlockPresent,
       systemTokenConfigured,
       apiFamily: config.apiFamily,
       invoiceSchema: config.invoiceSchema,
     },
     prerequisitesReady,
     submissionArmed,
-    productionStillLocked: !config.canSubmit,
+    productionStillLocked: !submissionArmed,
     prerequisiteChecks,
     armingChecks,
     blockers: prerequisiteChecks.filter((item) => !item.ok).map((item) => item.code),
