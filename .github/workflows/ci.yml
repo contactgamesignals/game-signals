@@ -42,6 +42,7 @@ jobs:
           node --experimental-strip-types scripts/check-stripe-webhook-runtime.ts
           node --experimental-strip-types scripts/check-stripe-billing-runtime.ts
           node --experimental-strip-types scripts/check-stripe-runtime-smoke.ts
+          node --experimental-strip-types scripts/check-stripe-webhook-runtime-smoke.ts
           node --experimental-strip-types scripts/check-operator-launch-readiness-access.ts
           chmod +x scripts/run-ksef-issuance-orchestrator-check.sh
           bash scripts/run-ksef-issuance-orchestrator-check.sh
