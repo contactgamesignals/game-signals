@@ -7,6 +7,7 @@ import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
+import { configuredBillingProvider, normalizeBillingProvider } from "@/lib/billing-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function SettingsPage() {
   const [{ data: subscription }, { data: profile }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("plan, status, stripe_customer_id, stripe_subscription_id, tax_access_status, tax_access_reason")
+      .select("plan, status, stripe_customer_id, stripe_subscription_id, billing_provider, billing_customer_id, billing_subscription_id, tax_access_status, tax_access_reason")
       .eq("workspace_id", membership.workspace_id)
       .maybeSingle(),
     supabase
@@ -45,8 +46,25 @@ export default async function SettingsPage() {
   const displayName = profile?.display_name ?? email.split("@")[0] ?? "Account";
   const canManageBilling = membership.role === "owner" || membership.role === "admin";
   const subscriptionStatus = subscription?.status ?? "trialing";
-  const paymentNeedsAttention = subscriptionStatus === "past_due" || subscriptionStatus === "incomplete";
-  const taxReviewRequired = subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review";
+  const hasStoredBillingIdentity = Boolean(
+    subscription?.billing_customer_id ||
+    subscription?.billing_subscription_id ||
+    subscription?.stripe_customer_id ||
+    subscription?.stripe_subscription_id,
+  );
+  const billingProvider = hasStoredBillingIdentity
+    ? normalizeBillingProvider(subscription?.billing_provider)
+    : configuredBillingProvider();
+  const billingHasCustomer = billingProvider === "paddle"
+    ? Boolean(subscription?.billing_customer_id)
+    : Boolean(subscription?.billing_customer_id || subscription?.stripe_customer_id);
+  const billingHasSubscription = billingProvider === "paddle"
+    ? Boolean(subscription?.billing_subscription_id)
+    : Boolean(subscription?.billing_subscription_id || subscription?.stripe_subscription_id);
+  const stripePaymentNeedsAttention =
+    billingProvider === "stripe" && (subscriptionStatus === "past_due" || subscriptionStatus === "incomplete");
+  const stripeTaxReviewRequired =
+    billingProvider === "stripe" && (subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review");
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -57,7 +75,7 @@ export default async function SettingsPage() {
     next_payment_attempt: string | null;
   } | null = null;
 
-  if (canManageBilling && paymentNeedsAttention) {
+  if (canManageBilling && stripePaymentNeedsAttention) {
     const { data: invoice } = await supabase
       .from("billing_invoice_records")
       .select("invoice_number, amount_remaining, currency, hosted_invoice_url, attempt_count, next_payment_attempt")
@@ -81,7 +99,7 @@ export default async function SettingsPage() {
           <div><div className="kicker">Workspace</div><h1>Settings</h1><p>Workspace, notification, billing, and integration configuration.</p></div>
           <Link href="/dashboard" className="btn btn-ghost">← Dashboard</Link>
         </div>
-        {canManageBilling && paymentNeedsAttention ? (
+        {canManageBilling && stripePaymentNeedsAttention ? (
           <div className="settings-grid" style={{ marginBottom: 16 }}>
             <BillingRecoveryCard
               workspaceId={membership.workspace_id as string}
@@ -96,7 +114,7 @@ export default async function SettingsPage() {
             />
           </div>
         ) : null}
-        {canManageBilling && taxReviewRequired ? (
+        {canManageBilling && stripeTaxReviewRequired ? (
           <div className="settings-grid" style={{ marginBottom: 16 }}>
             <BillingTaxReviewCard
               workspaceId={membership.workspace_id as string}
@@ -115,12 +133,14 @@ export default async function SettingsPage() {
             canManageBilling={canManageBilling}
           />
         </div>
-        {!paymentNeedsAttention && !taxReviewRequired ? (
+        {!stripePaymentNeedsAttention && !stripeTaxReviewRequired ? (
           <SettingsClient
             workspaceId={membership.workspace_id as string}
             currentPlan={normalizePlan(subscription?.plan)}
             subscriptionStatus={subscriptionStatus}
-            hasStripeCustomer={Boolean(subscription?.stripe_customer_id)}
+            billingProvider={billingProvider}
+            billingHasCustomer={billingHasCustomer}
+            billingHasSubscription={billingHasSubscription}
           />
         ) : null}
       </main>
