@@ -13,17 +13,27 @@ export type FrozenSellerDocumentForKsef = {
   ksef_reference_number?: string | null;
 };
 
-export type KsefSubmissionResult = {
-  sessionReference: string;
-  invoiceReference: string | null;
+export type KsefAcceptanceResult = {
   ksefReferenceNumber: string;
   statusCode: number;
   upoXml: string;
   acceptedAt: string;
 };
 
+export type KsefOpenedSession = {
+  sessionReference: string;
+  /** In-memory only: may contain AES material/access token; never persist it. */
+  sessionHandle: unknown;
+};
+
 export type KsefIssuanceDependencies = {
   startAttempt: (documentId: string, expectedSha256: string) => Promise<number>;
+  openSession: (input: {
+    documentId: string;
+    legalDocumentNumber: string;
+    sha256: string;
+    attemptNumber: number;
+  }) => Promise<KsefOpenedSession>;
   submitFrozenFa3: (input: {
     documentId: string;
     legalDocumentNumber: string;
@@ -31,13 +41,27 @@ export type KsefIssuanceDependencies = {
     sha256: string;
     sizeBytes: number;
     attemptNumber: number;
-  }) => Promise<KsefSubmissionResult>;
+    sessionReference: string;
+    sessionHandle: unknown;
+  }) => Promise<{ invoiceReference: string }>;
+  closeSession: (input: {
+    documentId: string;
+    sessionReference: string;
+    sessionHandle: unknown;
+  }) => Promise<void>;
+  waitForAcceptance: (input: {
+    documentId: string;
+    expectedSha256: string;
+    sessionReference: string;
+    invoiceReference: string;
+    sessionHandle: unknown;
+  }) => Promise<KsefAcceptanceResult>;
   recordReferences: (input: {
     documentId: string;
     expectedSha256: string;
     sessionReference: string;
     invoiceReference: string | null;
-    statusCode: number;
+    statusCode: number | null;
   }) => Promise<boolean>;
   recordReconciliationError: (input: {
     documentId: string;
@@ -71,12 +95,18 @@ function safeError(error: unknown) {
 }
 
 /**
- * Runs one submission attempt for an already numbered and frozen FA(3).
+ * Runs one KSeF issuance attempt for an already numbered and frozen FA(3).
  *
- * Any unexpected error after the attempt starts is treated as ambiguous. The
- * durable document must remain ksef_pending until the existing KSeF session is
- * reconciled. Only an authoritative KSeF rejection may move the document to a
- * retryable failed state through the reconciliation adapter.
+ * Persistence order is deliberate:
+ * 1. mark attempt pending,
+ * 2. open KSeF session,
+ * 3. persist session reference,
+ * 4. only then submit the legal invoice,
+ * 5. persist invoice reference before close/poll/UPO.
+ *
+ * Therefore an ambiguous network failure after invoice submission still leaves
+ * enough durable state to reconcile the existing KSeF session instead of
+ * blindly creating another legal submission.
  */
 export async function issueFrozenSellerDocumentToKsef(
   document: FrozenSellerDocumentForKsef,
@@ -103,38 +133,78 @@ export async function issueFrozenSellerDocumentToKsef(
   const attemptNumber = await deps.startAttempt(document.id, document.fa3_sha256);
 
   try {
-    const result = await deps.submitFrozenFa3({
+    const opened = await deps.openSession({
+      documentId: document.id,
+      legalDocumentNumber: document.legal_document_number,
+      sha256: document.fa3_sha256,
+      attemptNumber,
+    });
+    if (!opened.sessionReference.trim()) throw new Error("KSeF session reference is missing.");
+
+    const sessionRecorded = await deps.recordReferences({
+      documentId: document.id,
+      expectedSha256: document.fa3_sha256,
+      sessionReference: opened.sessionReference,
+      invoiceReference: null,
+      statusCode: null,
+    });
+    if (!sessionRecorded) {
+      throw new Error("KSeF session reference could not be persisted; invoice was not submitted.");
+    }
+
+    const submitted = await deps.submitFrozenFa3({
       documentId: document.id,
       legalDocumentNumber: document.legal_document_number,
       xml: document.fa3_xml,
       sha256: document.fa3_sha256,
       sizeBytes: document.fa3_size_bytes,
       attemptNumber,
+      sessionReference: opened.sessionReference,
+      sessionHandle: opened.sessionHandle,
     });
+    if (!submitted.invoiceReference.trim()) throw new Error("KSeF invoice reference is missing.");
 
-    const refsRecorded = await deps.recordReferences({
+    const invoiceRecorded = await deps.recordReferences({
       documentId: document.id,
       expectedSha256: document.fa3_sha256,
-      sessionReference: result.sessionReference,
-      invoiceReference: result.invoiceReference,
-      statusCode: result.statusCode,
+      sessionReference: opened.sessionReference,
+      invoiceReference: submitted.invoiceReference,
+      statusCode: null,
     });
-    if (!refsRecorded) throw new Error("KSeF references could not be persisted; reconciliation is required.");
+    if (!invoiceRecorded) {
+      throw new Error("KSeF invoice reference could not be persisted; reconciliation is required.");
+    }
 
-    const upoSha256 = await sha256Utf8(result.upoXml);
+    await deps.closeSession({
+      documentId: document.id,
+      sessionReference: opened.sessionReference,
+      sessionHandle: opened.sessionHandle,
+    });
+
+    const acceptance = await deps.waitForAcceptance({
+      documentId: document.id,
+      expectedSha256: document.fa3_sha256,
+      sessionReference: opened.sessionReference,
+      invoiceReference: submitted.invoiceReference,
+      sessionHandle: opened.sessionHandle,
+    });
+
+    const upoSha256 = await sha256Utf8(acceptance.upoXml);
     const accepted = await deps.recordAcceptance({
       documentId: document.id,
       expectedSha256: document.fa3_sha256,
-      ksefReferenceNumber: result.ksefReferenceNumber,
-      statusCode: result.statusCode,
-      upoXml: result.upoXml,
+      ksefReferenceNumber: acceptance.ksefReferenceNumber,
+      statusCode: acceptance.statusCode,
+      upoXml: acceptance.upoXml,
       upoSha256,
-      acceptedAt: result.acceptedAt,
+      acceptedAt: acceptance.acceptedAt,
     });
     if (!accepted) throw new Error("KSeF acceptance could not be persisted; reconciliation is required.");
 
     return {
-      ...result,
+      ...acceptance,
+      sessionReference: opened.sessionReference,
+      invoiceReference: submitted.invoiceReference,
       upoSha256,
       attemptNumber,
       legalDocumentNumber: document.legal_document_number,
