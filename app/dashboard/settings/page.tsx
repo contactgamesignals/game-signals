@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import BillingRecoveryCard from "@/components/BillingRecoveryCard";
 import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
-import EmailDigestSettings from "@/components/EmailDigestSettings";
 import SettingsClient from "@/components/SettingsClient";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { BRAND } from "@/lib/brand";
@@ -133,13 +132,6 @@ export default async function SettingsPage() {
             workspaceId={membership.workspace_id as string}
             initialWorkspaceName={workspaceName}
             canManageBilling={canManageBilling}
-          />
-        </div>
-        <div className="settings-grid" style={{ marginBottom: 16 }}>
-          <EmailDigestSettings
-            workspaceId={membership.workspace_id as string}
-            defaultEmail={email}
-            canManage={canManageBilling}
           />
         </div>
         {!stripePaymentNeedsAttention && !stripeTaxReviewRequired ? (
