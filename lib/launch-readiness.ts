@@ -58,7 +58,7 @@ export function getLaunchReadiness() {
       key: "contract_confirmation",
       label: "Durable contract / consumer information review",
       ready: approved("GAMESIGNAL_CONTRACT_CONFIRMATION_READY"),
-      detail: "Before paid consumer launch, confirm which durable-medium information Paddle supplies as Merchant of Record and which product/consumer information Lumino Games must separately deliver. Do not reuse the legacy Stripe contract-confirmation flow without this review.",
+      detail: "Before paid consumer launch, confirm which durable medium information Paddle supplies as Merchant of Record and which product/consumer information Lumino Games must separately deliver. Do not reuse the legacy Stripe contract-confirmation flow without this review.",
     },
     {
       key: "paddle_account",
