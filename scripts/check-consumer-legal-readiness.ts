@@ -28,9 +28,9 @@ assert.match(terms, /Paddle Sandbox/i);
 assert.match(terms, /Merchant of Record/i);
 assert.match(terms, /Paddle Customer Portal/i);
 assert.match(terms, /generally 14 days/i);
-assert.match(terms, /mandatory consumer rights/i);
+assert.match(terms, /rights that cannot legally be excluded/i);
 assert.match(terms, /Real paid billing is not enabled/i);
-assert.match(terms, /Stripe LIVE is OFF/i);
+assert.match(terms, /No direct LIVE billing route will be enabled/i);
 assert.match(terms, /Phone: will be published before any paid consumer launch if required/i);
 
 assert.match(privacy, /Privacy version: \{LEGAL_VERSIONS\.privacy\}/);
@@ -40,7 +40,7 @@ assert.match(privacy, /Article 22 GDPR/);
 assert.match(privacy, /Merchant of Record/i);
 assert.match(privacy, /We do not receive or store full payment-card details/i);
 assert.match(privacy, /Paddle Sandbox/i);
-assert.match(privacy, /KSeF|legacy\/direct billing route/i);
+assert.match(privacy, /legacy\/direct billing route/i);
 
 assert.match(withdrawal, /Withdrawal information version: \{LEGAL_VERSIONS\.withdrawal\}/);
 assert.match(withdrawal, /generally 14 days from the day we are informed/);
