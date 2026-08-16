@@ -1,5 +1,6 @@
 import "server-only";
 
+import { configuredBillingProvider } from "@/lib/billing-provider";
 import { getKsefProductionReadiness } from "@/lib/ksef/production-readiness";
 import { legalSupportPhoneConfigured, LEGAL_VERSIONS } from "@/lib/legal";
 import { ACTIVE_SELLER } from "@/lib/seller-profile";
@@ -16,145 +17,146 @@ function approved(name: string) {
 }
 
 /**
- * Administrative launch gate. All explicit approvals default to false.
+ * Global operator launch gate for the CURRENT customer billing route.
  *
- * This is intentionally separate from Stripe credentials: even a future
- * Stripe LIVE key must not be treated as permission to start charging users.
- * KSeF is additionally split into prerequisite readiness and final production
- * arming so a manual approval flag can never bypass missing seller/token/
- * InvoiceWrite evidence or the legal-effect production unlock.
+ * New subscriptions use Paddle Merchant of Record. Stripe/KSeF readiness is
+ * retained below as legacy/direct-billing rollback evidence, but it must not
+ * block or accidentally authorize the separate Paddle LIVE cutover.
+ *
+ * All legal/operational approvals remain explicit and fail closed. Paddle LIVE
+ * also has its own runtime lock inside the billing Edge Function, so these
+ * administrative flags cannot enable real charging by themselves.
  */
 export function getLaunchReadiness() {
-  const ksef = getKsefProductionReadiness();
-  const ksefBlockers = ksef.blockers.length ? ksef.blockers.join(", ") : "none";
-
+  const billingProvider = configuredBillingProvider();
   const checks: LaunchCheck[] = [
     {
+      key: "billing_provider",
+      label: "Current customer billing provider",
+      ready: billingProvider === "paddle",
+      detail: `Configured default provider is ${billingProvider}. The production launch checklist is currently designed for Paddle Merchant of Record; changing the provider requires a separate review.`,
+    },
+    {
       key: "seller",
-      label: "Final legal seller",
+      label: "Final product operator",
       ready: approved("GAMESIGNAL_LIVE_SELLER_APPROVED"),
-      detail: `Current working seller: ${ACTIVE_SELLER.legalName}. Final operator decision is still required immediately before LIVE.`,
+      detail: `Current operator: ${ACTIVE_SELLER.legalName}. Confirm the final operator immediately before LIVE and keep public legal pages, Paddle account details and payout/accounting records aligned.`,
     },
     {
       key: "legal_contact",
       label: "Paid-consumer legal contact",
       ready: legalSupportPhoneConfigured(),
-      detail: "A direct support phone number must be configured as GAMESIGNAL_SUPPORT_PHONE before paid consumer distance checkout is enabled. The number is intentionally not guessed or hard-coded.",
+      detail: "Configure and verify GAMESIGNAL_SUPPORT_PHONE before paid consumer launch if the final legal review requires a direct phone contact for this sales route. The number is intentionally never guessed or hard-coded.",
     },
     {
       key: "legal_documents",
       label: "Current legal document versions",
       ready: approved("GAMESIGNAL_LEGAL_DOCUMENTS_APPROVED"),
-      detail: `Final legal/accounting review must approve Terms ${LEGAL_VERSIONS.terms}, Privacy ${LEGAL_VERSIONS.privacy} and Withdrawal ${LEGAL_VERSIONS.withdrawal}.`,
+      detail: `Final legal review must approve Terms ${LEGAL_VERSIONS.terms}, Privacy ${LEGAL_VERSIONS.privacy} and Withdrawal ${LEGAL_VERSIONS.withdrawal} for the Paddle Merchant-of-Record route.`,
     },
     {
       key: "contract_confirmation",
-      label: "Durable contract confirmation",
+      label: "Durable contract / consumer information review",
       ready: approved("GAMESIGNAL_CONTRACT_CONFIRMATION_READY"),
-      detail: "Paid consumer launch remains blocked until the exact concluded-contract information is frozen and successfully delivered on a durable medium through a separately verified transactional channel.",
+      detail: "Before paid consumer launch, confirm which durable-medium information Paddle supplies as Merchant of Record and which product/consumer information Lumino Games must separately deliver. Do not reuse the legacy Stripe contract-confirmation flow without this review.",
     },
     {
-      key: "domestic_vat",
-      label: "Polish VAT + Stripe Tax profile",
-      ready:
-        ACTIVE_SELLER.vatStatus === "active" &&
-        ACTIVE_SELLER.automaticStripeTax &&
-        ACTIVE_SELLER.stripeTaxPriceBehavior === "inclusive",
-      detail: "Seller is verified as active Polish VAT. Stripe Tax sandbox is configured for inclusive SaaS pricing; re-check the official VAT register and mirror the configuration on the final LIVE Stripe account before charging.",
+      key: "paddle_account",
+      label: "Paddle LIVE account verification",
+      ready: approved("GAMESIGNAL_PADDLE_ACCOUNT_READY"),
+      detail: "Paddle LIVE business/identity verification must be approved. Sandbox approval or sandbox credentials do not satisfy this check.",
     },
     {
-      key: "pl_company_tax_id",
-      label: "PL Company Tax ID verification reconciliation",
-      ready: approved("GAMESIGNAL_PL_COMPANY_TAX_ID_LIVE_READY"),
-      detail: "Sandbox reconciliation is deployed and matches only the exact Tax ID type+value snapshotted on the invoice. Before LIVE, verify one real LIVE Company Tax ID flow and explicitly unlock the Supabase reconciler for sk_live using its separate accounting-effect unlock phrase.",
+      key: "paddle_domain",
+      label: "Paddle LIVE domain approval",
+      ready: approved("GAMESIGNAL_PADDLE_DOMAIN_READY"),
+      detail: "Verify that whoplaysmygame.com / www.whoplaysmygame.com is approved for Paddle LIVE Checkout and that the LIVE default payment link points to the canonical /pay page.",
     },
     {
-      key: "vat_ue",
-      label: "EU B2B / VAT-UE readiness",
-      ready: ACTIVE_SELLER.vatUeStatus === "valid" && approved("GAMESIGNAL_VAT_UE_READY"),
-      detail: "Seller VAT-UE is currently verified as valid. EU Company LIVE sales still require an explicitly approved customer VAT-ID/VIES evidence flow and accounting route.",
+      key: "paddle_catalog",
+      label: "Paddle LIVE catalog",
+      ready: approved("GAMESIGNAL_PADDLE_CATALOG_READY"),
+      detail: "Recreate and verify all six LIVE recurring prices (Indie/Studio/Publisher monthly + yearly). LIVE Paddle IDs are different from Sandbox IDs and must be mapped explicitly.",
     },
     {
-      key: "eu_b2c",
-      label: "EU B2C tax route",
-      ready: approved("GAMESIGNAL_EU_B2C_ROUTE_READY"),
-      detail: "Confirm the EUR 10,000 cross-border B2C threshold position and configure either the EU small-seller route or destination-VAT/OSS before EU consumer LIVE sales.",
+      key: "paddle_webhook",
+      label: "Paddle LIVE webhook",
+      ready: approved("GAMESIGNAL_PADDLE_WEBHOOK_READY"),
+      detail: "Create the separate LIVE notification destination, configure its LIVE secret, verify Paddle-Signature on the raw request body, and test the subscription lifecycle before launch.",
     },
     {
-      key: "vies",
-      label: "VIES evidence capture",
-      ready: approved("GAMESIGNAL_VIES_READY"),
-      detail: "EU Company VAT IDs must have a verified transaction-level evidence path; Company selection alone is not enough.",
+      key: "paddle_portal",
+      label: "Paddle LIVE customer portal",
+      ready: approved("GAMESIGNAL_PADDLE_PORTAL_READY"),
+      detail: "Verify Customer Portal access, invoice/receipt visibility and cancellation at period end against a LIVE test subscription before launch.",
     },
     {
-      key: "fa3",
-      label: "Active-VAT FA(3) schema validation",
-      ready: approved("GAMESIGNAL_FA3_VALIDATED"),
-      detail: "The domestic 23% VAT-inclusive FA(3) generator passes the pinned official MF XSD and has completed an anonymized official KSeF TEST OnlineSession/UPO regression. Keep this approval explicit so a later seller/schema change forces review.",
-    },
-    {
-      key: "ksef",
-      label: "KSeF production prerequisites",
-      ready: approved("GAMESIGNAL_KSEF_FLOW_READY") && ksef.prerequisitesReady,
-      detail: `Read-only production preflight: environment=${ksef.ksef.environment}; prerequisites ready=${ksef.prerequisitesReady ? "yes" : "no"}; blockers=${ksefBlockers}. Numbering, immutable FA(3), token-auth transport, persist-before-send, reconciliation and UPO storage are implemented, but the final seller/token/InvoiceWrite evidence must all pass the preflight.`,
-    },
-    {
-      key: "ksef_production_arm",
-      label: "KSeF production legal-effect arm",
-      ready: ksef.submissionArmed,
-      detail: `Production submission armed=${ksef.submissionArmed ? "yes" : "no"}; KSeF PROD still locked=${ksef.productionStillLocked ? "yes" : "no"}. This must stay false until the separately authorized go-live step sets the production environment, KSEF_ENABLED and the exact legal-effect unlock phrase after prerequisites pass.`,
+      key: "paddle_accounting",
+      label: "Paddle MoR accounting route",
+      ready: approved("GAMESIGNAL_PADDLE_ACCOUNTING_READY"),
+      detail: "Approve the accounting treatment and reconciliation of Paddle payouts, fees and Paddle-issued seller/reverse-invoice records before real revenue is accepted. Legacy direct Stripe/KSeF customer-invoice logic is not the Paddle customer-sales route.",
     },
     {
       key: "supabase_auth",
-      label: "Supabase Auth security review",
+      label: "Supabase Auth production security",
       ready: approved("GAMESIGNAL_SUPABASE_AUTH_READY"),
-      detail: "Enable Leaked Password Protection through Supabase Auth configuration and re-run the security advisor before LIVE. Do not simulate this setting through SQL.",
+      detail: "Re-run the Supabase security advisor before LIVE. Leaked Password Protection should be enabled once the project is on a plan that supports it, and the canonical production Site URL/redirect configuration must remain verified.",
     },
     {
-      key: "stripe_account",
-      label: "Stripe LIVE account onboarding",
+      key: "auth_email",
+      label: "Production authentication email delivery",
+      ready: approved("GAMESIGNAL_AUTH_EMAIL_READY"),
+      detail: "Verify a production-ready SMTP sender and end-to-end signup confirmation plus password-reset delivery on the whoplaysmygame.com Auth redirect flow before a public paid launch.",
+    },
+    {
+      key: "paddle_live_review",
+      label: "Final Paddle LIVE cutover review",
+      ready: approved("GAMESIGNAL_PADDLE_LIVE_APPROVED"),
+      detail: "Final explicit review must confirm LIVE credentials, client token, catalog, approved domain, notification destination, portal, legal pages and accounting route. This approval still does not bypass PADDLE_LIVE_BILLING_ENABLED in the Edge Function.",
+    },
+  ];
+
+  const ksef = getKsefProductionReadiness();
+  const legacyDirectBillingChecks: LaunchCheck[] = [
+    {
+      key: "legacy_stripe_account",
+      label: "Legacy Stripe LIVE account",
       ready: approved("GAMESIGNAL_STRIPE_ACCOUNT_READY"),
-      detail: "Business profile, website/support details, terms acceptance, charge capability and payouts must all be ready on the final LIVE Stripe account.",
+      detail: "Historical/direct-billing rollback only. Not a Paddle launch blocker.",
     },
     {
-      key: "stripe_recovery",
-      label: "Stripe revenue recovery",
+      key: "legacy_stripe_recovery",
+      label: "Legacy Stripe revenue recovery",
       ready: approved("GAMESIGNAL_STRIPE_RECOVERY_READY"),
-      detail: "Sandbox Smart Retries, past_due fail-closed entitlements, Hosted Invoice Page Pay now and payment-method recovery are technically verified. Reproduce and approve the same revenue-recovery policy on LIVE.",
+      detail: "Historical/direct-billing rollback only. Sandbox recovery logic remains preserved.",
     },
     {
-      key: "stripe_disputes",
-      label: "Stripe disputes / chargebacks",
+      key: "legacy_stripe_disputes",
+      label: "Legacy Stripe disputes",
       ready: approved("GAMESIGNAL_STRIPE_DISPUTES_READY"),
-      detail: "Dispute lifecycle persistence is implemented. Approve the final access/accounting policy for open, won and lost disputes before LIVE.",
+      detail: "Historical/direct-billing rollback only. Dispute persistence remains preserved.",
     },
     {
-      key: "stripe_api_version",
-      label: "Stripe API / webhook version",
-      ready: approved("GAMESIGNAL_STRIPE_API_VERSION_READY"),
-      detail: "Pin the final LIVE webhook/API payload version to the sandbox-tested Stripe API version and review upgrades deliberately.",
-    },
-    {
-      key: "email_delivery",
-      label: "Product email alert promise",
-      ready: approved("GAMESIGNAL_EMAIL_LAUNCH_READY"),
-      detail: "Current marketing says product alert email is coming soon, so paid launch may proceed without optional alert email only while that wording remains accurate. This is separate from the mandatory transactional contract-confirmation channel.",
-    },
-    {
-      key: "stripe_review",
-      label: "Final Stripe LIVE review",
-      ready: approved("GAMESIGNAL_STRIPE_LIVE_APPROVED"),
-      detail: "Live products, inclusive prices, Tax registration, webhook, Portal legal links, payment methods and final seller data require one explicit review immediately before LIVE.",
+      key: "legacy_ksef_prerequisites",
+      label: "Legacy direct-billing KSeF prerequisites",
+      ready: approved("GAMESIGNAL_KSEF_FLOW_READY") && ksef.prerequisitesReady,
+      detail: `Direct seller-invoice rollback path only. prerequisites=${ksef.prerequisitesReady ? "ready" : "blocked"}; production armed=${ksef.submissionArmed ? "yes" : "no"}. KSeF PROD must stay locked unless the direct-billing route is separately authorized.`,
     },
   ];
 
   const pending = checks.filter((check) => !check.ready);
 
   return {
-    mode: pending.length === 0 ? "ready_for_explicit_live_cutover" : "sandbox_only",
+    mode: pending.length === 0 ? "ready_for_explicit_paddle_live_cutover" : "sandbox_only",
     liveAllowed: pending.length === 0,
+    billingProvider,
     seller: ACTIVE_SELLER.legalName,
     checks,
     pending: pending.map((check) => check.key),
+    legacyDirectBilling: {
+      mode: "rollback_only",
+      checks: legacyDirectBillingChecks,
+      productionSubmissionArmed: ksef.submissionArmed,
+    },
   } as const;
 }
