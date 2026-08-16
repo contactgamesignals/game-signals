@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import EmailDigestSettings from "@/components/EmailDigestSettings";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
 import { PLAN_LABELS, normalizePlan } from "@/lib/plans";
@@ -410,7 +411,7 @@ export default function SettingsClient({
               <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <input type="checkbox" checked={immediateServiceRequested} onChange={(event) => setImmediateServiceRequested(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
                 <span>
-                  I expressly request that GameSignal starts providing the digital service immediately, before the 14-day withdrawal period ends. I understand that if I validly withdraw during that period, I may have to pay a proportionate amount for the service already provided, and mandatory consumer rights remain unaffected.
+                  I expressly request that Who Plays My Game starts providing the digital service immediately, before the 14-day withdrawal period ends. I understand that if I validly withdraw during that period, I may have to pay a proportionate amount for the service already provided, and mandatory consumer rights remain unaffected.
                 </span>
               </label>
             ) : (
@@ -503,15 +504,7 @@ export default function SettingsClient({
         </form>
       </section>
 
-      <section className="settings-card">
-        <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
-          <div>
-            <h2>Email alerts</h2>
-            <p>The delivery pipeline is implemented and tested. Production sending remains disabled until GameSignal has a verified sending domain.</p>
-          </div>
-          <span className="plan-pill">Coming soon</span>
-        </div>
-      </section>
+      <EmailDigestSettings workspaceId={workspaceId} />
 
       <section className="settings-card">
         <h2>Platform monitoring</h2>
