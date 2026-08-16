@@ -1,6 +1,6 @@
 # Who Plays My Game — current project status
 
-Last updated: 2026-08-16.
+Last updated: 2026-08-17.
 
 This file is the compact source of truth for the current product state. Historical GameSignal readiness/checkpoint files remain useful as audit history, but current code/runtime and this document take precedence where old branding or architecture notes conflict.
 
@@ -28,6 +28,7 @@ Currently implemented:
 - game create/edit/pause/resume/remove flows;
 - realtime mention updates;
 - Discord alerts for eligible plans;
+- opt-in daily email digests for active paid plans;
 - plan-based active-game limits;
 - Publisher CSV export;
 - account/workspace settings, export and guarded deletion;
@@ -36,7 +37,7 @@ Currently implemented:
 - Paddle Customer Portal integration;
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe.
 
-Kick and production email alerts remain intentionally unavailable.
+Kick remains intentionally unavailable. Instant per-signal email alerts are intentionally not used; product email is a capped daily digest instead.
 
 ## Domain, hosting and SEO
 
@@ -59,15 +60,15 @@ Supabase email/password authentication supports:
 - forgot/reset password;
 - protected dashboard/settings.
 
-Production Auth URL configuration is now set to the canonical Who Plays My Game domain:
+Production Auth URL configuration is set to the canonical Who Plays My Game domain:
 
 - Site URL: `https://www.whoplaysmygame.com`;
 - production callback allowlist: `https://www.whoplaysmygame.com/auth/callback`;
 - localhost may remain allowlisted for development.
 
-The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect.
+Production Auth email delivery is now configured through Resend custom SMTP using the verified `auth.whoplaysmygame.com` sending domain. A real recovery email was delivered successfully from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`, and the Supabase Auth log recorded the recovery request with HTTP 200 and the canonical reset callback.
 
-A production-ready custom SMTP sender for branded/reliable Auth emails should be verified before a public paid launch.
+The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect. Bot protection/rate-limit review for public Auth forms should also be completed before a large public launch.
 
 ## Monitoring runtime
 
@@ -75,9 +76,12 @@ Real monitoring is active:
 
 - Twitch Edge Function and scheduler;
 - YouTube Edge Function and scheduler;
-- Discord notification worker and scheduler.
+- Discord notification worker and scheduler;
+- daily email digest worker and scheduler.
 
-Recent production logs show these workers returning HTTP 200. The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
+The product-email scheduler runs once daily at `06:00 UTC`. It processes the previous complete UTC day, sends nothing when no matching signals exist, groups matching games/workspaces by recipient address, and is capped at one digest per recipient per day. Resend idempotency is also used to protect against retry duplicates.
+
+Recent production checks show the monitoring workers returning HTTP 200. The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
 
 ## Billing
 
@@ -104,13 +108,13 @@ Implemented/tested:
 - provider-aware Settings UI;
 - explicit Sandbox/LIVE locks.
 
-Paddle LIVE remains OFF and requires a deliberate separate cutover. The operator launch-readiness gate now follows the current Paddle MoR architecture: LIVE account verification, domain approval, LIVE catalog, LIVE webhook, portal, accounting route, legal review, Auth production review and a final explicit Paddle approval all fail closed.
+Paddle LIVE remains OFF and requires a deliberate separate cutover. The operator launch-readiness gate follows the current Paddle MoR architecture: LIVE account verification, domain approval, LIVE catalog, LIVE webhook, portal, accounting route, legal review, Auth production review and a final explicit Paddle approval all fail closed.
 
 ### Legacy/direct Stripe path
 
 The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as a rollback/legacy path. Existing Stripe-backed records must remain provider-associated.
 
-Stripe LIVE is OFF. Legacy Stripe/KSeF checks are now explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE.
+Stripe LIVE is OFF. Legacy Stripe/KSeF checks are explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE.
 
 Some historical direct-billing evidence structures deliberately continue using Stripe-specific field names and immutable legal-version snapshots. Do not rename or rewrite those merely for branding.
 
@@ -155,9 +159,14 @@ A post-domain-cutover review confirmed:
 
 ## Email
 
-The Resend-based product-email backend exists, but production product alert emails remain OFF.
+Resend now handles both email layers, with separate responsibilities:
 
-Do not enable the product-email scheduler until a production sender/domain is verified and the launch decision explicitly includes email alerts. Authentication email/SMTP readiness is tracked separately from optional product alert emails.
+- Supabase Auth uses custom SMTP and sends branded account/security emails from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`;
+- product digests use a restricted Resend Sending Access API key in Supabase Edge Function secrets and send from `Who Plays My Game <updates@auth.whoplaysmygame.com>`.
+
+Daily product email is opt-in per workspace and available to active Indie, Studio and Publisher plans. The Settings page lets an owner/admin enable or turn off the digest, choose the recipient and configure minimum signal score / Twitch viewer thresholds. The worker groups all eligible signals for the same recipient into one message and sends no email on empty days.
+
+Do not replace this with instant per-signal email delivery. Realtime delivery belongs in the dashboard and Discord; email remains the low-volume daily summary channel.
 
 ## Kick
 
@@ -177,8 +186,8 @@ Keep these invariants:
 - Stripe LIVE: OFF;
 - KSeF PROD: OFF;
 - Kick: OFF;
-- production product-email scheduler: OFF;
+- product email remains daily-digest-only, opt-in and capped at one message per recipient per day;
 - no secrets committed to Git;
 - database/RLS and custom worker authorization remain intact.
 
-Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security, configure production Auth SMTP, re-check current seller/company information and complete the final legal/consumer checkout review.
+Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security, add/verify public Auth bot protection and rate limits, re-check current seller/company information and complete the final legal/consumer checkout review.
