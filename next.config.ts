@@ -12,6 +12,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "game-signals.vercel.app" }],
+        destination: "https://www.whoplaysmygame.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
