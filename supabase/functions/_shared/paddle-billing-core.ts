@@ -18,6 +18,24 @@ export const PADDLE_PRICE_ENV_KEYS: Record<PaddlePaidPlan, Record<PaddleBillingP
   },
 };
 
+// Sandbox price IDs are public Paddle catalog identifiers, not credentials.
+// Keeping them here removes six manual runtime settings while still requiring
+// separate environment variables for every LIVE price before LIVE can be enabled.
+export const PADDLE_SANDBOX_PRICE_IDS: Record<PaddlePaidPlan, Record<PaddleBillingPeriod, string>> = {
+  indie: {
+    monthly: "pri_01m041w2rt1m5qm26yjygktnzj",
+    yearly: "pri_01m04220y737wxhfphwbx7yscx",
+  },
+  studio: {
+    monthly: "pri_01m0426yqh0mq79yz0z4dy1cf3",
+    yearly: "pri_01m042a8vyffzzdeqeyqs1kj6t",
+  },
+  publisher: {
+    monthly: "pri_01m042eynme90xtjwpsgpdbp33",
+    yearly: "pri_01m042kp4p6r7baaea3w3pv7yb",
+  },
+};
+
 export type PaddlePriceCatalogEntry = {
   priceId: string;
   plan: PaddlePaidPlan;
@@ -72,6 +90,26 @@ export function buildPaddlePriceCatalog(readEnv: (key: string) => string | undef
     for (const period of ["monthly", "yearly"] as const) {
       const key = PADDLE_PRICE_ENV_KEYS[plan][period];
       const priceId = readEnv(key)?.trim();
+      if (!priceId) continue;
+      if (!/^pri_[a-z\d]{26}$/.test(priceId)) {
+        throw new Error(`${key} is not a valid Paddle price ID.`);
+      }
+      entries.push({ priceId, plan, period });
+    }
+  }
+  return entries;
+}
+
+export function buildPaddleRuntimePriceCatalog(
+  environment: PaddleEnvironment,
+  readEnv: (key: string) => string | undefined,
+): PaddlePriceCatalogEntry[] {
+  const entries: PaddlePriceCatalogEntry[] = [];
+  for (const plan of ["indie", "studio", "publisher"] as const) {
+    for (const period of ["monthly", "yearly"] as const) {
+      const key = PADDLE_PRICE_ENV_KEYS[plan][period];
+      const configured = readEnv(key)?.trim();
+      const priceId = configured || (environment === "sandbox" ? PADDLE_SANDBOX_PRICE_IDS[plan][period] : undefined);
       if (!priceId) continue;
       if (!/^pri_[a-z\d]{26}$/.test(priceId)) {
         throw new Error(`${key} is not a valid Paddle price ID.`);
