@@ -5,12 +5,15 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
 import { PLAN_LABELS, normalizePlan } from "@/lib/plans";
+import { BILLING_PROVIDER_LABELS, type BillingProvider } from "@/lib/billing-provider";
 
 type Props = {
   workspaceId: string;
   currentPlan: PlanName;
   subscriptionStatus: string;
-  hasStripeCustomer: boolean;
+  billingProvider: BillingProvider;
+  billingHasCustomer: boolean;
+  billingHasSubscription: boolean;
 };
 
 type DiscordStatus = {
@@ -27,6 +30,7 @@ type BillingResponse = {
   plan?: string;
   status?: string;
   has_customer?: boolean;
+  has_subscription?: boolean;
   url?: string;
   error?: string;
   usePortal?: boolean;
@@ -38,16 +42,46 @@ const LAUNCH_BILLING_COUNTRY = "PL";
 
 const PAID_PLANS: Array<{
   plan: PaidPlanName;
-  monthly: string;
-  yearly: string;
+  stripeMonthly: string;
+  stripeYearly: string;
+  paddleMonthly: string;
+  paddleYearly: string;
   summary: string;
 }> = [
-  { plan: "indie", monthly: "24.50 PLN / mo", yearly: "245 PLN / yr", summary: "1 active game" },
-  { plan: "studio", monthly: "64.50 PLN / mo", yearly: "645 PLN / yr", summary: "Up to 3 active games + Discord" },
-  { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 active games + export" },
+  {
+    plan: "indie",
+    stripeMonthly: "24.50 PLN / mo",
+    stripeYearly: "245 PLN / yr",
+    paddleMonthly: "$2.99 / mo",
+    paddleYearly: "$29.90 / yr",
+    summary: "1 active game",
+  },
+  {
+    plan: "studio",
+    stripeMonthly: "64.50 PLN / mo",
+    stripeYearly: "645 PLN / yr",
+    paddleMonthly: "$7.99 / mo",
+    paddleYearly: "$79.90 / yr",
+    summary: "Up to 3 active games + Discord",
+  },
+  {
+    plan: "publisher",
+    stripeMonthly: "149.50 PLN / mo",
+    stripeYearly: "1495 PLN / yr",
+    paddleMonthly: "$14.99 / mo",
+    paddleYearly: "$149.90 / yr",
+    summary: "Up to 10 active games + export",
+  },
 ];
 
-export default function SettingsClient({ workspaceId, currentPlan, subscriptionStatus, hasStripeCustomer }: Props) {
+export default function SettingsClient({
+  workspaceId,
+  currentPlan,
+  subscriptionStatus,
+  billingProvider,
+  billingHasCustomer: initialBillingHasCustomer,
+  billingHasSubscription: initialBillingHasSubscription,
+}: Props) {
   const [status, setStatus] = useState<DiscordStatus | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [minimumSignalScore, setMinimumSignalScore] = useState(0);
@@ -62,16 +96,22 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
   const [billingConfigured, setBillingConfigured] = useState(false);
   const [billingPlan, setBillingPlan] = useState<PlanName>(currentPlan);
   const [billingStatus, setBillingStatus] = useState(subscriptionStatus);
-  const [billingHasCustomer, setBillingHasCustomer] = useState(hasStripeCustomer);
+  const [billingHasCustomer, setBillingHasCustomer] = useState(initialBillingHasCustomer);
+  const [billingHasSubscription, setBillingHasSubscription] = useState(initialBillingHasSubscription);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [buyerType, setBuyerType] = useState<BuyerType>("individual");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [recurringBillingAccepted, setRecurringBillingAccepted] = useState(false);
   const [immediateServiceRequested, setImmediateServiceRequested] = useState(false);
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
 
   const effectivePlan = billingStatus === "active" || billingStatus === "trialing" ? billingPlan : "free";
   const hasPaidPlan = effectivePlan !== "free";
+  const hasExistingSubscription = billingHasSubscription && billingStatus !== "canceled";
+  const providerLabel = BILLING_PROVIDER_LABELS[billingProvider];
+  const providerPortalLabel = billingProvider === "paddle" ? "Paddle Customer Portal" : "Stripe Customer Portal";
+  const billingFunction = billingProvider === "paddle" ? "paddle-billing" : "stripe-billing";
   const checkoutConsentsReady =
     termsAccepted &&
     recurringBillingAccepted &&
@@ -89,7 +129,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
   async function invokeBilling(action: "status" | "checkout" | "portal", extra: Record<string, unknown> = {}) {
     const supabase = createClient();
-    const { data, error: functionError } = await supabase.functions.invoke("stripe-billing", {
+    const { data, error: functionError } = await supabase.functions.invoke(billingFunction, {
       body: { action, workspace_id: workspaceId, ...extra },
     });
     if (functionError) throw new Error(functionError.message);
@@ -129,6 +169,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         setBillingPlan(normalizePlan(data.plan));
         setBillingStatus(String(data.status ?? "trialing"));
         setBillingHasCustomer(Boolean(data.has_customer));
+        setBillingHasSubscription(Boolean(data.has_subscription));
       } catch (statusError) {
         if (active) setBillingError(statusError instanceof Error ? statusError.message : "Could not load billing status.");
       } finally {
@@ -138,7 +179,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
 
     const billingResult = new URLSearchParams(window.location.search).get("billing");
     if (billingResult === "success") {
-      setBillingMessage("Checkout completed. Stripe is synchronizing your subscription now.");
+      setBillingMessage(`Checkout completed. ${providerLabel} is synchronizing your subscription now.`);
       window.history.replaceState({}, "", window.location.pathname);
     } else if (billingResult === "cancelled") {
       setBillingMessage("Checkout was cancelled. No changes were made.");
@@ -226,7 +267,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
     setBillingMessage(null);
     try {
       const data = await invokeBilling("portal");
-      if (!data.url) throw new Error("Stripe did not return a billing portal URL.");
+      if (!data.url) throw new Error(`${providerLabel} did not return a billing portal URL.`);
       window.location.assign(data.url);
     } catch (portalError) {
       setBillingError(portalError instanceof Error ? portalError.message : "Could not open billing portal.");
@@ -235,11 +276,13 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
   }
 
   async function startCheckout(plan: PaidPlanName) {
-    if (!billingConfigured || hasPaidPlan) return;
+    if (!billingConfigured || hasPaidPlan || hasExistingSubscription) return;
+    setCheckoutAttempted(true);
     if (!checkoutConsentsReady) {
-      setBillingError("Choose Individual or Company and accept the required checkout statements first.");
+      setBillingError(null);
       return;
     }
+    setCheckoutAttempted(false);
     setBillingBusy(true);
     setBillingError(null);
     setBillingMessage(null);
@@ -248,7 +291,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         plan,
         period: billingPeriod,
         buyer_type: buyerType,
-        billing_country: LAUNCH_BILLING_COUNTRY,
+        ...(billingProvider === "stripe" ? { billing_country: LAUNCH_BILLING_COUNTRY } : {}),
         terms_accepted: termsAccepted,
         recurring_billing_accepted: recurringBillingAccepted,
         immediate_service_requested: buyerType === "individual" ? immediateServiceRequested : false,
@@ -258,7 +301,7 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         await openBillingPortal();
         return;
       }
-      if (!data.url) throw new Error("Stripe did not return a Checkout URL.");
+      if (!data.url) throw new Error(`${providerLabel} did not return a Checkout URL.`);
       window.location.assign(data.url);
     } catch (checkoutError) {
       setBillingError(checkoutError instanceof Error ? checkoutError.message : "Could not create Checkout session.");
@@ -275,7 +318,11 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Billing</h2>
-            <p>Choose a plan with Stripe Checkout. Existing subscriptions are changed or cancelled securely in Stripe Customer Portal.</p>
+            <p>
+              {billingProvider === "paddle"
+                ? "Choose a plan with Paddle. Paddle acts as Merchant of Record for the customer transaction and handles checkout, applicable indirect taxes, and customer billing documents."
+                : "Choose a plan with Stripe Checkout. Existing subscriptions are changed or cancelled securely in Stripe Customer Portal."}
+            </p>
           </div>
           <span className="plan-pill">
             {billingChecking ? "Checking…" : `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`}
@@ -307,7 +354,9 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
         {!hasPaidPlan ? (
           <div className="form-grid" style={{ marginBottom: 18 }}>
             <div className="status-message">
-              Paid beta checkout is currently available only for customers with a Polish billing address. Prices shown in PLN are customer-facing totals and Polish VAT is calculated inside the displayed price where applicable. Do not continue if your billing address is outside Poland yet.
+              {billingProvider === "paddle"
+                ? "Paddle is the Merchant of Record for this checkout. Paddle calculates the applicable transaction taxes and provides the customer billing document. The final amount is confirmed in Paddle Checkout."
+                : "Paid beta checkout is currently available only for customers with a Polish billing address. Prices shown in PLN are customer-facing totals and Polish VAT is calculated inside the displayed price where applicable. Do not continue if your billing address is outside Poland yet."}
             </div>
 
             <div>
@@ -334,9 +383,13 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
             </div>
 
             <div className="status-message">
-              {buyerType === "company"
-                ? "Stripe Checkout will collect the Polish billing address and require the company legal name and supported VAT/tax ID fields."
-                : "Stripe Checkout will collect your Polish billing address as an individual. Company VAT/tax fields will not be required."}
+              {billingProvider === "paddle"
+                ? buyerType === "company"
+                  ? "Paddle Checkout will collect the billing details and supported company tax ID information required for the purchase."
+                  : "Paddle Checkout will collect the billing details required for the individual purchase."
+                : buyerType === "company"
+                  ? "Stripe Checkout will collect the Polish billing address and require the company legal name and supported VAT/tax ID fields."
+                  : "Stripe Checkout will collect your Polish billing address as an individual. Company VAT/tax fields will not be required."}
             </div>
 
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -365,26 +418,35 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
                 Company purchase. Mandatory rights that apply by law to a particular business customer, including any statutory protections for qualifying sole traders, are not excluded.
               </div>
             )}
+
+            {checkoutAttempted && !checkoutConsentsReady ? (
+              <div className="auth-error">
+                Please accept all required statements above before continuing to checkout.
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         <div className="form-grid">
           {PAID_PLANS.map((item) => {
             const isCurrent = effectivePlan === item.plan;
+            const priceLabel = billingProvider === "paddle"
+              ? billingPeriod === "monthly" ? item.paddleMonthly : item.paddleYearly
+              : billingPeriod === "monthly" ? item.stripeMonthly : item.stripeYearly;
             return (
               <div className="settings-row" key={item.plan} style={{ alignItems: "center" }}>
                 <div>
                   <strong>{PLAN_LABELS[item.plan]}</strong>
-                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {billingPeriod === "monthly" ? item.monthly : item.yearly}</p>
+                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {priceLabel}</p>
                 </div>
                 {isCurrent ? (
                   <span className="plan-pill">Current plan</span>
-                ) : hasPaidPlan ? (
+                ) : hasPaidPlan || hasExistingSubscription ? (
                   <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
                     Change plan
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured || !checkoutConsentsReady} onClick={() => startCheckout(item.plan)}>
+                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(item.plan)}>
                     Continue with {PLAN_LABELS[item.plan]}
                   </button>
                 )}
@@ -393,9 +455,9 @@ export default function SettingsClient({ workspaceId, currentPlan, subscriptionS
           })}
         </div>
 
-        {hasPaidPlan ? (
+        {hasPaidPlan || hasExistingSubscription ? (
           <div className="status-message" style={{ marginTop: 14 }}>
-            Plan changes, monthly/yearly switching, payment methods, invoices and cancellation are handled in Stripe Customer Portal. Cancellation applies at the end of the paid period; unused time is not normally refunded or credited except where required by law.
+            Plan changes, payment methods, billing documents and cancellation are handled in {providerPortalLabel}. Cancellation applies at the end of the paid period; unused time is not normally refunded or credited except where required by law.
           </div>
         ) : null}
       </section>
