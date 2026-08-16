@@ -146,22 +146,12 @@ const staleEvidence = evaluateKsefProductionReadiness({
   seller: {
     ...baseInput.seller,
     vatStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
-    vatUeStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
-  } as KsefProductionReadinessInput["seller"] & { vatUeStatusVerifiedAt?: string },
-});
-// Preserve the original stale evidence check with the canonical field name.
-const staleEvidenceCanonical = evaluateKsefProductionReadiness({
-  ...baseInput,
-  seller: {
-    ...baseInput.seller,
-    vatStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
     vatUeVerifiedAt: "2026-08-01T00:00:00.000Z",
   },
 });
-void staleEvidence;
-assert.equal(staleEvidenceCanonical.prerequisitesReady, false);
-assert.ok(staleEvidenceCanonical.blockers.includes("seller_vat_status_is_active_and_fresh"));
-assert.ok(staleEvidenceCanonical.blockers.includes("seller_vat_ue_status_is_valid_and_fresh"));
+assert.equal(staleEvidence.prerequisitesReady, false);
+assert.ok(staleEvidence.blockers.includes("seller_vat_status_is_active_and_fresh"));
+assert.ok(staleEvidence.blockers.includes("seller_vat_ue_status_is_valid_and_fresh"));
 
 for (const key of [
   "KSEF_ENV=test",
