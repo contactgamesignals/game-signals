@@ -42,13 +42,36 @@ const LAUNCH_BILLING_COUNTRY = "PL";
 
 const PAID_PLANS: Array<{
   plan: PaidPlanName;
-  monthly: string;
-  yearly: string;
+  stripeMonthly: string;
+  stripeYearly: string;
+  paddleMonthly: string;
+  paddleYearly: string;
   summary: string;
 }> = [
-  { plan: "indie", monthly: "24.50 PLN / mo", yearly: "245 PLN / yr", summary: "1 active game" },
-  { plan: "studio", monthly: "64.50 PLN / mo", yearly: "645 PLN / yr", summary: "Up to 3 active games + Discord" },
-  { plan: "publisher", monthly: "149.50 PLN / mo", yearly: "1495 PLN / yr", summary: "Up to 10 active games + export" },
+  {
+    plan: "indie",
+    stripeMonthly: "24.50 PLN / mo",
+    stripeYearly: "245 PLN / yr",
+    paddleMonthly: "$2.99 / mo",
+    paddleYearly: "$29.90 / yr",
+    summary: "1 active game",
+  },
+  {
+    plan: "studio",
+    stripeMonthly: "64.50 PLN / mo",
+    stripeYearly: "645 PLN / yr",
+    paddleMonthly: "$7.99 / mo",
+    paddleYearly: "$79.90 / yr",
+    summary: "Up to 3 active games + Discord",
+  },
+  {
+    plan: "publisher",
+    stripeMonthly: "149.50 PLN / mo",
+    stripeYearly: "1495 PLN / yr",
+    paddleMonthly: "$14.99 / mo",
+    paddleYearly: "$149.90 / yr",
+    summary: "Up to 10 active games + export",
+  },
 ];
 
 export default function SettingsClient({
@@ -81,6 +104,7 @@ export default function SettingsClient({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [recurringBillingAccepted, setRecurringBillingAccepted] = useState(false);
   const [immediateServiceRequested, setImmediateServiceRequested] = useState(false);
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
 
   const effectivePlan = billingStatus === "active" || billingStatus === "trialing" ? billingPlan : "free";
   const hasPaidPlan = effectivePlan !== "free";
@@ -253,10 +277,12 @@ export default function SettingsClient({
 
   async function startCheckout(plan: PaidPlanName) {
     if (!billingConfigured || hasPaidPlan || hasExistingSubscription) return;
+    setCheckoutAttempted(true);
     if (!checkoutConsentsReady) {
-      setBillingError("Choose Individual or Company and accept the required checkout statements first.");
+      setBillingError(null);
       return;
     }
+    setCheckoutAttempted(false);
     setBillingBusy(true);
     setBillingError(null);
     setBillingMessage(null);
@@ -392,17 +418,26 @@ export default function SettingsClient({
                 Company purchase. Mandatory rights that apply by law to a particular business customer, including any statutory protections for qualifying sole traders, are not excluded.
               </div>
             )}
+
+            {checkoutAttempted && !checkoutConsentsReady ? (
+              <div className="auth-error">
+                Please accept all required statements above before continuing to checkout.
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         <div className="form-grid">
           {PAID_PLANS.map((item) => {
             const isCurrent = effectivePlan === item.plan;
+            const priceLabel = billingProvider === "paddle"
+              ? billingPeriod === "monthly" ? item.paddleMonthly : item.paddleYearly
+              : billingPeriod === "monthly" ? item.stripeMonthly : item.stripeYearly;
             return (
               <div className="settings-row" key={item.plan} style={{ alignItems: "center" }}>
                 <div>
                   <strong>{PLAN_LABELS[item.plan]}</strong>
-                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {billingPeriod === "monthly" ? item.monthly : item.yearly}</p>
+                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {priceLabel}</p>
                 </div>
                 {isCurrent ? (
                   <span className="plan-pill">Current plan</span>
@@ -411,7 +446,7 @@ export default function SettingsClient({
                     Change plan
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured || !checkoutConsentsReady} onClick={() => startCheckout(item.plan)}>
+                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(item.plan)}>
                     Continue with {PLAN_LABELS[item.plan]}
                   </button>
                 )}
