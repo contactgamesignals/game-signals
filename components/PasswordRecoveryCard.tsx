@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
+import TurnstileChallenge from "@/components/TurnstileChallenge";
 
 type Props = {
   mode: "request" | "reset";
@@ -15,6 +16,8 @@ export default function PasswordRecoveryCard({ mode }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -30,8 +33,12 @@ export default function PasswordRecoveryCard({ mode }: Props) {
     try {
       const supabase = createClient();
       if (requesting) {
+        if (!captchaToken) throw new Error("Please complete the security check and try again.");
         const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`;
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo,
+          captchaToken,
+        });
         if (error) throw error;
         setSuccess(true);
         setMessage("If an account exists for this email, a password reset link has been sent.");
@@ -50,6 +57,7 @@ export default function PasswordRecoveryCard({ mode }: Props) {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Password recovery failed.");
     } finally {
+      if (requesting) setCaptchaResetKey((value) => value + 1);
       setLoading(false);
     }
   }
@@ -73,18 +81,25 @@ export default function PasswordRecoveryCard({ mode }: Props) {
 
         <form className="auth-form" onSubmit={submit}>
           {requesting ? (
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@studio.com"
-                autoComplete="email"
-                required
-                disabled={loading}
+            <>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@studio.com"
+                  autoComplete="email"
+                  required
+                  disabled={loading}
+                />
+              </label>
+              <TurnstileChallenge
+                action="password_reset"
+                onTokenChange={setCaptchaToken}
+                resetKey={captchaResetKey}
               />
-            </label>
+            </>
           ) : (
             <>
               <label>
@@ -115,7 +130,7 @@ export default function PasswordRecoveryCard({ mode }: Props) {
               </label>
             </>
           )}
-          <button className="btn btn-primary" disabled={loading || success}>
+          <button className="btn btn-primary" disabled={loading || success || (requesting && !captchaToken)}>
             {loading ? "Please wait…" : requesting ? "Send reset link" : "Update password"}
           </button>
         </form>
