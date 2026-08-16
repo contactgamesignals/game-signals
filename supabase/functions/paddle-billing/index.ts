@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   assertPaddleCheckoutEnabled,
-  buildPaddlePriceCatalog,
+  buildPaddleRuntimePriceCatalog,
   isPaddleBillingPeriod,
   isPaddlePaidPlan,
   paddleApiBase,
@@ -45,7 +45,7 @@ function serviceClient() {
 function paddleRuntime() {
   const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
   const apiKey = validatePaddleApiKey(environment, Deno.env.get("PADDLE_API_KEY") ?? undefined);
-  const catalog = buildPaddlePriceCatalog((key) => Deno.env.get(key) ?? undefined);
+  const catalog = buildPaddleRuntimePriceCatalog(environment, (key) => Deno.env.get(key) ?? undefined);
   return { environment, apiKey, catalog, baseUrl: paddleApiBase(environment) };
 }
 
