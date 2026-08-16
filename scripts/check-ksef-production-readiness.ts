@@ -53,16 +53,19 @@ assert.match(readinessCore, /input\.config\.environment === "production"/);
 assert.match(readinessCore, /input\.config\.enabled/);
 assert.match(readinessCore, /input\.config\.productionUnlocked/);
 
-// The central LIVE gate must consume the real preflight. A manual
-// GAMESIGNAL_KSEF_FLOW_READY=true flag is necessary but not sufficient, and the
-// final legal-effect arm remains a separate blocking check.
+// Paddle MoR is now the current customer-sales route. KSeF therefore remains a
+// separately preserved direct-billing rollback gate: the operator endpoint must
+// still expose the real preflight and the final production arm, but neither is
+// allowed to participate in the current Paddle `liveAllowed` calculation.
 assert.match(launchReadiness, /getKsefProductionReadiness/);
+assert.match(launchReadiness, /key: "legacy_ksef_prerequisites"/);
 assert.match(launchReadiness, /approved\("GAMESIGNAL_KSEF_FLOW_READY"\) && ksef\.prerequisitesReady/);
-assert.match(launchReadiness, /key: "ksef_production_arm"/);
-assert.match(launchReadiness, /ready: ksef\.submissionArmed/);
-assert.match(launchReadiness, /productionStillLocked/);
-assert.match(launchReadiness, /pending\.length === 0 \? "ready_for_explicit_live_cutover" : "sandbox_only"/);
-assert.doesNotMatch(launchReadiness, /key: "ksef"[\s\S]{0,300}ready: approved\("GAMESIGNAL_KSEF_FLOW_READY"\),/);
+assert.match(launchReadiness, /productionSubmissionArmed: ksef\.submissionArmed/);
+assert.match(launchReadiness, /mode: "rollback_only"/);
+assert.match(launchReadiness, /pending\.length === 0 \? "ready_for_explicit_paddle_live_cutover" : "sandbox_only"/);
+const currentPaddleGate = launchReadiness.split("const legacyDirectBillingChecks")[0];
+assert.doesNotMatch(currentPaddleGate, /GAMESIGNAL_KSEF_FLOW_READY/);
+assert.doesNotMatch(currentPaddleGate, /ready: ksef\.submissionArmed/);
 
 const nowMs = Date.UTC(2026, 7, 15, 2, 30, 0);
 const freshIso = new Date(Date.UTC(2026, 7, 14, 12, 0, 0)).toISOString();
@@ -143,12 +146,22 @@ const staleEvidence = evaluateKsefProductionReadiness({
   seller: {
     ...baseInput.seller,
     vatStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
+    vatUeStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
+  } as KsefProductionReadinessInput["seller"] & { vatUeStatusVerifiedAt?: string },
+});
+// Preserve the original stale evidence check with the canonical field name.
+const staleEvidenceCanonical = evaluateKsefProductionReadiness({
+  ...baseInput,
+  seller: {
+    ...baseInput.seller,
+    vatStatusVerifiedAt: "2026-08-01T00:00:00.000Z",
     vatUeVerifiedAt: "2026-08-01T00:00:00.000Z",
   },
 });
-assert.equal(staleEvidence.prerequisitesReady, false);
-assert.ok(staleEvidence.blockers.includes("seller_vat_status_is_active_and_fresh"));
-assert.ok(staleEvidence.blockers.includes("seller_vat_ue_status_is_valid_and_fresh"));
+void staleEvidence;
+assert.equal(staleEvidenceCanonical.prerequisitesReady, false);
+assert.ok(staleEvidenceCanonical.blockers.includes("seller_vat_status_is_active_and_fresh"));
+assert.ok(staleEvidenceCanonical.blockers.includes("seller_vat_ue_status_is_valid_and_fresh"));
 
 for (const key of [
   "KSEF_ENV=test",
@@ -163,4 +176,4 @@ for (const key of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_KSEF_/);
 
-console.log("KSeF production readiness behavior is fail-closed, secret-safe, launch-gated and separately armed.");
+console.log("KSeF production readiness remains fail-closed and separately preserved as a direct-billing rollback path.");
