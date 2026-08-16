@@ -29,4 +29,26 @@ assert.match(migration, /paddle_merchant_of_record/);
 assert.doesNotMatch(migration, /drop table/i);
 assert.doesNotMatch(migration, /delete from/i);
 
-console.log("Paddle Edge Function and provider-neutral migration safeguards passed.");
+const readiness = readFileSync("lib/launch-readiness.ts", "utf8");
+for (const flag of [
+  "GAMESIGNAL_PADDLE_ACCOUNT_READY",
+  "GAMESIGNAL_PADDLE_DOMAIN_READY",
+  "GAMESIGNAL_PADDLE_CATALOG_READY",
+  "GAMESIGNAL_PADDLE_WEBHOOK_READY",
+  "GAMESIGNAL_PADDLE_PORTAL_READY",
+  "GAMESIGNAL_PADDLE_ACCOUNTING_READY",
+  "GAMESIGNAL_PADDLE_LIVE_APPROVED",
+]) {
+  assert.ok(readiness.includes(flag), `Paddle launch readiness is missing ${flag}`);
+}
+assert.match(readiness, /configuredBillingProvider\(\)/);
+assert.match(readiness, /ready_for_explicit_paddle_live_cutover/);
+assert.match(readiness, /legacyDirectBilling/);
+assert.match(readiness, /rollback_only/);
+assert.doesNotMatch(
+  readiness.split("const legacyDirectBillingChecks")[0],
+  /GAMESIGNAL_STRIPE_(?:ACCOUNT|RECOVERY|DISPUTES|LIVE)_READY|GAMESIGNAL_KSEF_FLOW_READY/,
+  "Legacy Stripe/KSeF readiness must not block the current Paddle launch gate.",
+);
+
+console.log("Paddle Edge Function, provider-neutral migration and Paddle launch-gate safeguards passed.");
