@@ -5,7 +5,11 @@ export function normalizeBillingProvider(value: unknown): BillingProvider {
 }
 
 export function configuredBillingProvider(): BillingProvider {
-  return normalizeBillingProvider(process.env.GAMESIGNAL_BILLING_PROVIDER);
+  // Paddle is the default for new/free workspaces. Setting the environment
+  // explicitly to `stripe` remains the rollback switch. Stored subscription
+  // providers are normalized separately so historical Stripe subscriptions
+  // never get reclassified just because the default changed.
+  return process.env.GAMESIGNAL_BILLING_PROVIDER === "stripe" ? "stripe" : "paddle";
 }
 
 export const BILLING_PROVIDER_LABELS: Record<BillingProvider, string> = {
