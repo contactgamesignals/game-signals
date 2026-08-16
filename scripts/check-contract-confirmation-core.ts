@@ -8,7 +8,6 @@ import {
 } from "../supabase/functions/_shared/contract-confirmation-core.ts";
 
 const coreSource = readFileSync("supabase/functions/_shared/contract-confirmation-core.ts", "utf8");
-const legalSource = readFileSync("lib/legal.ts", "utf8");
 
 const base: ContractConfirmationInput = {
   productName: "GameSignal",
@@ -46,6 +45,16 @@ const base: ContractConfirmationInput = {
   stripeCheckoutSessionId: "cs_test_contract_confirmation_123",
   contractConcludedAt: "2026-08-15T10:30:00+02:00",
 };
+
+// This builder belongs to the historical direct-Stripe evidence path. Its legal
+// versions and old brand/domain snapshot are intentionally immutable and must
+// not be silently rewritten when the public product/legal pages are rebranded.
+assert.deepEqual(CONTRACT_LEGAL_VERSIONS, {
+  terms: "2026-08-15-v3",
+  privacy: "2026-08-15-v3",
+  withdrawal: "2026-08-15-v1",
+  confirmation: "2026-08-15-v1",
+});
 
 const first = buildContractConfirmationText(base);
 const second = buildContractConfirmationText(structuredClone(base));
@@ -151,18 +160,10 @@ assert.throws(
   /valid date-time/,
 );
 
-for (const [key, value] of Object.entries({
-  terms: CONTRACT_LEGAL_VERSIONS.terms,
-  privacy: CONTRACT_LEGAL_VERSIONS.privacy,
-  withdrawal: CONTRACT_LEGAL_VERSIONS.withdrawal,
-})) {
-  assert.match(legalSource, new RegExp(`${key}: "${value.replaceAll(".", "\\.")}"`));
-}
-
 assert.doesNotMatch(coreSource, /Deno\.env|process\.env/);
 assert.doesNotMatch(coreSource, /\bfetch\s*\(/);
 assert.doesNotMatch(coreSource, /createClient|supabase/i);
 assert.doesNotMatch(coreSource, /Date\.now\s*\(/);
 assert.doesNotMatch(coreSource, /new Date\(\s*\)/);
 
-console.log("Contract confirmation builder is deterministic, amount-complete, version-locked and fail-closed.");
+console.log("Legacy direct-Stripe contract confirmation builder remains deterministic, amount-complete, version-locked and fail-closed.");
