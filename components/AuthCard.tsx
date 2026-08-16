@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
+import TurnstileChallenge from "@/components/TurnstileChallenge";
 
 type Props = {
   mode: "login" | "signup";
@@ -16,6 +17,8 @@ export default function AuthCard({ mode, configured }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -31,12 +34,20 @@ export default function AuthCard({ mode, configured }: Props) {
       setMessage("Authentication is temporarily unavailable.");
       return;
     }
+    if (!captchaToken) {
+      setMessage("Please complete the security check and try again.");
+      return;
+    }
 
     setLoading(true);
     try {
       const supabase = createClient();
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+          options: { captchaToken },
+        });
         if (error) throw error;
         router.push("/dashboard");
         router.refresh();
@@ -48,6 +59,7 @@ export default function AuthCard({ mode, configured }: Props) {
           options: {
             emailRedirectTo: redirectTo,
             data: { display_name: displayName.trim() || email.split("@")[0] },
+            captchaToken,
           },
         });
         if (error) throw error;
@@ -63,6 +75,7 @@ export default function AuthCard({ mode, configured }: Props) {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
+      setCaptchaResetKey((value) => value + 1);
       setLoading(false);
     }
   }
@@ -121,12 +134,17 @@ export default function AuthCard({ mode, configured }: Props) {
               required
             />
           </label>
+          <TurnstileChallenge
+            action={isLogin ? "auth_login" : "auth_signup"}
+            onTokenChange={setCaptchaToken}
+            resetKey={captchaResetKey}
+          />
           {isLogin ? (
             <div style={{ textAlign: "right", marginTop: -6 }}>
               <Link href="/forgot-password" className="tiny">Forgot password?</Link>
             </div>
           ) : null}
-          <button className="btn btn-primary" disabled={loading}>
+          <button className="btn btn-primary" disabled={loading || !captchaToken || success}>
             {loading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
           </button>
         </form>
