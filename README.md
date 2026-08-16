@@ -1,42 +1,39 @@
-# GameSignal
+# Who Plays My Game
 
-GameSignal is a Next.js + Supabase service for monitoring creator activity around video games.
+Who Plays My Game is a Next.js + Supabase service for game developers and publishers that monitors creator activity around tracked games.
 
-Production: `https://game-signals.vercel.app`
+Production: `https://www.whoplaysmygame.com`
 
-## Current foundation
+## Current product
 
-- Next.js App Router frontend preserving the GameSignal landing-page design.
+- Next.js App Router frontend on Vercel.
 - Supabase email/password authentication and protected dashboard.
-- PostgreSQL workspaces, subscriptions, games, aliases, mentions, scan history and notification delivery records.
-- Hardened Row Level Security.
-- Database-enforced tracked-game limits: Free 1, Indie 1, Studio 3, Publisher 10.
-- Real Twitch and YouTube Edge Function workers.
-- Realtime mention updates in the dashboard.
-- Secure Discord webhook management: the saved webhook URL is server-only and is never returned to the browser.
-- Automatic Discord notification delivery every minute through Supabase Cron.
-- Cron authentication generated inside Postgres and stored in Supabase Vault; plaintext is never committed to Git.
+- PostgreSQL workspaces, subscriptions, games, aliases, mentions, scan history and notification records.
+- Real YouTube video monitoring and Twitch live-stream monitoring.
+- Realtime creator-signal dashboard.
+- Game aliases and exclusion terms.
+- Database-enforced active-game limits: Free 1, Indie 1, Studio 3, Publisher 10.
+- Discord alerts for eligible plans.
+- Paddle Merchant-of-Record billing integration in SANDBOX, including Checkout and Customer Portal.
+- Stripe direct-billing code retained as a sandbox/rollback and historical accounting path; Stripe LIVE is not enabled.
+- Kick monitoring and production email alerts remain intentionally unavailable.
 
-## External credentials still required
+## Production domains
 
-Real platform scanning needs these Supabase Edge Function secrets:
+Canonical URL:
 
 ```text
-TWITCH_CLIENT_ID
-TWITCH_CLIENT_SECRET
-YOUTUBE_API_KEY
+https://www.whoplaysmygame.com
 ```
 
-Do not commit or paste those values into source control.
-
-The internal cron authentication secret does **not** need to be supplied manually. `docs/CRON_SETUP.sql` generates it inside Postgres, stores it in Vault and stores only a SHA-256 value in the service-role-only runtime settings table.
+The apex domain redirects to `www` through Vercel. DNS is delegated through Cloudflare in DNS-only mode for the Vercel records.
 
 ## Local setup
 
 Requirements:
 
 - Node.js 22+
-- Supabase CLI
+- Supabase CLI when working with Edge Functions or database migrations
 
 ```bash
 cp .env.example .env.local
@@ -44,82 +41,74 @@ npm install
 npm run dev
 ```
 
-The repository contains safe public defaults for the connected GameSignal Supabase project. Override them only when working with another project.
+Do not commit service-role keys, Paddle/Stripe secrets, platform API keys, Discord webhooks or other credentials.
 
-## Database migrations
+## Supabase Auth production configuration
 
-The filenames in `supabase/migrations` mirror the live Supabase migration history. After linking a matching project:
+The hosted Auth project should use the canonical production domain:
 
-```bash
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-supabase db push
+```text
+Site URL: https://www.whoplaysmygame.com
+Redirect URL: https://www.whoplaysmygame.com/auth/callback
 ```
 
-Environment-specific cron schedules are intentionally provisioned separately from schema migrations. See `docs/CRON_SETUP.sql`.
+Keep local development redirects separately if needed.
 
-## Auth production configuration
+## External platform secrets
 
-The hosted Supabase Auth configuration still needs these dashboard values:
+Real platform scanning uses Supabase Edge Function secrets such as:
 
-- Site URL: `https://game-signals.vercel.app`
-- Redirect URL: `https://game-signals.vercel.app/auth/callback`
+```text
+TWITCH_CLIENT_ID
+TWITCH_CLIENT_SECRET
+YOUTUBE_API_KEY
+```
 
-Email/password auth is the production path today. Google OAuth is intentionally hidden from the interface until the Google provider is configured.
+The internal cron secret is generated/stored through the existing Supabase Vault/runtime setup and is not committed to Git.
+
+## Billing
+
+New subscription checkout currently defaults to Paddle SANDBOX. The application keeps provider identity per subscription so an existing Stripe-backed subscription is not silently converted to Paddle.
+
+Paddle-related runtime configuration is deliberately fail-closed. LIVE billing requires a separate explicit LIVE environment/key/unlock and must not be enabled as part of ordinary deployments.
+
+Current Paddle Sandbox price catalog:
+
+- Indie: $2.99 monthly / $29.90 yearly
+- Studio: $7.99 monthly / $79.90 yearly
+- Publisher: $14.99 monthly / $149.90 yearly
 
 ## Edge Functions
 
-Workers:
+Core active workers include:
 
 ```text
 scan-twitch
 scan-youtube
 notify-discord
 manage-discord
+paddle-billing
+paddle-webhook
 ```
 
-All workers use custom authorization because scheduled jobs and authenticated user requests have different trust models. Scheduled requests carry a Vault-managed secret; workers hash the supplied value and compare it with the service-role-only runtime hash.
-
-Platform secrets can be added with the Supabase dashboard or CLI:
-
-```bash
-supabase secrets set TWITCH_CLIENT_ID=...
-supabase secrets set TWITCH_CLIENT_SECRET=...
-supabase secrets set YOUTUBE_API_KEY=...
-```
-
-Then deploy scanners with JWT gateway verification disabled; they validate authorization internally:
-
-```bash
-supabase functions deploy scan-twitch --no-verify-jwt
-supabase functions deploy scan-youtube --no-verify-jwt
-supabase functions deploy notify-discord --no-verify-jwt
-supabase functions deploy manage-discord --no-verify-jwt
-```
+Some workers deliberately disable Supabase gateway JWT verification because they implement their own authenticated-user or internal-cron authorization. Preserve the existing authorization model when deploying them.
 
 ## Monitoring cadence
 
-Already active:
+- Twitch scheduler: active, with per-plan due-time logic.
+- YouTube scheduler: active, quota-conscious scheduling.
+- Discord delivery: active.
+- Email delivery scheduler: intentionally inactive until a production sender is ready.
 
-- Discord delivery: every minute.
+## Product truth
 
-Enable after external API credentials exist:
+- YouTube: live.
+- Twitch: live.
+- Discord: live on eligible plans.
+- Paddle: Sandbox only.
+- Kick: coming soon, pending supported developer/API access.
+- Production email alerts: coming soon.
+- Stripe LIVE: off.
+- KSeF production submission: off.
 
-- Twitch: recommended scheduler every 3 minutes; each game also stores a plan-dependent `next_scan_at`.
-- YouTube: recommended scheduler every 15 minutes; the worker defaults to one due game per run to conserve YouTube quota.
-
-## What still belongs to later product stages
-
-- Stripe Checkout, webhooks and Billing Portal.
-- Transactional email delivery with a verified sending domain.
-- Kick worker using an official API.
-- Team invitations.
-- Weekly reports / CSV export.
-
-## Security
-
-- No service-role key or external API secret is committed to the repository.
-- Discord webhook destinations are server-only.
-- Internal runtime settings are inaccessible to browser roles.
-- Cron plaintext lives only in Supabase Vault.
-- `pg_net` is used with `pg_cron` according to Supabase's scheduling model. The currently installed `pg_net` package is non-relocatable, so Database Advisor may report an extension-namespace warning even though its API lives in the dedicated `net` schema.
+For the most current engineering state and launch gates, see `PROJECT_STATUS.md`.

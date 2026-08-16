@@ -4,8 +4,8 @@ import { COMPANY } from "@/lib/company";
 import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "Withdrawal — GameSignal",
-  description: "Consumer withdrawal information and model statement for GameSignal.",
+  title: "Withdrawal — Who Plays My Game",
+  description: "Consumer withdrawal information and model statement for Who Plays My Game.",
 };
 
 export default function WithdrawalPage() {
@@ -16,14 +16,14 @@ export default function WithdrawalPage() {
       <article className="auth-card" style={{ width: "min(920px, 100%)", maxWidth: 920 }}>
         <Link href="/" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{COMPANY.productName}</span>
         </Link>
 
         <div className="kicker" style={{ marginTop: 24 }}>Consumer information</div>
         <h1>Withdrawal from an Individual subscription</h1>
         <p>Last updated: {LEGAL_UPDATED_DATE} · Withdrawal information version: {LEGAL_VERSIONS.withdrawal}</p>
         <p>
-          This page is intended for buyers who purchased GameSignal as an individual and who have a statutory right to withdraw from a distance contract. Company/business purchases do not receive an additional contractual 14-day withdrawal right, although mandatory protections that apply by law remain unaffected.
+          This page is intended for buyers who purchased {COMPANY.productName} as an individual and who have a statutory right to withdraw from a distance contract. Company/business purchases do not receive an additional contractual 14-day withdrawal right, although mandatory protections that apply by law remain unaffected.
         </p>
 
         <h2>How to withdraw</h2>
@@ -32,16 +32,16 @@ export default function WithdrawalPage() {
         </p>
         {supportPhone ? <p>Phone contact: <a href={`tel:${supportPhone.replaceAll(" ", "")}`}>{supportPhone}</a>.</p> : null}
         <p>
-          If GameSignal later provides an electronic withdrawal form, a withdrawal submitted through that form will be acknowledged without undue delay on a durable medium as required by applicable law. Email withdrawal remains available independently of such a form.
+          If {COMPANY.productName} later provides an electronic withdrawal form, a withdrawal submitted through that form will be acknowledged without undue delay on a durable medium as required by applicable law. Email withdrawal remains available independently of such a form.
         </p>
         <p>
-          If you expressly requested that GameSignal start immediately during the withdrawal period and you then validly withdraw, applicable law may require payment of a proportionate amount for the service supplied up to the time we receive your withdrawal statement.
+          If you expressly requested that {COMPANY.productName} start immediately during the withdrawal period and you then validly withdraw, applicable law may require payment of a proportionate amount for the service supplied up to the time we receive your withdrawal statement.
         </p>
         <p>
           Starting the service does not by itself mean that a statutory withdrawal right is lost. Any loss of the right after full performance applies only where all statutory conditions for that consequence have been satisfied.
         </p>
         <p>
-          Cancellation of future renewals is different from statutory withdrawal. Ordinary cancellation is available through Stripe Customer Portal and normally takes effect at the end of the current paid period without a prorated refund or credit, except where applicable law requires otherwise.
+          Cancellation of future renewals is different from statutory withdrawal. Ordinary subscription cancellation is available through the applicable billing provider&apos;s customer portal; the current Paddle integration uses Paddle Customer Portal. Cancellation normally takes effect at the end of the current paid period without a prorated refund or credit, except where applicable law requires otherwise.
         </p>
 
         <h2>Model withdrawal statement</h2>
@@ -50,9 +50,9 @@ export default function WithdrawalPage() {
 ${COMPANY.registeredAddress}
 Email: ${COMPANY.supportEmail}${supportPhone ? `\nPhone: ${supportPhone}` : ""}
 
-I hereby give notice that I withdraw from my contract for the GameSignal subscription.
+I hereby give notice that I withdraw from my contract for the ${COMPANY.productName} subscription.
 
-GameSignal account email: __________________________
+${COMPANY.productName} account email: __________________________
 Plan: __________________________
 Order / subscription date: __________________________
 Name: __________________________
@@ -79,7 +79,7 @@ Signature (only if sent on paper): __________________________`}
         </p>
 
         <div className="dashboard-actions" style={{ marginTop: 28 }}>
-          <a className="btn btn-primary" href={`mailto:${COMPANY.supportEmail}?subject=GameSignal%20withdrawal`}>Email withdrawal</a>
+          <a className="btn btn-primary" href={`mailto:${COMPANY.supportEmail}?subject=Who%20Plays%20My%20Game%20withdrawal`}>Email withdrawal</a>
           <Link className="btn btn-ghost" href="/terms">Terms</Link>
           <Link className="btn btn-ghost" href="/privacy">Privacy Policy</Link>
         </div>

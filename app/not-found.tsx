@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
 export default function NotFound() {
   return (
@@ -6,7 +7,7 @@ export default function NotFound() {
       <section className="auth-card">
         <Link href="/" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{BRAND.name}</span>
         </Link>
         <div className="kicker" style={{ marginTop: 24 }}>404</div>
         <h1>Page not found</h1>

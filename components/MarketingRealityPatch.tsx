@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { BRAND } from "@/lib/brand";
 
 function findTextElement(selector: string, startsWith: string) {
   return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) =>
@@ -36,7 +37,7 @@ export default function MarketingRealityPatch() {
       const heroCopy = document.querySelector<HTMLElement>(".hero-copy");
       if (heroCopy) {
         heroCopy.textContent =
-          "GameSignal detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.";
+          `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
       }
 
       const systemState = document.querySelector<HTMLElement>(".system-state");
@@ -139,7 +140,7 @@ export default function MarketingRealityPatch() {
           "Everything in Indie",
           "Discord alerts",
           "Faster monitoring cadence",
-          "Stripe self-service billing",
+          "Paddle self-service billing",
         ],
         Publisher: [
           "Up to 10 active games",
@@ -168,7 +169,7 @@ export default function MarketingRealityPatch() {
         }
         if (question.startsWith("Can I cancel my subscription?")) {
           answer.textContent =
-            "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period.";
+            "Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.";
         }
       });
     };

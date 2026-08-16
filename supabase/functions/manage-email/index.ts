@@ -127,9 +127,9 @@ Deno.serve(async (request) => {
       if (!existing) return json({ error: "Configure an email destination first." }, 409);
       await sendResendEmail(
         existing.destination,
-        "GameSignal test notification",
-        "Your GameSignal email alerts are connected correctly.",
-        `<div style="font-family:system-ui,sans-serif;line-height:1.5"><h2>GameSignal test notification</h2><p>Your email alerts are connected correctly.</p><p style="color:#667085">Workspace: ${escapeHtml(body.workspace_id)}</p></div>`,
+        "Who Plays My Game test notification",
+        "Your Who Plays My Game email alerts are connected correctly.",
+        `<div style="font-family:system-ui,sans-serif;line-height:1.5"><h2>Who Plays My Game test notification</h2><p>Your email alerts are connected correctly.</p><p style="color:#667085">Workspace: ${escapeHtml(body.workspace_id)}</p></div>`,
         `gamesignal-test:${body.workspace_id}:${crypto.randomUUID()}`,
       );
       return json({ ok: true });

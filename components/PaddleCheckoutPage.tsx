@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Script from "next/script";
 import { useState } from "react";
+import { BRAND } from "@/lib/brand";
 
 type PaddleWindow = Window & {
   Paddle?: {
@@ -45,10 +46,10 @@ export default function PaddleCheckoutPage({ clientToken, environment }: Props) 
     <main className="auth-page">
       <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={initialize} onError={() => setError("Could not load Paddle checkout.")} />
       <section className="auth-card">
-        <Link href="/" className="brand"><span className="brand-mark" /><span>GameSignal</span></Link>
+        <Link href="/" className="brand"><span className="brand-mark" /><span>{BRAND.name}</span></Link>
         <div className="kicker" style={{ marginTop: 24 }}>Secure checkout</div>
         <h1>Paddle checkout</h1>
-        <p>Paddle is preparing the secure checkout overlay for your GameSignal subscription.</p>
+        <p>Paddle is preparing the secure checkout overlay for your {BRAND.name} subscription.</p>
         {error ? <div className="auth-error">{error}</div> : <div className="status-message">Checkout should open automatically. If it does not, return to Billing and try again.</div>}
         <div className="dashboard-actions" style={{ marginTop: 18 }}>
           <Link className="btn btn-ghost" href="/dashboard/settings">Back to billing</Link>

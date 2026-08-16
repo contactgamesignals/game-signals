@@ -6,6 +6,18 @@ import { landingMarkup } from "@/lib/landing-markup";
 
 type Source = "youtube" | "twitch" | "kick";
 
+const STORAGE = {
+  demoGame: "who-plays-my-game-demo-game-v1",
+  pendingGame: "who-plays-my-game-pending-game",
+  pendingPlan: "who-plays-my-game-pending-plan",
+} as const;
+
+const LEGACY_STORAGE = {
+  demoGame: "gamesignal-demo-game-v3",
+  pendingGame: "gamesignal-pending-game",
+  pendingPlan: "gamesignal-pending-plan",
+} as const;
+
 export default function LandingPage() {
   const hostRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -55,7 +67,8 @@ export default function LandingPage() {
       if (heroGame) heroGame.textContent = upperName;
       if (workspaceTitle) workspaceTitle.textContent = upperName;
       if (labGame) labGame.value = name;
-      localStorage.setItem("gamesignal-demo-game-v3", name);
+      localStorage.setItem(STORAGE.demoGame, name);
+      localStorage.removeItem(LEGACY_STORAGE.demoGame);
     };
 
     qsa<HTMLElement>("[data-open]").forEach((button) => {
@@ -178,14 +191,15 @@ export default function LandingPage() {
             .filter((item) => item.getAttribute("aria-disabled") !== "true")
             .map((item) => (item.textContent ?? "").trim().toLowerCase()),
         };
-        localStorage.setItem("gamesignal-pending-game", JSON.stringify(payload));
+        localStorage.setItem(STORAGE.pendingGame, JSON.stringify(payload));
+        localStorage.removeItem(LEGACY_STORAGE.pendingGame);
         closeModals();
         router.push(`/signup?game=${encodeURIComponent(payload.title)}`);
       },
       { signal },
     );
 
-    const saved = localStorage.getItem("gamesignal-demo-game-v3");
+    const saved = localStorage.getItem(STORAGE.demoGame) ?? localStorage.getItem(LEGACY_STORAGE.demoGame);
     if (saved) setGame(saved);
 
     qs<HTMLInputElement>("#viewerRange")?.addEventListener(
@@ -298,7 +312,7 @@ export default function LandingPage() {
           const yearly = button.dataset.cycle === "yearly";
           qsa<HTMLElement>(".price").forEach((price) => {
             const value = yearly ? price.dataset.yearly : price.dataset.monthly;
-            price.innerHTML = `${value ?? "0"} PLN <small>/mo</small>`;
+            price.innerHTML = `${value ?? "$0"} <small>/${yearly ? "yr" : "mo"}</small>`;
           });
         },
         { signal },
@@ -310,7 +324,8 @@ export default function LandingPage() {
         "click",
         () => {
           const plan = (button.dataset.plan ?? "indie").toLowerCase();
-          localStorage.setItem("gamesignal-pending-plan", plan);
+          localStorage.setItem(STORAGE.pendingPlan, plan);
+          localStorage.removeItem(LEGACY_STORAGE.pendingPlan);
           router.push(`/signup?plan=${encodeURIComponent(plan)}`);
         },
         { signal },

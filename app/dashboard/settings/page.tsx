@@ -4,6 +4,7 @@ import BillingRecoveryCard from "@/components/BillingRecoveryCard";
 import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
 import SettingsClient from "@/components/SettingsClient";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
+import { BRAND } from "@/lib/brand";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
@@ -91,7 +92,7 @@ export default async function SettingsPage() {
   return (
     <div className="app-shell">
       <header className="app-topbar">
-        <Link href="/dashboard" className="brand"><span className="brand-mark" /><span>GameSignal</span></Link>
+        <Link href="/dashboard" className="brand"><span className="brand-mark" /><span>{BRAND.name}</span></Link>
         <div className="app-topbar-right">{email}</div>
       </header>
       <main className="dashboard-main" style={{ maxWidth: 1180, margin: "0 auto" }}>

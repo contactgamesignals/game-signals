@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -58,14 +59,14 @@ export default function PasswordRecoveryCard({ mode }: Props) {
       <section className="auth-card">
         <Link href="/" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{BRAND.name}</span>
         </Link>
         <div className="kicker" style={{ marginTop: 24 }}>Account recovery</div>
         <h1>{requesting ? "Reset your password" : "Choose a new password"}</h1>
         <p>
           {requesting
             ? "Enter your account email and we’ll send a secure recovery link."
-            : "Set a new password for your GameSignal account."}
+            : `Set a new password for your ${BRAND.name} account.`}
         </p>
 
         {message ? <div className={success ? "auth-success" : "auth-error"}>{message}</div> : null}

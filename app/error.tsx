@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { BRAND } from "@/lib/brand";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -13,17 +14,17 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
       <section className="auth-card">
         <Link href="/" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{BRAND.name}</span>
         </Link>
         <div className="kicker" style={{ marginTop: 24 }}>Something went wrong</div>
         <h1>We could not load this page</h1>
-        <p>Try again. If the problem continues, contact GameSignal support.</p>
+        <p>Try again. If the problem continues, contact {BRAND.name} support.</p>
         <div className="dashboard-actions" style={{ marginTop: 18 }}>
           <button className="btn btn-primary" onClick={reset}>Try again</button>
           <Link className="btn btn-ghost" href="/dashboard">Dashboard</Link>
         </div>
         <div className="auth-links">
-          <a href="mailto:contact.gamesignals@gmail.com">contact.gamesignals@gmail.com</a>
+          <a href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
         </div>
       </section>
     </main>

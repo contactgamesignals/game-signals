@@ -89,7 +89,7 @@ async function deliverOne(
       body: JSON.stringify({
         from: fromEmail,
         to: [row.recipient_email.trim()],
-        subject: "GameSignal — confirmation of your subscription contract",
+        subject: "Who Plays My Game — confirmation of your subscription contract",
         text: row.confirmation_text,
         html: `<pre style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.55">${escapeHtml(row.confirmation_text)}</pre>`,
       }),
@@ -123,8 +123,6 @@ async function deliverOne(
     return "retryable" as const;
   }
 
-  // Resend documents 409 idempotency conflicts/concurrent requests separately.
-  // Both mean delivery outcome needs reconciliation rather than blind resend.
   if (response.status === 409 || response.status === 408) {
     await transition(supabase, row, "needs_review", { error: `${errorText} Automatic retry disabled.` });
     return "needs_review" as const;
@@ -142,8 +140,6 @@ Deno.serve(async (request) => {
     const auth = await authorizeRequest(request);
     if (!auth.internal) return json({ error: "Forbidden." }, 403);
 
-    // Validate transactional sender configuration BEFORE claiming any rows.
-    // Missing sender/domain configuration must leave confirmations pending.
     const apiKey = required(Deno.env.get("RESEND_API_KEY"), "RESEND_API_KEY");
     const fromEmail = required(Deno.env.get("RESEND_FROM_EMAIL"), "RESEND_FROM_EMAIL");
 
@@ -168,9 +164,6 @@ Deno.serve(async (request) => {
         const result = await deliverOne(supabase, row, apiKey, fromEmail);
         summary[result] += 1;
       } catch (error) {
-        // If provider delivery succeeded but the DB transition failed, the row
-        // stays `sending`, which the claim RPC never auto-reclaims. This is
-        // deliberately fail-closed and requires reconciliation/manual review.
         summary.transition_errors += 1;
         console.error("Contract-confirmation delivery transition error", row.id, error);
       }

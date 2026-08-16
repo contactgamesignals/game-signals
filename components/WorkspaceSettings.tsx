@@ -72,7 +72,7 @@ export default function WorkspaceSettings({
 
   async function deleteAccount() {
     if (deleteConfirmation !== "DELETE") return;
-    if (!window.confirm("Permanently delete your GameSignal account and workspace data? Required billing/accounting records may be retained separately where legally required. This cannot be undone.")) return;
+    if (!window.confirm(`Permanently delete your ${COMPANY.productName} account and workspace data? Required billing/accounting records may be retained separately where legally required. This cannot be undone.`)) return;
 
     setDeleteBusy(true);
     setDeleteError(null);
@@ -99,7 +99,7 @@ export default function WorkspaceSettings({
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Workspace & account</h2>
-            <p>Update how your workspace and account are displayed inside GameSignal.</p>
+            <p>Update how your workspace and account are displayed inside {COMPANY.productName}.</p>
           </div>
           <span className="plan-pill">Account</span>
         </div>
@@ -132,7 +132,7 @@ export default function WorkspaceSettings({
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Operator & legal</h2>
-            <p>GameSignal is operated by {COMPANY.legalName}.</p>
+            <p>{COMPANY.productName} is operated by {COMPANY.legalName}.</p>
           </div>
           <span className="plan-pill">Operator</span>
         </div>
@@ -163,13 +163,13 @@ export default function WorkspaceSettings({
         <section className="settings-card">
           <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
             <div>
-              <h2>Accounting export</h2>
-              <p>Download Stripe billing records for bookkeeping and future KSeF/OSS workflows.</p>
+              <h2>Legacy direct-billing export</h2>
+              <p>Download retained Stripe direct-billing records used by the legacy/rollback billing route.</p>
             </div>
             <span className="plan-pill">Owner / admin</span>
           </div>
           <div className="status-message" style={{ marginBottom: 14 }}>
-            Invoice snapshots and billing adjustments are kept separately. Direct card refunds that cannot be safely linked to an invoice are flagged for accounting review instead of being guessed automatically.
+            New subscriptions currently use Paddle Sandbox. These exports are kept for historical direct-billing/accounting records and do not replace Paddle customer documents.
           </div>
           <div className="dashboard-actions">
             <a className="btn btn-ghost" href="/api/accounting/billing-export">Download invoices CSV</a>
@@ -182,7 +182,7 @@ export default function WorkspaceSettings({
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Danger zone</h2>
-            <p>Permanently delete your GameSignal account and owned workspace data.</p>
+            <p>Permanently delete your {COMPANY.productName} account and owned workspace data.</p>
           </div>
           <span className="plan-pill">Permanent</span>
         </div>

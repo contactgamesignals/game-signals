@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 
 const yearlyTotals: Record<string, string> = {
-  Indie: "245",
-  Studio: "645",
-  Publisher: "1495",
+  Indie: "$29.90",
+  Studio: "$79.90",
+  Publisher: "$149.90",
 };
 
 export default function PricingCyclePatch() {
@@ -18,12 +18,12 @@ export default function PricingCyclePatch() {
 
         if (yearly) {
           const total = yearlyTotals[name];
-          if (total) price.innerHTML = `${total} PLN <small>/yr</small>`;
+          if (total) price.innerHTML = `${total} <small>/yr</small>`;
           return;
         }
 
         const monthly = price.dataset.monthly;
-        if (monthly) price.innerHTML = `${monthly} PLN <small>/mo</small>`;
+        if (monthly) price.innerHTML = `${monthly} <small>/mo</small>`;
       });
     };
 

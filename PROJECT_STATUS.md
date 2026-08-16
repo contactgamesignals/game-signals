@@ -1,214 +1,162 @@
-# GameSignal — current project status
+# Who Plays My Game — current project status
 
-Last verified: 2026-08-15.
+Last updated: 2026-08-16.
 
-Repository alignment: the verified readiness branch was merged into `main` on 2026-08-15; this file now describes the `main` source of truth and the live Supabase runtime.
+This file is the compact source of truth for the current product state. Historical GameSignal readiness/checkpoint files remain useful as audit history, but current code/runtime and this document take precedence where old branding or architecture notes conflict.
 
-This file is the compact source of truth for the current product state. Historical readiness/checkpoint documents remain useful as audit history, but if an older note conflicts with this file or the current runtime, use the current runtime and current code.
+## Product and brand
 
-## Product
+Who Plays My Game is a subscription application for game developers and publishers. A workspace adds games and the service monitors public creator activity around those titles.
 
-GameSignal is a subscription application for game developers and publishers. A workspace adds games and GameSignal monitors the web for creator activity around those titles.
+Current public brand:
 
-Currently supported in the real product:
+- product: Who Plays My Game
+- canonical production URL: `https://www.whoplaysmygame.com`
+- support email: `whoplaysmygame@gmail.com`
+- operator: Lumino Games sp. z o.o.
+
+Historical technical identifiers such as `GAMESIGNAL_*`, migration names and some database evidence labels are intentionally retained where changing them could break compatibility or audit continuity.
+
+## Live product
+
+Currently implemented:
 
 - YouTube video monitoring;
 - Twitch live-stream monitoring;
-- live creator-signal dashboard;
+- real Supabase-backed creator-signal dashboard;
 - aliases and exclusion terms;
+- game create/edit/pause/resume/remove flows;
+- realtime mention updates;
 - Discord alerts for eligible plans;
 - plan-based active-game limits;
-- Stripe-hosted subscription Checkout and Customer Portal in SANDBOX;
-- accounting/billing evidence and exports.
+- Publisher CSV export;
+- account/workspace settings, export and guarded deletion;
+- public Terms, Privacy and Withdrawal pages;
+- Paddle Merchant-of-Record billing integration in SANDBOX;
+- Paddle Customer Portal integration;
+- provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe.
 
-Kick and production email delivery remain intentionally unavailable until their external prerequisites are met.
+Kick and production email alerts remain intentionally unavailable.
 
-## Live application
+## Domain and hosting
 
-- Production URL: `https://game-signals.vercel.app`.
-- Next.js 16 application deployed through Vercel Git integration.
-- Supabase email/password authentication with signup confirmation, login, forgot/reset password and protected dashboard/settings.
-- Workspace/account settings, account export and guarded account deletion.
-- First-user onboarding and landing -> signup -> dashboard handoff.
-- Tracked-game CRUD, Edit, Pause, Resume and Remove.
-- Active monitoring limits are enforced in the database and protected against concurrent limit bypass:
-  - Free: 1 active game
-  - Indie: 1
-  - Studio: 3
-  - Publisher: 10
-- Publisher signal CSV export includes spreadsheet formula-injection protection.
-- Production security headers are enabled.
-- Branded 404 and error screens are present.
+Vercel hosts the application.
+
+- `https://whoplaysmygame.com` redirects to `https://www.whoplaysmygame.com`.
+- both domains are attached to the Vercel project and have valid DNS configuration;
+- Cloudflare is used for DNS, with the Vercel records kept DNS-only;
+- the previous `game-signals.vercel.app` address is a legacy deployment hostname, not the public canonical URL.
+
+## Authentication
+
+Supabase email/password authentication supports:
+
+- signup confirmation;
+- login;
+- forgot/reset password;
+- protected dashboard/settings.
+
+The production Supabase Auth dashboard should use the canonical Who Plays My Game domain for Site URL and redirect allowlisting. Localhost redirects may be kept for development.
 
 ## Monitoring runtime
 
-Real monitoring is active.
+Real monitoring is active:
 
-- Twitch Edge Function: ACTIVE; scheduler every minute with per-plan due-time logic.
-- YouTube Edge Function: ACTIVE; scheduler every 15 minutes with quota-conscious due-game scheduling.
-- Discord notification worker: ACTIVE; scheduler every minute.
-- Email scheduler exists but is intentionally inactive until a verified sender domain is configured.
+- Twitch Edge Function and scheduler;
+- YouTube Edge Function and scheduler;
+- Discord notification worker and scheduler.
 
-Runtime verification on 2026-08-15:
-
-- one active tracked game existed in the live Supabase database;
-- YouTube and Twitch scan timestamps were updating normally;
-- recent cron executions were succeeding;
-- recent scan runs were successful;
-- no new creator matches in the preceding 24 hours was a data/result condition, not a stopped scheduler;
-- historical real YouTube mention evidence exists in the database;
-- real AFTERBLAST monitoring and Discord delivery were verified earlier in the project.
-
-## Dashboard and user flow
-
-The authenticated dashboard is backed by real Supabase data, not the landing-page demo.
-
-- Mentions are loaded from the database.
-- New/updated mentions arrive through Supabase Realtime.
-- YouTube and Twitch filters are real.
-- Twitch LIVE state uses recent `last_seen_at` evidence.
-- Game scan timestamps are shown to the user.
-- Empty states explain that monitoring is automatic.
-- Creating/editing/pausing/resuming/removing a monitor calls the real API routes.
-
-The public `Signal Lab` on the landing page is an explicitly labelled interactive marketing demo and must not be confused with the authenticated real dashboard.
+The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
 
 ## Billing
 
-Stripe is fully configured and tested in SANDBOX, but real charges are not enabled.
+### Current default: Paddle Sandbox
 
-Connected Stripe account verified on 2026-08-15:
+Paddle is the default provider for new subscription checkout in the current code path.
 
-- display name: `GameSignals sandbox`;
-- therefore the current connected Stripe account cannot be treated as a LIVE payments account.
+Sandbox catalog:
 
-Sandbox functionality already implemented/tested:
+- Indie: $2.99/month or $29.90/year
+- Studio: $7.99/month or $79.90/year
+- Publisher: $14.99/month or $149.90/year
 
-- Indie, Studio and Publisher monthly + yearly prices;
-- Stripe Checkout;
-- Stripe Customer Portal;
-- Individual / solo and Company / business buyer paths;
-- Polish billing address collection;
-- Company identity and supported Tax ID collection;
-- recurring-billing/Terms/Privacy consent evidence;
-- automatic Stripe Tax configuration for the currently modelled active-VAT seller;
-- subscription lifecycle synchronization;
-- payment recovery behaviour;
-- invoice lifecycle ledger;
-- Credit Notes/refunds;
-- disputes/chargebacks evidence;
-- accounting CSV exports;
-- Tax ID verification reconciliation safeguards.
+Implemented/tested:
 
-Future LIVE-capable Stripe billing/webhook code is guarded by explicit TEST/LIVE runtime checks. A LIVE Stripe secret alone is not treated as authorization to charge customers.
+- checkout transaction creation;
+- webhook subscription synchronization;
+- active subscription state in Supabase;
+- customer/subscription identifiers;
+- Paddle Customer Portal;
+- cancellation at the end of the paid period;
+- duplicate-subscription protection;
+- provider-aware Settings UI;
+- explicit Sandbox/LIVE locks.
 
-## Seller / VAT profile
+Paddle LIVE remains OFF and must require a deliberate separate cutover.
 
-Current working seller/operator:
+### Legacy/direct Stripe path
+
+The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as a rollback/legacy path. Existing Stripe-backed records must remain provider-associated.
+
+Stripe LIVE is OFF. Do not turn it on as part of normal deployments or the rebrand.
+
+Some historical direct-billing evidence structures deliberately continue using Stripe-specific field names and immutable legal-version snapshots. Do not rename or rewrite those merely for branding.
+
+## Seller/operator
+
+Current operator:
 
 - Lumino Games sp. z o.o.
 - KRS: `0000910452`
 - NIP: `6762600090`
 - REGON: `389433660`
 - registered address: `ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Poland`
-- support/privacy: `contact.gamesignals@gmail.com`
+- support/privacy: `whoplaysmygame@gmail.com`
 
-Current billing tax profile, verified on 2026-08-14:
+## Legal pages
 
-- Polish VAT status: ACTIVE;
-- VAT-UE/VIES: VALID;
-- customer-facing Stripe prices: VAT-inclusive;
-- EU/non-EU routes remain fail-closed wherever transaction-level evidence/tax handling is not explicitly approved.
+Public legal pages are aligned to the Who Plays My Game brand and current closed-beta architecture:
 
-Older notes describing Lumino Games as VAT-exempt are historical and are superseded by the verified 2026-08-14 active-VAT/VAT-UE state.
+- Paddle Sandbox is the current default test checkout;
+- no real-money billing is enabled;
+- Paddle is described as Merchant of Record for a future Paddle transaction;
+- legacy Stripe/direct-billing infrastructure is identified as non-default rollback/history rather than the active customer route;
+- mandatory consumer rights are not excluded.
 
-## Polish invoice / KSeF readiness
+Current web legal versions:
 
-A substantial KSeF/FA(3) implementation exists and is intentionally fail-closed.
+- Terms: `2026-08-16-v4`
+- Privacy: `2026-08-16-v4`
+- Withdrawal: `2026-08-16-v2`
 
-Implemented/tested on the readiness branch and supporting Supabase schema:
-
-- durable seller-document queue;
-- seller snapshot evidence;
-- atomic/idempotent legal document numbering;
-- sandbox documents cannot consume legal invoice numbers;
-- immutable FA(3) XML snapshot with SHA-256 verification;
-- official MF FA(3) XSD validation;
-- anonymized KSeF TEST OnlineSession/UPO regression;
-- persist-before-send KSeF state machine;
-- pre-submit vs ambiguous post-submit failure separation;
-- no blind retry after ambiguous submission;
-- deterministic pending-session reconciliation;
-- KSeF `440` duplicate reconciliation using original-session evidence;
-- UPO hashing/evidence;
-- production KSeF remains separately locked.
-
-GameSignal does not automatically rely on the temporary 2026 PLN 10,000 KSeF transition because the application cannot know all seller-wide invoice activity outside GameSignal.
-
-## Legal / consumer pages
-
-Public pages exist for:
-
-- Terms;
-- Privacy Policy;
-- Withdrawal information/model statement.
-
-Checkout records the buyer path and required acceptance evidence. Additional immutable contract-confirmation storage/delivery safeguards have been developed as readiness infrastructure; they must not distract from the core product roadmap and should only be extended when directly required for launch/runtime behaviour.
+The legacy Stripe durable-contract-confirmation core retains its own historical immutable version identifiers because it represents a separate direct-billing evidence path.
 
 ## Email
 
-The Resend-based email delivery backend exists, but production email alerts remain OFF.
+The Resend-based email backend exists, but production email alerts remain OFF.
 
-External prerequisite:
-
-- verify a production sending domain / sender identity.
-
-Until then the product truthfully presents email alerts as Coming soon. Do not activate the email cron with an unverified sender.
+Do not enable the email scheduler until a production sender/domain is verified and the launch decision explicitly includes email alerts.
 
 ## Kick
 
-Kick monitoring remains Coming soon.
+Kick monitoring remains Coming soon. Do not implement scraping or unsupported/private endpoints as a workaround for missing appropriate API/developer access.
 
-External prerequisite:
+## KSeF / direct-billing accounting readiness
 
-- obtain appropriate KICK developer/API/commercial approval for the intended monitoring use.
+A substantial fail-closed KSeF and seller-document implementation remains in the repository for the legacy/direct seller billing route. KSeF production submission remains locked.
 
-Do not implement scraping or private/unsupported endpoints as a workaround.
+The Paddle Merchant-of-Record customer route must not be conflated with the old direct Stripe seller-invoice architecture. Preserve old evidence code where needed for history/rollback; do not activate KSeF PROD during the rebrand.
 
-## Current automation
+## Security and launch locks
 
-Expected runtime jobs:
+Keep these invariants:
 
-- `gamesignal-discord-every-minute` — ACTIVE;
-- `gamesignal-twitch-every-minute` — ACTIVE;
-- `gamesignal-youtube-every-15-minutes` — ACTIVE;
-- `gamesignal-stripe-tax-id-every-5-minutes` — ACTIVE;
-- `gamesignal-email-every-minute` — INACTIVE intentionally.
+- Paddle LIVE: OFF until separately approved;
+- Stripe LIVE: OFF;
+- KSeF PROD: OFF;
+- Kick: OFF;
+- production email scheduler: OFF;
+- no secrets committed to Git;
+- database/RLS and custom worker authorization remain intact.
 
-## Security / infrastructure notes
-
-Supabase known items:
-
-- `pg_net` in the public schema remains intentionally because the current scheduler path depends on it;
-- Leaked Password Protection is still disabled and should be enabled in Supabase Auth before public paid launch;
-- informational unused-index hints are expected on the current small dataset and are not a reason to delete indexes now.
-
-Vercel verification on 2026-08-15:
-
-- production site returned HTTP 200;
-- no production runtime error clusters were reported for the preceding 24 hours;
-- current readiness-branch previews built successfully.
-
-## What is actually left before a real paid launch
-
-Do not restart already completed product engineering. The remaining blockers are narrow:
-
-1. **Stripe LIVE account/configuration** — the connected Stripe account is currently sandbox. Create/connect the real LIVE account and reproduce the already-tested prices, Tax, webhook and Portal configuration, then perform a separately authorized cutover.
-2. **Final seller/KSeF production credentials** — immediately before LIVE re-check seller/VAT/VAT-UE/KRS evidence and configure the final production KSeF authorization/InvoiceWrite evidence while keeping the legal-effect unlock separate until cutover.
-3. **Supabase Leaked Password Protection** — enable in Auth settings and re-run Security Advisor.
-4. **Email, if wanted at launch** — verify the production sender domain; otherwise leave Email Coming soon.
-5. **Kick** — obtain the required KICK approval; otherwise leave Kick Coming soon.
-6. **Scaling** — review/request YouTube Search API quota before meaningful customer scale.
-7. Run one final production-launch smoke checklist, then enable LIVE billing deliberately.
-
-Everything else should now be treated as product maintenance/polish rather than a reason to delay normal use of the working authentication, dashboard, game monitoring and Discord-alert system.
+Before a public paid launch, re-check current seller/company information, production billing-provider configuration, authentication redirects, security settings, platform quotas and the final legal/consumer checkout flow.

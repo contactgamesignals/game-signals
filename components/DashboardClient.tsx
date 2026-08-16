@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 import type { PlanName } from "@/lib/plans";
@@ -31,6 +32,8 @@ type GameConfigResponse = {
 };
 
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
+const PENDING_GAME_STORAGE_KEY = "who-plays-my-game-pending-game";
+const LEGACY_PENDING_GAME_STORAGE_KEY = "gamesignal-pending-game";
 
 function platformClass(platform: DashboardMention["platform"]) {
   if (platform === "youtube") return { cls: "y", short: "YT" };
@@ -127,10 +130,11 @@ export default function DashboardClient({
   }, [games, workspaceId]);
 
   useEffect(() => {
-    const pendingRaw = localStorage.getItem("gamesignal-pending-game");
+    const pendingRaw = localStorage.getItem(PENDING_GAME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PENDING_GAME_STORAGE_KEY);
     if (!pendingRaw) return;
 
-    localStorage.removeItem("gamesignal-pending-game");
+    localStorage.removeItem(PENDING_GAME_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_PENDING_GAME_STORAGE_KEY);
     try {
       const pending = JSON.parse(pendingRaw) as PendingGame;
       setEditingGame(null);
@@ -262,7 +266,7 @@ export default function DashboardClient({
       <header className="app-topbar">
         <Link href="/dashboard" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{BRAND.name}</span>
         </Link>
         <div className="app-topbar-right">
           <span>{email}</span>
@@ -317,7 +321,7 @@ export default function DashboardClient({
               </div>
               <div className="dashboard-panel-body">
                 <div className="settings-row" style={{ borderTop: 0 }}>
-                  <div><strong>1. Add a game</strong><p>Enter the title and optional aliases so GameSignal knows what to look for.</p></div>
+                  <div><strong>1. Add a game</strong><p>Enter the title and optional aliases so {BRAND.name} knows what to look for.</p></div>
                   <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
                 </div>
                 <div className="settings-row">
@@ -367,7 +371,7 @@ export default function DashboardClient({
               )) : (
                 <div className="empty-state">
                   <strong>No games tracked yet</strong>
-                  Add your first game and GameSignal will start monitoring YouTube and Twitch automatically.
+                  Add your first game and {BRAND.name} will start monitoring YouTube and Twitch automatically.
                 </div>
               )}
             </div>
@@ -409,7 +413,7 @@ export default function DashboardClient({
               }) : (
                 <div className="empty-state">
                   <strong>No matching signals yet</strong>
-                  GameSignal is monitoring your tracked games. New YouTube videos and Twitch streams will appear here automatically.
+                  {BRAND.name} is monitoring your tracked games. New YouTube videos and Twitch streams will appear here automatically.
                 </div>
               )}
             </div>

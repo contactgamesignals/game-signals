@@ -111,10 +111,10 @@ Deno.serve(async (request) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "User-Agent": Deno.env.get("DISCORD_USER_AGENT") ?? "GameSignal/0.1",
+            "User-Agent": Deno.env.get("DISCORD_USER_AGENT") ?? "WhoPlaysMyGame/0.1",
           },
           body: JSON.stringify({
-            username: "GameSignal",
+            username: "Who Plays My Game",
             embeds: [{
               title: mention.platform === "youtube" ? "New YouTube video detected" : `New ${mention.platform} stream detected`,
               description: `**${mention.creator_name}** mentioned or started playing **${game.title}**.`,

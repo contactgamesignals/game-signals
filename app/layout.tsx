@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
+import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -15,9 +16,13 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "GameSignal — creator intelligence for game developers",
+  metadataBase: new URL(BRAND.siteUrl),
+  title: `${BRAND.name} — creator intelligence for game developers`,
   description:
     "Monitor YouTube videos and Twitch live streams about your game. Kick monitoring is planned, pending KICK developer approval.",
+  alternates: {
+    canonical: "/",
+  },
   icons: {
     icon: "/favicon.svg",
   },

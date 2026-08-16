@@ -16,9 +16,9 @@ const headers = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SITE_URL = Deno.env.get("GAMESIGNAL_SITE_URL") ?? "https://game-signals.vercel.app";
-const TERMS_VERSION = "2026-08-13-v2";
-const PRIVACY_VERSION = "2026-08-13-v2";
+const PUBLIC_SITE_URL = "https://www.whoplaysmygame.com";
+const TERMS_VERSION = "2026-08-16-v4";
+const PRIVACY_VERSION = "2026-08-16-v4";
 
 type BuyerType = "individual" | "company";
 type PaddleObject = Record<string, unknown>;
@@ -33,6 +33,18 @@ function objectValue(value: unknown): PaddleObject | null {
 
 function isBuyerType(value: unknown): value is BuyerType {
   return value === "individual" || value === "company";
+}
+
+function canonicalSiteUrl() {
+  const configured = Deno.env.get("GAMESIGNAL_SITE_URL")?.trim().replace(/\/+$/, "");
+  if (!configured || configured.includes("game-signals.vercel.app")) return PUBLIC_SITE_URL;
+  return configured;
+}
+
+function paddleCheckoutUrl() {
+  const configured = Deno.env.get("PADDLE_CHECKOUT_URL")?.trim();
+  if (!configured || configured.includes("game-signals.vercel.app")) return `${canonicalSiteUrl()}/pay`;
+  return configured;
 }
 
 function serviceClient() {
@@ -209,7 +221,6 @@ Deno.serve(async (request) => {
       .single();
     if (consentError || !consent?.id) throw new Error("Could not record checkout consent.");
 
-    const checkoutUrl = Deno.env.get("PADDLE_CHECKOUT_URL")?.trim() || `${SITE_URL}/pay`;
     const transaction = await paddleRequest("/transactions", {
       method: "POST",
       body: {
@@ -217,13 +228,14 @@ Deno.serve(async (request) => {
         collection_mode: "automatic",
         custom_data: {
           gamesignal: "true",
+          product: "who-plays-my-game",
           workspace_id: body.workspace_id,
           plan: body.plan,
           billing_period: body.period,
           buyer_type: body.buyer_type,
           consent_id: String(consent.id),
         },
-        checkout: { url: checkoutUrl },
+        checkout: { url: paddleCheckoutUrl() },
       },
     });
 

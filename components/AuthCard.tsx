@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -71,7 +72,7 @@ export default function AuthCard({ mode, configured }: Props) {
       <section className="auth-card">
         <Link href="/" className="brand">
           <span className="brand-mark" />
-          <span>GameSignal</span>
+          <span>{BRAND.name}</span>
         </Link>
         <div className="kicker" style={{ marginTop: 24 }}>
           {isLogin ? "Account access" : "Create workspace"}

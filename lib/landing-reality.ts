@@ -1,3 +1,4 @@
+import { BRAND, LEGACY_BRAND } from "@/lib/brand";
 import { landingMarkup as baseLandingMarkup } from "@/lib/landing-markup-base";
 
 function replace(source: string, before: string, after: string) {
@@ -9,9 +10,9 @@ let markup = baseLandingMarkup;
 markup = replace(
   markup,
   "GameSignal detects new YouTube videos plus live streams on Twitch and Kick. Instead of manually searching the web, you get one clean feed and alerts when it actually matters.",
-  "GameSignal detects new YouTube videos and live streams on Twitch. Instead of manually searching the web, you get one clean feed of creator signals. Kick monitoring is planned, pending KICK developer approval.",
+  `${BRAND.name} detects new YouTube videos and live streams on Twitch. Instead of manually searching the web, you get one clean feed of creator signals. Kick monitoring is planned, pending KICK developer approval.`,
 );
-markup = replace(markup, "No credit card required. Add your game title and try the interactive monitoring demo.", "Closed beta. No real payments are accepted yet; billing currently uses Stripe sandbox.");
+markup = replace(markup, "No credit card required. Add your game title and try the interactive monitoring demo.", "Closed beta. Paddle Sandbox is enabled for test checkout; no real payments are accepted.");
 markup = replace(markup, '<div class="platform"><span class="dot ki"></span>Kick</div>', '<div class="platform"><span class="dot ki"></span>Kick · coming soon</div>');
 markup = replace(markup, '<div class="platform">Email + Discord</div>', '<div class="platform">Discord · Email coming soon</div>');
 markup = replace(markup, '<div class="system-state"><i></i> 3 sources online</div>', '<div class="system-state"><i></i> 2 sources online</div>');
@@ -36,7 +37,23 @@ markup = replace(markup, '<div class="result" data-source="kick" data-viewers="7
 markup = replace(
   markup,
   "A simple subscription model based on the number of tracked games and how quickly you want alerts to arrive.",
-  "Closed beta pricing preview. Checkout currently uses Stripe sandbox and does not charge real money. At checkout you can purchase as Individual / solo or Company / business.",
+  "Closed beta pricing preview. Checkout currently uses Paddle Sandbox and does not charge real money. Paddle acts as Merchant of Record for the customer transaction.",
+);
+
+markup = replace(
+  markup,
+  '<div class="price" data-monthly="24.5" data-yearly="20.5">24.5 PLN <small>/mo</small></div>',
+  '<div class="price" data-monthly="$2.99" data-yearly="$29.90">$2.99 <small>/mo</small></div>',
+);
+markup = replace(
+  markup,
+  '<div class="price" data-monthly="64.5" data-yearly="54">64.5 PLN <small>/mo</small></div>',
+  '<div class="price" data-monthly="$7.99" data-yearly="$79.90">$7.99 <small>/mo</small></div>',
+);
+markup = replace(
+  markup,
+  '<div class="price" data-monthly="149.5" data-yearly="124.5">149.5 PLN <small>/mo</small></div>',
+  '<div class="price" data-monthly="$14.99" data-yearly="$149.90">$14.99 <small>/mo</small></div>',
 );
 
 markup = replace(
@@ -47,7 +64,7 @@ markup = replace(
 markup = replace(
   markup,
   '<ul><li><span class="check">✓</span>Up to 3 games</li><li><span class="check">✓</span>Email + Discord alerts</li><li><span class="check">✓</span>Faster refresh rate</li><li><span class="check">✓</span>12-month history</li><li><span class="check">✓</span>3 team members</li></ul>',
-  '<ul><li><span class="check">✓</span>Up to 3 active games</li><li><span class="check">✓</span>Everything in Indie</li><li><span class="check">✓</span>Discord alerts</li><li><span class="check">✓</span>Faster monitoring cadence</li><li><span class="check">✓</span>Stripe self-service billing</li></ul>',
+  '<ul><li><span class="check">✓</span>Up to 3 active games</li><li><span class="check">✓</span>Everything in Indie</li><li><span class="check">✓</span>Discord alerts</li><li><span class="check">✓</span>Faster monitoring cadence</li><li><span class="check">✓</span>Paddle self-service billing</li></ul>',
 );
 markup = replace(
   markup,
@@ -62,23 +79,27 @@ markup = replace(
 markup = replace(
   markup,
   "Yes. In the production version you will be able to cancel from account settings while keeping access until the end of the paid period.",
-  "Yes. Paid subscriptions are managed in Stripe Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.",
+  "Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.",
 );
 markup = replace(
   markup,
   '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Privacy Policy · Terms · Contact</div></div></footer>',
-  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+  `<footer><div class="shell footer-inner"><div>© 2026 ${BRAND.name} · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:${BRAND.supportEmail}">Contact</a></div></div></footer>`,
 );
 markup = replace(
   markup,
   '<footer><div class="shell footer-inner"><div>© 2026 GameSignal. Creator intelligence for game developers.</div><div>Closed beta · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
-  '<footer><div class="shell footer-inner"><div>© 2026 GameSignal · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:contact.gamesignals@gmail.com">Contact</a></div></div></footer>',
+  `<footer><div class="shell footer-inner"><div>© 2026 ${BRAND.name} · operated by Lumino Games sp. z o.o.</div><div><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a> · <a href="/withdrawal">Withdrawal</a> · <a href="mailto:${BRAND.supportEmail}">Contact</a></div></div></footer>`,
 );
 markup = replace(markup, '<div class="notification"><strong>New creator detected</strong><p>RavenByte is streaming your game on Kick for the first time.</p></div>', '');
 markup = replace(markup, '<button type="button" class="source-check selected">Kick</button>', '<button type="button" class="source-check" aria-disabled="true" style="opacity:.55">Kick · soon</button>');
 markup = replace(markup, '<div class="notice">Interactive frontend demo. A production version still needs APIs, a database, auth, and payments.</div>', '<div class="notice">After signup, YouTube and Twitch monitoring starts automatically. Kick and email delivery are coming soon.</div>');
-markup = replace(markup, '<div class="notice">In production this form should be connected to your authentication system.</div>', '<div class="notice">Account access is handled by the live GameSignal authentication system.</div>');
-markup = replace(markup, '<p style="color:#9099ad">In production this step would create a checkout session and activate the selected plan after payment.</p>', '<p style="color:#9099ad">Paid plans use Stripe-hosted Checkout and can be managed later in Stripe Customer Portal.</p>');
-markup = replace(markup, '<div class="notice">This demo does not process any payments.</div>', '<div class="notice">Closed beta billing currently uses Stripe sandbox and does not charge real money.</div>');
+markup = replace(markup, '<div class="notice">In production this form should be connected to your authentication system.</div>', `<div class="notice">Account access is handled by the live ${BRAND.name} authentication system.</div>`);
+markup = replace(markup, '<p style="color:#9099ad">In production this step would create a checkout session and activate the selected plan after payment.</p>', '<p style="color:#9099ad">Paid plans use Paddle Checkout and can be managed later in Paddle Customer Portal.</p>');
+markup = replace(markup, '<div class="notice">This demo does not process any payments.</div>', '<div class="notice">Closed beta billing currently uses Paddle Sandbox and does not charge real money.</div>');
+
+markup = markup
+  .replaceAll(LEGACY_BRAND.name, BRAND.name)
+  .replaceAll(LEGACY_BRAND.supportEmail, BRAND.supportEmail);
 
 export const landingRealityMarkup = markup;

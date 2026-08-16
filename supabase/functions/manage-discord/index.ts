@@ -100,12 +100,12 @@ Deno.serve(async (request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: "GameSignal",
+          username: "Who Plays My Game",
           embeds: [{
-            title: "GameSignal test notification",
+            title: "Who Plays My Game test notification",
             description: "Your Discord webhook is connected correctly.",
             color: 3532799,
-            footer: { text: "GameSignal" },
+            footer: { text: "Who Plays My Game" },
             timestamp: new Date().toISOString(),
           }],
         }),
