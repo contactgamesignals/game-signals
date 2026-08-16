@@ -39,7 +39,7 @@ assert.match(privacy, /Automated processing/);
 assert.match(privacy, /Article 22 GDPR/);
 assert.match(privacy, /Merchant of Record/i);
 assert.match(privacy, /We do not receive or store full payment-card details/i);
-assert.match(privacy, /Paddle Sandbox/i);
+assert.match(privacy, /Paddle integration is Sandbox only/i);
 assert.match(privacy, /legacy\/direct billing route/i);
 
 assert.match(withdrawal, /Withdrawal information version: \{LEGAL_VERSIONS\.withdrawal\}/);
