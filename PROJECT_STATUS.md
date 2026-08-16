@@ -38,14 +38,17 @@ Currently implemented:
 
 Kick and production email alerts remain intentionally unavailable.
 
-## Domain and hosting
+## Domain, hosting and SEO
 
 Vercel hosts the application.
 
-- `https://whoplaysmygame.com` redirects to `https://www.whoplaysmygame.com`.
+- `https://whoplaysmygame.com` redirects to `https://www.whoplaysmygame.com`;
 - both domains are attached to the Vercel project and have valid DNS configuration;
 - Cloudflare is used for DNS, with the Vercel records kept DNS-only;
-- the previous `game-signals.vercel.app` address is a legacy deployment hostname, not the public canonical URL.
+- `https://game-signals.vercel.app` is retained only as a legacy Vercel alias and now permanently redirects every path to the matching path on `https://www.whoplaysmygame.com`;
+- the root and all three public legal pages use canonical URLs on `www.whoplaysmygame.com`;
+- `/robots.txt` is live and blocks private/auth/API routes from crawling;
+- `/sitemap.xml` is live and contains only the public homepage and legal pages.
 
 ## Authentication
 
@@ -56,7 +59,15 @@ Supabase email/password authentication supports:
 - forgot/reset password;
 - protected dashboard/settings.
 
-The production Supabase Auth dashboard should use the canonical Who Plays My Game domain for Site URL and redirect allowlisting. Localhost redirects may be kept for development.
+Production Auth URL configuration is now set to the canonical Who Plays My Game domain:
+
+- Site URL: `https://www.whoplaysmygame.com`;
+- production callback allowlist: `https://www.whoplaysmygame.com/auth/callback`;
+- localhost may remain allowlisted for development.
+
+The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect.
+
+A production-ready custom SMTP sender for branded/reliable Auth emails should be verified before a public paid launch.
 
 ## Monitoring runtime
 
@@ -66,7 +77,7 @@ Real monitoring is active:
 - YouTube Edge Function and scheduler;
 - Discord notification worker and scheduler.
 
-The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
+Recent production logs show these workers returning HTTP 200. The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
 
 ## Billing
 
@@ -84,6 +95,7 @@ Implemented/tested:
 
 - checkout transaction creation;
 - webhook subscription synchronization;
+- raw-body Paddle-Signature verification with a five-second timestamp tolerance;
 - active subscription state in Supabase;
 - customer/subscription identifiers;
 - Paddle Customer Portal;
@@ -92,13 +104,13 @@ Implemented/tested:
 - provider-aware Settings UI;
 - explicit Sandbox/LIVE locks.
 
-Paddle LIVE remains OFF and must require a deliberate separate cutover.
+Paddle LIVE remains OFF and requires a deliberate separate cutover. The operator launch-readiness gate now follows the current Paddle MoR architecture: LIVE account verification, domain approval, LIVE catalog, LIVE webhook, portal, accounting route, legal review, Auth production review and a final explicit Paddle approval all fail closed.
 
 ### Legacy/direct Stripe path
 
 The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as a rollback/legacy path. Existing Stripe-backed records must remain provider-associated.
 
-Stripe LIVE is OFF. Do not turn it on as part of normal deployments or the rebrand.
+Stripe LIVE is OFF. Legacy Stripe/KSeF checks are now explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE.
 
 Some historical direct-billing evidence structures deliberately continue using Stripe-specific field names and immutable legal-version snapshots. Do not rename or rewrite those merely for branding.
 
@@ -131,11 +143,21 @@ Current web legal versions:
 
 The legacy Stripe durable-contract-confirmation core retains its own historical immutable version identifiers because it represents a separate direct-billing evidence path.
 
+## Database security
+
+A post-domain-cutover review confirmed:
+
+- RLS is enabled on all current public application/billing tables reviewed;
+- internal billing tables flagged by the advisor as having RLS without policies are intentionally service-role-only and do not grant table access to `anon` or `authenticated`;
+- workspace RLS helpers use `auth.uid()`, `SECURITY DEFINER`, a fixed search path and no client CREATE privilege in the private schema;
+- the active `pg_net` extension is intentionally left in place because the scheduler stack uses pg_cron + pg_net and the installed extension is not relocatable without recreation;
+- performance-advisor unused-index notices are not being acted on during closed beta because many indexes protect low-frequency billing/history paths and premature removal would create more risk than value.
+
 ## Email
 
-The Resend-based email backend exists, but production email alerts remain OFF.
+The Resend-based product-email backend exists, but production product alert emails remain OFF.
 
-Do not enable the email scheduler until a production sender/domain is verified and the launch decision explicitly includes email alerts.
+Do not enable the product-email scheduler until a production sender/domain is verified and the launch decision explicitly includes email alerts. Authentication email/SMTP readiness is tracked separately from optional product alert emails.
 
 ## Kick
 
@@ -145,7 +167,7 @@ Kick monitoring remains Coming soon. Do not implement scraping or unsupported/pr
 
 A substantial fail-closed KSeF and seller-document implementation remains in the repository for the legacy/direct seller billing route. KSeF production submission remains locked.
 
-The Paddle Merchant-of-Record customer route must not be conflated with the old direct Stripe seller-invoice architecture. Preserve old evidence code where needed for history/rollback; do not activate KSeF PROD during the rebrand.
+The Paddle Merchant-of-Record customer route must not be conflated with the old direct Stripe seller-invoice architecture. Preserve old evidence code where needed for history/rollback; do not activate KSeF PROD unless the direct-billing route is separately re-authorized.
 
 ## Security and launch locks
 
@@ -155,8 +177,8 @@ Keep these invariants:
 - Stripe LIVE: OFF;
 - KSeF PROD: OFF;
 - Kick: OFF;
-- production email scheduler: OFF;
+- production product-email scheduler: OFF;
 - no secrets committed to Git;
 - database/RLS and custom worker authorization remain intact.
 
-Before a public paid launch, re-check current seller/company information, production billing-provider configuration, authentication redirects, security settings, platform quotas and the final legal/consumer checkout flow.
+Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security, configure production Auth SMTP, re-check current seller/company information and complete the final legal/consumer checkout review.
