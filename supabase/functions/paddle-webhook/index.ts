@@ -1,11 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildPaddlePriceCatalog,
+  buildPaddleRuntimePriceCatalog,
   isPaddleBillingPeriod,
   isPaddlePaidPlan,
   mapPaddleSubscriptionStatus,
   paddleCancelAtPeriodEnd,
   priceMetadata,
+  resolvePaddleEnvironment,
 } from "../_shared/paddle-billing-core.ts";
 
 const headers = { "Content-Type": "application/json" };
@@ -128,7 +129,8 @@ async function syncSubscription(
 
   const customData = objectValue(subscription.custom_data) ?? {};
   const priceId = firstPriceId(subscription);
-  const catalog = buildPaddlePriceCatalog((key) => Deno.env.get(key) ?? undefined);
+  const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
+  const catalog = buildPaddleRuntimePriceCatalog(environment, (key) => Deno.env.get(key) ?? undefined);
   const fromPrice = priceMetadata(catalog, priceId);
   if (!fromPrice) throw new Error(`Paddle subscription price ${priceId ?? "unknown"} is not mapped to a GameSignal plan.`);
 
