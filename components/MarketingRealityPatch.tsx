@@ -19,7 +19,7 @@ function isUnavailableControl(element: Element | null) {
 
   const sourceSwitch = element.closest(".source-switch");
   const sourceSwitchText = (sourceSwitch?.textContent ?? "").trim();
-  return sourceSwitchText.startsWith("Kick") || sourceSwitchText.startsWith("Email");
+  return sourceSwitchText.startsWith("Kick") || sourceSwitchText.startsWith("Daily email");
 }
 
 export default function MarketingRealityPatch() {
@@ -40,14 +40,20 @@ export default function MarketingRealityPatch() {
           `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
       }
 
+      const heroMicro = document.querySelector<HTMLElement>(".hero .micro");
+      if (heroMicro) {
+        heroMicro.textContent =
+          "Public beta is open. Create a free account and start monitoring YouTube and Twitch; paid checkout will open after Paddle LIVE activation.";
+      }
+
       const systemState = document.querySelector<HTMLElement>(".system-state");
       if (systemState) systemState.innerHTML = "<i></i> 2 sources online";
 
       const kickPlatform = findTextElement(".platform", "Kick");
       if (kickPlatform) kickPlatform.innerHTML = '<span class="dot ki"></span>Kick · coming soon';
 
-      const notificationsPlatform = findTextElement(".platform", "Email");
-      if (notificationsPlatform) notificationsPlatform.textContent = "Discord · Email coming soon";
+      const notificationsPlatform = findTextElement(".platform", "Discord");
+      if (notificationsPlatform) notificationsPlatform.textContent = "Discord + daily email";
 
       const scoreStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) =>
         (step.querySelector("h3")?.textContent ?? "").trim() === "Score",
@@ -62,7 +68,8 @@ export default function MarketingRealityPatch() {
       );
       const alertCopy = alertStep?.querySelector<HTMLElement>("p");
       if (alertCopy) {
-        alertCopy.textContent = "Studio and Publisher can send matching signals to Discord. Email delivery is coming soon.";
+        alertCopy.textContent =
+          "Eligible paid plans can receive one opt-in daily email digest. Studio and Publisher can also send matching signals to Discord.";
       }
 
       const kickMapLabel = document.querySelector<HTMLElement>(".map-label.l3");
@@ -97,15 +104,15 @@ export default function MarketingRealityPatch() {
         if (text) text.textContent = "Kick · coming soon ";
       }
 
-      const emailToggleRow = findTextElement(".source-switch", "Email");
+      const emailToggleRow = findTextElement(".source-switch", "Daily email");
       if (emailToggleRow) {
         const toggle = emailToggleRow.querySelector<HTMLElement>(".switch");
         toggle?.classList.remove("on");
         toggle?.setAttribute("aria-disabled", "true");
         emailToggleRow.style.opacity = "0.55";
-        emailToggleRow.title = "Email delivery is coming soon";
+        emailToggleRow.title = "Configure the opt-in daily email digest from account settings";
         const text = Array.from(emailToggleRow.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
-        if (text) text.textContent = "Email · coming soon ";
+        if (text) text.textContent = "Daily email · account setting ";
       }
 
       const kickTab = document.querySelector<HTMLButtonElement>('.tab[data-filter="kick"]');
@@ -119,13 +126,25 @@ export default function MarketingRealityPatch() {
       const notice = document.querySelector<HTMLElement>(".controls .notice");
       if (notice) {
         notice.textContent =
-          "Interactive demo. Production monitoring is live for YouTube and Twitch; Kick and email delivery are still being prepared.";
+          "Interactive demo. Production monitoring is live for YouTube and Twitch; Discord alerts and opt-in daily email digests are available on eligible plans. Kick is coming soon.";
       }
 
       const onboardingNotice = document.querySelector<HTMLElement>("#onboardingModal .notice");
       if (onboardingNotice) {
         onboardingNotice.textContent =
-          "After signup, YouTube and Twitch monitoring starts automatically. Kick and email delivery are coming soon.";
+          "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
+      }
+
+      const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
+      if (planNotice) {
+        planNotice.textContent =
+          "New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.";
+      }
+
+      const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
+      if (pricingLead) {
+        pricingLead.textContent =
+          "Public beta pricing. Free accounts can start monitoring now; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
       }
 
       const planFeatures: Record<string, string[]> = {
@@ -133,6 +152,7 @@ export default function MarketingRealityPatch() {
           "1 active tracked game",
           "YouTube + Twitch monitoring",
           "Creator signal dashboard",
+          "Opt-in daily email digest",
           "Aliases and exclusion terms",
         ],
         Studio: [
