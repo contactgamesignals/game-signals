@@ -5,7 +5,7 @@ import { LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: `Privacy Policy — ${COMPANY.productName}`,
-  description: `Privacy information for ${COMPANY.productName}, operated by ${COMPANY.legalName}.`,
+  description: `Privacy information for ${COMPANY.productName}, operated by ${COMPANY.legalName}`,
 };
 
 export default function PrivacyPage() {
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           <span>{COMPANY.productName}</span>
         </Link>
 
-        <div className="kicker" style={{ marginTop: 24 }}>Legal · closed beta</div>
+        <div className="kicker" style={{ marginTop: 24 }}>Legal · public beta</div>
         <h1>Privacy Policy</h1>
         <p>Last updated: {LEGAL_UPDATED_DATE} · Privacy version: {LEGAL_VERSIONS.privacy}</p>
         <p>
@@ -59,7 +59,7 @@ export default function PrivacyPage() {
           <li><strong>Billing and checkout evidence:</strong> to initiate the selected checkout, synchronize subscription access, retain checkout choices and handle cancellation, withdrawal, refund, complaint or dispute requests. The legal bases may include performance of the contract, legal obligations and legitimate interests in maintaining reliable transaction records and defending legal claims.</li>
           <li><strong>Security, abuse prevention and support:</strong> to protect accounts, diagnose problems and respond to support requests. The legal basis is our legitimate interest in operating a secure and reliable service.</li>
           <li><strong>Creator-signal monitoring:</strong> to identify public mentions of monitored games and present those signals to the relevant workspace. The legal basis is our legitimate interest in providing creator-intelligence monitoring from publicly available sources.</li>
-          <li><strong>Legal and accounting duties:</strong> where applicable, to comply with tax, accounting, consumer-protection and other legal obligations. Real paid billing is not currently enabled in the closed beta.</li>
+          <li><strong>Legal and accounting duties:</strong> where applicable, to comply with tax, accounting, consumer-protection and other legal obligations. New real-money subscriptions remain unavailable until Paddle LIVE is activated.</li>
           <li><strong>Consent:</strong> where we specifically ask for consent for a separate purpose.</li>
         </ul>
 
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
 
         <h2>5. Service providers, recipients and external platforms</h2>
         <p>
-          We use specialist providers to operate {COMPANY.productName}. These include Supabase for database and authentication infrastructure, Vercel for application hosting, Paddle for the current Merchant-of-Record billing integration, and potentially Resend for future transactional/email-delivery infrastructure. A legacy Stripe sandbox integration remains in the codebase as a rollback/testing route. Discord receives notifications only if you configure a Discord webhook.
+          We use specialist providers to operate {COMPANY.productName}. These include Supabase for database and authentication infrastructure, Vercel for application hosting, Paddle for the Merchant-of-Record billing integration, and Resend for authentication email delivery and opt-in product email digests. A legacy Stripe sandbox integration remains in the codebase as a rollback/testing route. Discord receives notifications only if you configure a Discord webhook.
         </p>
         <p>
           Professional advisers and competent public authorities may receive information where necessary for accounting, legal compliance, dispute handling, security or a binding legal requirement, subject to applicable confidentiality and data-protection rules.
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           Paddle acts as Merchant of Record for transactions processed through Paddle. Paddle may collect billing identity, address, payment-method and tax information, calculate applicable transaction taxes, process the payment, issue customer billing documents and provide customer self-service through Paddle Customer Portal. We receive the identifiers and transaction/subscription information needed to associate the Paddle purchase with the correct workspace and access level.
         </p>
         <p>
-          The current Paddle integration is Sandbox only and does not accept real money. LIVE billing requires a separate explicit activation.
+          The verified integration currently remains in Sandbox while the separate Paddle LIVE account, domain, catalog, credentials and notification destination are prepared. Public Sandbox checkout is disabled and does not accept real money.
         </p>
 
         <h2>7. International processing</h2>
@@ -118,12 +118,12 @@ export default function PrivacyPage() {
 
         <h2>11. Cookies and local storage</h2>
         <p>
-          {COMPANY.productName} uses technical storage needed for authentication, session continuity, onboarding state and product operation. The closed beta does not intentionally deploy advertising cookies. If analytics or optional marketing technologies are introduced later, this policy and any required consent mechanism will be updated first.
+          {COMPANY.productName} uses technical storage needed for authentication, session continuity, onboarding state and product operation. The public beta does not intentionally deploy advertising cookies. If analytics or optional marketing technologies are introduced later, this policy and any required consent mechanism will be updated first.
         </p>
 
-        <h2>12. Closed beta changes</h2>
+        <h2>12. Public beta changes</h2>
         <p>
-          {COMPANY.productName} is still in closed beta. Features, providers and retention rules may evolve. Material changes to this policy will be reflected by updating this page and its revision date before they apply where required.
+          {COMPANY.productName} is in public beta. Features, providers and retention rules may evolve. Material changes to this policy will be reflected by updating this page and its revision date before they apply where required.
         </p>
 
         <div className="dashboard-actions" style={{ marginTop: 28 }}>
