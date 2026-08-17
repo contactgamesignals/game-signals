@@ -117,12 +117,6 @@ Deno.serve(async (request) => {
     const auth = await authorizeRequest(request);
     if (auth.internal || !auth.userId) return json({ error: "Forbidden." }, 403);
 
-    const apiKey = required(Deno.env.get("RESEND_API_KEY"), "RESEND_API_KEY");
-    const fromEmail = Deno.env.get("ACCOUNT_AGREEMENT_FROM_EMAIL")?.trim()
-      || Deno.env.get("RESEND_FROM_EMAIL")?.trim()
-      || "Who Plays My Game <updates@auth.whoplaysmygame.com>";
-    const supportPhone = required(Deno.env.get("GAMESIGNAL_SUPPORT_PHONE"), "GAMESIGNAL_SUPPORT_PHONE");
-
     const supabase = serviceClient();
     const { data: userData, error: userError } = await supabase.auth.admin.getUserById(auth.userId);
     const recipient = userData.user?.email?.trim();
@@ -139,7 +133,11 @@ Deno.serve(async (request) => {
       .limit(1)
       .maybeSingle();
     if (rowError) throw new Error(`Could not read account agreement acceptance: ${rowError.message}`);
-    if (!rowData) return json({ error: "Current signup legal acceptance was not found." }, 409);
+
+    // Accounts created before the public-launch legal evidence flow have no
+    // current acceptance row. They remain valid legacy accounts and must not be
+    // blocked merely because this newer delivery mechanism did not exist yet.
+    if (!rowData) return json({ ok: true, legacy_account: true });
 
     let row = rowData as AcceptanceRow;
     if (row.confirmation_status === "delivered") {
@@ -149,17 +147,21 @@ Deno.serve(async (request) => {
       return json({ error: "Agreement confirmation delivery needs reconciliation before another send." }, 409);
     }
 
+    // Only current public-signup accounts need the transactional sender and the
+    // public customer-contact phone. Keeping these requirements below the legacy
+    // bypass prevents old accounts from being disrupted before launch.
+    const apiKey = required(Deno.env.get("RESEND_API_KEY"), "RESEND_API_KEY");
+    const fromEmail = Deno.env.get("ACCOUNT_AGREEMENT_FROM_EMAIL")?.trim()
+      || Deno.env.get("RESEND_FROM_EMAIL")?.trim()
+      || "Who Plays My Game <updates@auth.whoplaysmygame.com>";
+    const supportPhone = required(Deno.env.get("GAMESIGNAL_SUPPORT_PHONE"), "GAMESIGNAL_SUPPORT_PHONE");
+
     if (!row.confirmation_text || !row.confirmation_sha256) {
       const confirmationText = buildConfirmationText({ email: recipient, acceptedAt: row.accepted_at, phone: supportPhone });
       const confirmationHash = await sha256(confirmationText);
       const { data: prepared, error: prepareError } = await supabase
         .from("account_legal_acceptances")
-        .update({
-          confirmation_text: confirmationText,
-          confirmation_sha256: confirmationHash,
-          confirmation_status: "pending",
-          confirmation_last_error: null,
-        })
+        .update({ confirmation_text: confirmationText, confirmation_sha256: confirmationHash, confirmation_status: "pending", confirmation_last_error: null })
         .eq("id", row.id)
         .is("confirmation_text", null)
         .select("id,user_id,terms_version,privacy_version,accepted_at,confirmation_text,confirmation_sha256,confirmation_status,confirmation_provider_message_id,confirmation_attempts")
@@ -178,16 +180,11 @@ Deno.serve(async (request) => {
     }
 
     if (!row.confirmation_text || !row.confirmation_sha256) throw new Error("Frozen account agreement confirmation is incomplete.");
-    const computedHash = await sha256(row.confirmation_text);
-    if (computedHash !== row.confirmation_sha256) throw new Error("Frozen account agreement confirmation hash mismatch.");
+    if (await sha256(row.confirmation_text) !== row.confirmation_sha256) throw new Error("Frozen account agreement confirmation hash mismatch.");
 
     const { data: claimed, error: claimError } = await supabase
       .from("account_legal_acceptances")
-      .update({
-        confirmation_status: "sending",
-        confirmation_attempts: row.confirmation_attempts + 1,
-        confirmation_last_error: null,
-      })
+      .update({ confirmation_status: "sending", confirmation_attempts: row.confirmation_attempts + 1, confirmation_last_error: null })
       .eq("id", row.id)
       .in("confirmation_status", ["pending", "failed"])
       .select("id")
