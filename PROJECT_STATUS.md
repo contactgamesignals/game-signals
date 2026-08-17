@@ -11,14 +11,14 @@ This file is the compact source of truth for the current product state. Historic
 - Support/privacy email: `whoplaysmygame@gmail.com`
 - Public support phone: `+48 694 366 395`
 - Operator: Lumino Games sp. z o.o.
+- Registered address: `ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Małopolskie, Poland`
 - KRS: `0000910452`
 - NIP: `6762600090`
 - REGON: `389433660`
-- Current registered address in the app still needs to be reconciled with the company's latest registered-address change before paid LIVE launch.
 
 The support phone is intentionally kept in operator/legal contact information and transactional agreement confirmation rather than promoted in marketing copy.
 
-Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility/audit continuity.
+Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility/audit continuity. Historical frozen billing/contract evidence is not rewritten when current operator data changes.
 
 ## Public launch state
 
@@ -53,7 +53,7 @@ Implemented and production-backed:
 - plan-based active-game limits;
 - CSV signal export for every active paid plan;
 - account/workspace settings, export and guarded deletion;
-- public Terms, Privacy and Withdrawal pages;
+- public Terms, Privacy, Withdrawal and Refund Policy pages;
 - Paddle Merchant-of-Record billing integration verified in Sandbox;
 - Paddle Customer Portal;
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe.
@@ -86,7 +86,7 @@ Accepted versions and a database timestamp are stored in service-role-only `acco
 
 The database stores delivery evidence for the signup agreement confirmation: frozen confirmation text, SHA-256, status, provider message ID, attempts, sent timestamp and error state.
 
-Supabase Edge Function `send-account-agreement-confirmation` v3 is ACTIVE. It:
+Supabase Edge Function `send-account-agreement-confirmation` is ACTIVE. It:
 
 - authenticates the current user;
 - bypasses legacy accounts created before the current signup-evidence flow;
@@ -95,7 +95,7 @@ Supabase Edge Function `send-account-agreement-confirmation` v3 is ACTIVE. It:
 - persists sending/delivered/failed/needs_review state;
 - sends current operator/contact information, Free plan status and accepted document versions.
 
-The public phone is `+48 694 366 395`; an environment override may still be used later if needed. Successful signup confirmation routes through this sender before dashboard access. Existing legacy accounts remain unaffected.
+Future confirmations use the current registered address. Already frozen/delivered historical confirmations remain immutable and are not rewritten. The public phone is `+48 694 366 395`; an environment override may still be used later if needed.
 
 ## Monitoring and email runtime
 
@@ -141,28 +141,37 @@ One historical Paddle Sandbox subscription remains on the internal `luminotax@gm
 
 ### Public Sandbox checkout lock
 
-`paddle-billing` v15 is ACTIVE. New Sandbox checkout requires explicit `PADDLE_SANDBOX_CHECKOUT_ENABLED=true`; keep it absent/false on public production. Customer Portal access for an existing Paddle customer remains independent from the new-sales switch.
+New Sandbox checkout requires explicit `PADDLE_SANDBOX_CHECKOUT_ENABLED=true`; keep it absent/false on public production. Customer Portal access for an existing Paddle customer remains independent from the new-sales switch.
 
-### Paddle LIVE — still OFF
+### Paddle LIVE — onboarding in progress, real charges still OFF
 
 Paddle is the intended Merchant of Record for new paid customer transactions. Its role is to handle the payment transaction, applicable sales tax/VAT/GST, customer billing documents and payment-side refund/chargeback handling. Do not rebuild a second new direct-payment/tax stack for Paddle customers.
 
 Sandbox and LIVE use separate credentials, catalog IDs and webhook configuration.
 
-Before real-money sales:
+Completed in LIVE:
 
-- complete Paddle LIVE business/account verification;
-- approve the LIVE domain/default payment link;
-- create six LIVE price IDs;
-- create LIVE API key and client-side token;
-- configure LIVE webhook/signing secret;
-- verify LIVE Customer Portal;
+- three products and six prices created;
+- all six LIVE `pri_...` IDs mapped in application billing code;
+- LIVE API key created and stored in Supabase as `PADDLE_LIVE_API_KEY`;
+- LIVE client-side token created and stored in Vercel Production as `PADDLE_LIVE_CLIENT_TOKEN`;
+- LIVE notification destination created for the Supabase `paddle-webhook` endpoint;
+- LIVE webhook signing secret stored in Supabase as `PADDLE_LIVE_WEBHOOK_SECRET`;
+- `whoplaysmygame.com` submitted for Paddle domain approval and currently pending review;
+- Paddle account/business verification started;
+- current Lumino Games registered address reconciled in app/legal data and current billing seller profile.
+
+Still required before real-money sales:
+
+- finish Paddle LIVE business/account verification;
+- receive domain approval and set/verify the LIVE default payment link;
+- verify LIVE Customer Portal and enabled payment methods;
+- set up/verify Paddle payouts;
 - confirm Paddle MoR accounting/reconciliation route;
-- reconcile the latest Lumino Games registered address across Paddle and public legal/operator data;
-- smoke-test with `PADDLE_LIVE_BILLING_ENABLED=false` first;
-- only then explicitly set `PADDLE_LIVE_BILLING_ENABLED=true`.
+- smoke-test LIVE configuration while `PADDLE_LIVE_BILLING_ENABLED=false`;
+- only then explicitly enable the LIVE sales gate.
 
-Paddle.js is prepared for LIVE initialization including `pwCustomer` for Retain readiness.
+Do not switch public checkout to LIVE prematurely. Paddle.js is prepared for LIVE initialization including `pwCustomer` for Retain readiness.
 
 ## Legacy/direct Stripe and KSeF
 
@@ -180,7 +189,7 @@ Current versions:
 - Privacy: `2026-08-17-v1`
 - Withdrawal: `2026-08-17-v1`
 
-Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, paid-plan feature access is uniform, Sandbox sales disabled and Paddle LIVE still pending. Operator contact includes the support email and public support phone. The registered address must be reconciled to the company's latest official address before paid LIVE launch.
+Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, paid-plan feature access is uniform, Sandbox sales disabled and Paddle LIVE still pending. Operator contact uses the current registered address, support email and public support phone. `/refunds` provides the standalone Refund Policy URL required by Paddle website verification.
 
 Future Paddle checkout consent records use current Terms/Privacy versions.
 
@@ -199,7 +208,7 @@ RLS is enabled on reviewed public application/billing tables. Workspace helpers 
 - Free public beta signup: OPEN;
 - paid-plan features: SAME across Indie/Studio/Publisher; only active-game limit differs;
 - public Paddle Sandbox new checkout: OFF;
-- Paddle LIVE: OFF until full LIVE cutover;
+- Paddle LIVE real-money checkout: OFF until full LIVE cutover;
 - Stripe LIVE: OFF;
 - KSeF PROD: OFF;
 - Kick: OFF;
