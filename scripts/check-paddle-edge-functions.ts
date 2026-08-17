@@ -7,6 +7,13 @@ assert.match(billing, /billing_checkout_consents/);
 assert.match(billing, /\/portal-sessions/);
 assert.match(billing, /assertPaddleCheckoutEnabled/);
 assert.match(billing, /PADDLE_CHECKOUT_URL/);
+assert.match(billing, /PADDLE_SANDBOX_CHECKOUT_ENABLED/);
+assert.match(billing, /environment === "live" \? liveBillingEnabled : sandboxCheckoutEnabled/);
+assert.match(billing, /Paid checkout is not available while Paddle LIVE is being activated\./);
+assert.ok(
+  billing.indexOf('if (body.action === "portal")') < billing.indexOf('assertPaddleCheckoutEnabled({'),
+  "Customer Portal must remain reachable independently from the new-checkout lock.",
+);
 assert.match(billing, /collection_mode: "automatic"/);
 assert.doesNotMatch(billing, /pdl_(?:sdbx|live)_apikey_[A-Za-z0-9_]+/, "Paddle API keys must never be committed.");
 
