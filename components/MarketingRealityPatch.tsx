@@ -25,9 +25,7 @@ function isUnavailableControl(element: Element | null) {
 export default function MarketingRealityPatch() {
   useEffect(() => {
     const removeDynamicKickSignals = () => {
-      document.querySelectorAll<HTMLElement>('[data-source="kick"]').forEach((element) => {
-        element.remove();
-      });
+      document.querySelectorAll<HTMLElement>('[data-source="kick"]').forEach((element) => element.remove());
       document.querySelectorAll<HTMLElement>("#heroFeed .feed-line").forEach((element) => {
         if ((element.textContent ?? "").includes("Kick")) element.remove();
       });
@@ -35,16 +33,10 @@ export default function MarketingRealityPatch() {
 
     const apply = () => {
       const heroCopy = document.querySelector<HTMLElement>(".hero-copy");
-      if (heroCopy) {
-        heroCopy.textContent =
-          `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
-      }
+      if (heroCopy) heroCopy.textContent = `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
 
       const heroMicro = document.querySelector<HTMLElement>(".hero .micro");
-      if (heroMicro) {
-        heroMicro.textContent =
-          "Public beta is open. Create a free account and start monitoring YouTube and Twitch; paid checkout will open after Paddle LIVE activation.";
-      }
+      if (heroMicro) heroMicro.textContent = "Public beta is opening shortly. Signup is temporarily locked for the final customer-contact setup; paid checkout will open after Paddle LIVE activation.";
 
       const systemState = document.querySelector<HTMLElement>(".system-state");
       if (systemState) systemState.innerHTML = "<i></i> 2 sources online";
@@ -55,29 +47,18 @@ export default function MarketingRealityPatch() {
       const notificationsPlatform = findTextElement(".platform", "Discord");
       if (notificationsPlatform) notificationsPlatform.textContent = "Discord + daily email";
 
-      const scoreStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) =>
-        (step.querySelector("h3")?.textContent ?? "").trim() === "Score",
-      );
+      const scoreStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) => (step.querySelector("h3")?.textContent ?? "").trim() === "Score");
       const scoreCopy = scoreStep?.querySelector<HTMLElement>("p");
-      if (scoreCopy) {
-        scoreCopy.textContent = "See the creator, current views or live viewers, and a signal score that helps prioritize mentions.";
-      }
+      if (scoreCopy) scoreCopy.textContent = "See the creator, current views or live viewers, and a signal score that helps prioritize mentions.";
 
-      const alertStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) =>
-        (step.querySelector("h3")?.textContent ?? "").trim() === "Alert",
-      );
+      const alertStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) => (step.querySelector("h3")?.textContent ?? "").trim() === "Alert");
       const alertCopy = alertStep?.querySelector<HTMLElement>("p");
-      if (alertCopy) {
-        alertCopy.textContent =
-          "Eligible paid plans can receive one opt-in daily email digest. Studio and Publisher can also send matching signals to Discord.";
-      }
+      if (alertCopy) alertCopy.textContent = "Eligible paid plans can receive one opt-in daily email digest. Studio and Publisher can also send matching signals to Discord.";
 
       const kickMapLabel = document.querySelector<HTMLElement>(".map-label.l3");
       if (kickMapLabel) kickMapLabel.textContent = "Kick / coming soon";
 
-      const kickSourceRow = Array.from(document.querySelectorAll<HTMLElement>(".source-row")).find((row) =>
-        (row.textContent ?? "").includes("Kick"),
-      );
+      const kickSourceRow = Array.from(document.querySelectorAll<HTMLElement>(".source-row")).find((row) => (row.textContent ?? "").includes("Kick"));
       if (kickSourceRow) {
         const count = kickSourceRow.querySelector<HTMLElement>(".source-count");
         if (count) count.textContent = "soon";
@@ -124,51 +105,21 @@ export default function MarketingRealityPatch() {
       }
 
       const notice = document.querySelector<HTMLElement>(".controls .notice");
-      if (notice) {
-        notice.textContent =
-          "Interactive demo. Production monitoring is live for YouTube and Twitch; Discord alerts and opt-in daily email digests are available on eligible plans. Kick is coming soon.";
-      }
+      if (notice) notice.textContent = "Interactive demo. Production monitoring is live for YouTube and Twitch; Discord alerts and opt-in daily email digests are available on eligible plans. Kick is coming soon.";
 
       const onboardingNotice = document.querySelector<HTMLElement>("#onboardingModal .notice");
-      if (onboardingNotice) {
-        onboardingNotice.textContent =
-          "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
-      }
+      if (onboardingNotice) onboardingNotice.textContent = "After signup opens, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
 
       const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
-      if (planNotice) {
-        planNotice.textContent =
-          "New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.";
-      }
+      if (planNotice) planNotice.textContent = "New account signup is temporarily locked for final launch contact setup. Paid checkout remains unavailable until Paddle LIVE activation is completed.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
-      if (pricingLead) {
-        pricingLead.textContent =
-          "Public beta pricing. Free accounts can start monitoring now; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
-      }
+      if (pricingLead) pricingLead.textContent = "Public beta pricing. Free signup will open after the final customer-contact setup; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
 
       const planFeatures: Record<string, string[]> = {
-        Indie: [
-          "1 active tracked game",
-          "YouTube + Twitch monitoring",
-          "Creator signal dashboard",
-          "Opt-in daily email digest",
-          "Aliases and exclusion terms",
-        ],
-        Studio: [
-          "Up to 3 active games",
-          "Everything in Indie",
-          "Discord alerts",
-          "Faster monitoring cadence",
-          "Paddle self-service billing",
-        ],
-        Publisher: [
-          "Up to 10 active games",
-          "Everything in Studio",
-          "CSV signal export",
-          "Highest monitoring cadence",
-          "Pause and resume active monitors",
-        ],
+        Indie: ["1 active tracked game", "YouTube + Twitch monitoring", "Creator signal dashboard", "Opt-in daily email digest", "Aliases and exclusion terms"],
+        Studio: ["Up to 3 active games", "Everything in Indie", "Discord alerts", "Faster monitoring cadence", "Paddle self-service billing"],
+        Publisher: ["Up to 10 active games", "Everything in Studio", "CSV signal export", "Highest monitoring cadence", "Pause and resume active monitors"],
       };
 
       document.querySelectorAll<HTMLElement>(".plan").forEach((plan) => {
@@ -183,14 +134,8 @@ export default function MarketingRealityPatch() {
         const question = (item.querySelector(".faq-q")?.textContent ?? "").trim();
         const answer = item.querySelector<HTMLElement>(".faq-a");
         if (!answer) return;
-        if (question.startsWith("What if my game has a common name?")) {
-          answer.textContent =
-            "Add aliases, studio-specific search phrases, and exclusion terms. You can edit them later if a false positive appears.";
-        }
-        if (question.startsWith("Can I cancel my subscription?")) {
-          answer.textContent =
-            "Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.";
-        }
+        if (question.startsWith("What if my game has a common name?")) answer.textContent = "Add aliases, studio-specific search phrases, and exclusion terms. You can edit them later if a false positive appears.";
+        if (question.startsWith("Can I cancel my subscription?")) answer.textContent = "Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.";
       });
     };
 
