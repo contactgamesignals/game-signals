@@ -17,6 +17,7 @@ const headers = {
 };
 
 const PUBLIC_SITE_URL = "https://www.whoplaysmygame.com";
+const PADDLE_LIVE_CHECKOUT_URL = "https://whoplaysmygame.com/pay";
 const TERMS_VERSION = "2026-08-17-v1";
 const PRIVACY_VERSION = "2026-08-17-v1";
 
@@ -43,8 +44,9 @@ function canonicalSiteUrl() {
 
 function paddleCheckoutUrl() {
   const configured = Deno.env.get("PADDLE_CHECKOUT_URL")?.trim();
-  if (!configured || configured.includes("game-signals.vercel.app")) return `${canonicalSiteUrl()}/pay`;
-  return configured;
+  if (configured && !configured.includes("game-signals.vercel.app")) return configured;
+  const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
+  return environment === "live" ? PADDLE_LIVE_CHECKOUT_URL : `${canonicalSiteUrl()}/pay`;
 }
 
 function serviceClient() {
@@ -142,7 +144,7 @@ Deno.serve(async (request) => {
     const sandboxCheckoutEnabled = Deno.env.get("PADDLE_SANDBOX_CHECKOUT_ENABLED") === "true";
     const checkoutEnabled = runtimeConfigured && billingEnabled &&
       (environment === "live" ? liveBillingEnabled : sandboxCheckoutEnabled);
-    const paddleIdentityMatchesRuntime = subscription.billing_provider === "paddle" &&
+    const currentPaddleIdentity = subscription.billing_provider === "paddle" &&
       subscription.billing_environment === environment;
 
     if (body.action === "status") {
@@ -151,11 +153,10 @@ Deno.serve(async (request) => {
         checkout_enabled: checkoutEnabled,
         provider: "paddle",
         paddle_mode: environment,
-        billing_environment: subscription.billing_environment ?? "live",
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
-        has_customer: paddleIdentityMatchesRuntime && Boolean(subscription.billing_customer_id),
-        has_subscription: paddleIdentityMatchesRuntime && Boolean(subscription.billing_subscription_id),
+        has_customer: currentPaddleIdentity && Boolean(subscription.billing_customer_id),
+        has_subscription: currentPaddleIdentity && Boolean(subscription.billing_subscription_id),
       });
     }
 
@@ -169,13 +170,8 @@ Deno.serve(async (request) => {
     }
 
     if (body.action === "portal") {
-      if (subscription.billing_provider !== "paddle" || !subscription.billing_customer_id) {
-        return json({ error: "No Paddle customer exists for this workspace yet." }, 409);
-      }
-      if (subscription.billing_environment !== runtime.environment) {
-        return json({
-          error: "This workspace contains historical Paddle Sandbox billing data and cannot open it in the LIVE Customer Portal.",
-        }, 409);
+      if (!currentPaddleIdentity || !subscription.billing_customer_id) {
+        return json({ error: "No Paddle customer exists for this workspace in the current billing environment yet." }, 409);
       }
       const subscriptionIds = subscription.billing_subscription_id ? [String(subscription.billing_subscription_id)] : [];
       const portal = await paddleRequest(`/customers/${encodeURIComponent(String(subscription.billing_customer_id))}/portal-sessions`, {
@@ -211,8 +207,7 @@ Deno.serve(async (request) => {
       return json({ error: "Individuals must explicitly request immediate service before checkout." }, 400);
     }
 
-    const existingPaddleSubscriptionNeedsPortal = subscription.billing_provider === "paddle" &&
-      subscription.billing_environment === runtime.environment &&
+    const existingPaddleSubscriptionNeedsPortal = currentPaddleIdentity &&
       Boolean(subscription.billing_subscription_id) && subscription.status !== "canceled";
     const alreadyPaid = subscription.plan !== "free" &&
       (subscription.status === "active" || subscription.status === "trialing");
