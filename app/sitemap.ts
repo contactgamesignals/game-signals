@@ -9,6 +9,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      url: `${BRAND.siteUrl}/twitch-stream-alerts-for-game-developers`,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
+      url: `${BRAND.siteUrl}/youtube-game-monitoring`,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
+      url: `${BRAND.siteUrl}/game-creator-monitoring`,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
       url: `${BRAND.siteUrl}/terms`,
       changeFrequency: "monthly",
       priority: 0.3,
