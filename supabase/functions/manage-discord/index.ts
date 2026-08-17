@@ -55,7 +55,7 @@ Deno.serve(async (request) => {
 
     const plan = String(subscription?.plan ?? "free");
     const subscriptionActive = subscription?.status === "active" || subscription?.status === "trialing";
-    const allowed = subscriptionActive && (plan === "studio" || plan === "publisher");
+    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher");
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const { data: existing, error: channelError } = await service
@@ -91,7 +91,7 @@ Deno.serve(async (request) => {
     }
 
     if (!allowed) {
-      return json({ error: "Discord alerts require an active Studio or Publisher plan." }, 403);
+      return json({ error: "Discord alerts require an active paid plan." }, 403);
     }
 
     if (body.action === "test") {
