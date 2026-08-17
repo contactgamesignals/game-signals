@@ -2,32 +2,36 @@
 
 Last updated: 2026-08-17.
 
-This file is the compact source of truth for the current product state. Historical GameSignal readiness/checkpoint files remain useful as audit history, but current code/runtime and this document take precedence where old branding or architecture notes conflict.
+This file is the compact source of truth for the current product state. Historical GameSignal readiness/checkpoint files remain audit history; current code/runtime and this document take precedence where old branding or architecture notes conflict.
 
-## Product and brand
+## Brand and operator
 
-Who Plays My Game is a subscription application for game developers and publishers. A workspace adds games and the service monitors public creator activity around those titles.
+- Product: Who Plays My Game
+- Canonical production URL: `https://www.whoplaysmygame.com`
+- Support/privacy email: `whoplaysmygame@gmail.com`
+- Operator: Lumino Games sp. z o.o.
+- KRS: `0000910452`
+- NIP: `6762600090`
+- REGON: `389433660`
+- Current registered address: `ul. Ujastek 1, 31-752 Kraków, Poland`
 
-Current public brand:
+Do not use the old `Kazimierza Morawskiego 5/127` address for Lumino Games. That address was incorrectly mixed into current operator data and has been corrected in `lib/company.ts` and the current `billing_seller_profiles` row. Historical immutable Stripe/direct-billing evidence snapshots are not rewritten merely for this correction.
 
-- product: Who Plays My Game
-- canonical production URL: `https://www.whoplaysmygame.com`
-- support email: `whoplaysmygame@gmail.com`
-- operator: Lumino Games sp. z o.o.
-
-Historical technical identifiers such as `GAMESIGNAL_*`, migration names and some database evidence labels are intentionally retained where changing them could break compatibility or audit continuity.
+Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility/audit continuity.
 
 ## Public launch state
 
-The public beta is authorized/open for normal account registration and free product use.
+The application is technically ready for public Free beta use, but final public consumer launch should wait for the one remaining operator datum: a real public customer-contact telephone number for Lumino Games / Who Plays My Game.
 
-A new Free workspace can track one active game. Public users can create an account, confirm their email, sign in, add a game and use the real YouTube/Twitch monitoring dashboard. Free signup must not be confused with a paid Paddle subscription.
+Once that number is configured and the durable account-agreement confirmation sender is wired into the signup-confirmation callback, the Free public beta can be announced broadly.
 
-New real-money checkout remains deliberately locked until the separate Paddle LIVE account/domain/catalog/webhook/credentials cutover is complete. Public Paddle Sandbox checkout is fail-closed and cannot be presented as a real purchase.
+A new Free workspace can track one active game. Free signup creates no payment obligation.
+
+New real-money checkout remains deliberately locked until the separate Paddle LIVE cutover is complete. Public Paddle Sandbox checkout is fail-closed and cannot be presented as a real purchase.
 
 ## Live product
 
-Currently implemented:
+Implemented and production-backed:
 
 - YouTube video monitoring;
 - Twitch live-stream monitoring;
@@ -35,196 +39,161 @@ Currently implemented:
 - aliases and exclusion terms;
 - game create/edit/pause/resume/remove flows;
 - realtime mention updates;
-- Discord alerts for eligible plans;
-- opt-in daily email digests for active paid plans;
+- Discord alerts for eligible paid plans;
+- opt-in daily email digests for eligible paid plans;
 - plan-based active-game limits;
 - Publisher CSV export;
 - account/workspace settings, export and guarded deletion;
 - public Terms, Privacy and Withdrawal pages;
-- Paddle Merchant-of-Record integration, verified in Sandbox;
-- Paddle Customer Portal integration;
+- Paddle Merchant-of-Record billing integration verified in Sandbox;
+- Paddle Customer Portal;
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe.
 
-Kick remains intentionally unavailable. Instant per-signal email alerts are intentionally not used; product email is a capped daily digest instead.
+Kick remains intentionally unavailable. Do not implement scraping/private endpoints as a workaround.
+
+## Authentication and signup legal evidence
+
+Production Auth is configured on the canonical domain with:
+
+- email/password signup and login;
+- forgot/reset password;
+- Resend custom SMTP on verified `auth.whoplaysmygame.com`;
+- Cloudflare Turnstile enforced server-side on public email/password auth flows.
+
+Real recovery email delivery and real browser login with Turnstile were verified. Requests without CAPTCHA were rejected with `captcha_failed`.
+
+Public signup now requires a visible checkbox agreeing to current Terms and acknowledging the Privacy Policy. The frontend sends the exact legal versions in Supabase user metadata.
+
+The database trigger `handle_new_user()` independently fail-closes signup unless it receives:
+
+- `terms_accepted=true`;
+- Terms version `2026-08-17-v1`;
+- `privacy_acknowledged=true`;
+- Privacy version `2026-08-17-v1`.
+
+Accepted versions and a database timestamp are stored in service-role-only `account_legal_acceptances`. New subscriptions created by signup are Free, `billing_provider='paddle'`, and keep legacy `stripe_status_raw='trialing'` compatibility.
+
+## Durable account-agreement confirmation
+
+UOKiK guidance for distance contracts requires confirmation on a durable medium no later than the start of the service; email is a durable medium while a mutable web page is not.
+
+The database now stores delivery evidence fields for the signup agreement confirmation: frozen confirmation text, SHA-256, status, provider message ID, attempts, sent timestamp and error state.
+
+Supabase Edge Function `send-account-agreement-confirmation` v1 is ACTIVE and implements:
+
+- authenticated-user-only custom authorization;
+- current legal-version lookup;
+- frozen confirmation text + SHA-256 verification;
+- Resend idempotency key;
+- explicit sending/delivered/failed/needs_review state;
+- durable email content covering operator identity, Free plan/service, 0-price status, technical requirements, withdrawal information, complaint contact and accepted document versions.
+
+The sender intentionally requires `GAMESIGNAL_SUPPORT_PHONE` and therefore remains fail-closed until a genuine public Lumino Games / Who Plays My Game phone number is supplied. Do not invent or substitute a Lumino Tax/private number.
+
+After the phone is configured, wire this sender into successful signup confirmation (`/auth/callback?next=/dashboard`) and perform one end-to-end external signup test before broad announcement.
+
+## Monitoring and email runtime
+
+Active:
+
+- Twitch Edge Function + scheduler;
+- YouTube Edge Function + scheduler;
+- Discord notification worker + scheduler;
+- daily email digest worker + scheduler.
+
+The product digest runs once daily at `06:00 UTC`, processes the previous complete UTC day, sends nothing when no matching signals exist, groups by recipient and is capped at one digest per recipient per day. Resend idempotency protects against retry duplicates.
+
+Do not replace daily digest email with instant per-signal email. Realtime belongs in dashboard/Discord.
 
 ## Domain, hosting and SEO
 
-Vercel hosts the application.
-
-- `https://whoplaysmygame.com` redirects to `https://www.whoplaysmygame.com`;
-- both domains are attached to the Vercel project and have valid DNS configuration;
-- Cloudflare is used for DNS, with the Vercel records kept DNS-only;
-- `https://game-signals.vercel.app` is retained only as a legacy Vercel alias and permanently redirects matching paths to `https://www.whoplaysmygame.com`;
-- the root and public legal pages use canonical URLs on `www.whoplaysmygame.com`;
-- `/robots.txt` is live and blocks private/auth/API routes from crawling;
-- `/sitemap.xml` is live and contains only the public homepage and legal pages.
-
-## Authentication
-
-Supabase email/password authentication supports signup confirmation, login, forgot/reset password and protected dashboard/settings.
-
-Production Auth configuration:
-
-- Site URL: `https://www.whoplaysmygame.com`;
-- production callback: `https://www.whoplaysmygame.com/auth/callback`;
-- Resend custom SMTP on verified `auth.whoplaysmygame.com`;
-- Cloudflare Turnstile enforced server-side for public email/password auth flows.
-
-A real recovery email was delivered successfully. Direct Auth login/recovery without CAPTCHA was rejected with `captcha_failed`, while a real browser password login with Turnstile succeeded with HTTP 200.
-
-The Supabase Free plan still reports Leaked Password Protection disabled. Treat upgrading/reviewing Supabase Auth security as a paid-launch hardening item, not as a defect in the current free public beta.
-
-## Monitoring runtime
-
-Real monitoring is active:
-
-- Twitch Edge Function and scheduler;
-- YouTube Edge Function and scheduler;
-- Discord notification worker and scheduler;
-- daily email digest worker and scheduler.
-
-The product-email scheduler runs once daily at `06:00 UTC`. It processes the previous complete UTC day, sends nothing when no matching signals exist, groups matching games/workspaces by recipient address and is capped at one digest per recipient per day. Resend idempotency protects against retry duplicates.
-
-The public Signal Lab is only an interactive marketing demo; the authenticated dashboard is backed by real Supabase data.
+- Vercel production hosting;
+- apex redirects to `www`;
+- Cloudflare DNS records remain DNS-only for Vercel;
+- legacy `game-signals.vercel.app` permanently redirects matching paths to the canonical host;
+- canonical metadata uses `www.whoplaysmygame.com`;
+- `/robots.txt` and `/sitemap.xml` are live.
 
 ## Billing
 
-### Current customer route: Paddle Merchant of Record
+### Paddle Merchant of Record — current customer route
 
-New subscription records default to `billing_provider = 'paddle'`. Existing Stripe-backed rows are not rewritten and remain Stripe-associated.
+New subscription records default to Paddle. Existing Stripe-backed records remain Stripe-associated.
 
-Planned Paddle catalog:
+Planned prices:
 
 - Indie: $2.99/month or $29.90/year
 - Studio: $7.99/month or $79.90/year
 - Publisher: $14.99/month or $149.90/year
 
-Sandbox has already verified:
+Sandbox has verified transaction creation, webhook synchronization, Paddle-Signature verification, active subscription state, customer/subscription IDs, Customer Portal, end-of-period cancellation and duplicate-subscription protection.
 
-- checkout transaction creation;
-- webhook subscription synchronization;
-- raw-body Paddle-Signature verification with a five-second timestamp tolerance;
-- active subscription state in Supabase;
-- customer/subscription identifiers;
-- Customer Portal;
-- cancellation at the end of the paid period;
-- duplicate-subscription protection;
-- provider-aware Settings UI.
+One historical Paddle Sandbox subscription remains on the internal `luminotax@gmail.com` test workspace. Sandbox IDs are test history and are not valid LIVE identifiers.
 
-One internal historical Paddle Sandbox subscription remains on the `luminotax@gmail.com` test workspace. Its Sandbox customer/subscription IDs are test history and must not be treated as LIVE Paddle identifiers.
+### Public Sandbox checkout lock
 
-### Public Sandbox sales lock
+`paddle-billing` v15 is ACTIVE. New Sandbox checkout requires explicit `PADDLE_SANDBOX_CHECKOUT_ENABLED=true`; keep it absent/false on public production. Customer Portal access for an existing Paddle customer remains independent from the new-sales switch.
 
-Production `paddle-billing` is deployed with an explicit Sandbox checkout lock. New Sandbox checkout requires `PADDLE_SANDBOX_CHECKOUT_ENABLED=true`; keep that flag absent/false on the public production service.
+### Paddle LIVE — still OFF
 
-The lock does not remove Customer Portal access for an already existing Paddle customer. This preserves cancellation/billing-management access independently from the switch that opens new sales.
+Sandbox and LIVE use separate credentials, catalog IDs and webhook configuration.
 
-Current Paddle billing Edge Function version after the public-launch update: v15 ACTIVE.
+Before real-money sales:
 
-### Paddle LIVE
+- complete Paddle LIVE business/account verification;
+- approve the LIVE domain/default payment link;
+- create six LIVE price IDs;
+- create LIVE API key and client-side token;
+- configure LIVE webhook/signing secret;
+- verify LIVE Customer Portal;
+- publish the support telephone;
+- confirm Paddle MoR accounting/reconciliation route;
+- complete final consumer checkout/legal review;
+- smoke-test with `PADDLE_LIVE_BILLING_ENABLED=false` first;
+- only then explicitly set `PADDLE_LIVE_BILLING_ENABLED=true`.
 
-Paddle LIVE remains OFF until the real LIVE environment is configured. Sandbox and LIVE credentials/catalog IDs are separate.
+Paddle.js is prepared for LIVE initialization including `pwCustomer` for Retain readiness.
 
-Required paid-launch work still includes:
+## Legacy/direct Stripe and KSeF
 
-- Paddle LIVE business/account verification;
-- LIVE domain/default payment-link approval;
-- six LIVE plan price IDs;
-- LIVE API key and client-side token;
-- LIVE webhook destination/signing secret;
-- LIVE Customer Portal validation;
-- support telephone published for consumer contact before paid consumer sales;
-- accounting reconciliation route confirmed for Paddle MoR proceeds;
-- final legal/consumer checkout review;
-- final explicit `PADDLE_LIVE_BILLING_ENABLED=true` only after smoke checks.
+Stripe LIVE is OFF. KSeF PROD is OFF. Legacy direct Stripe/KSeF infrastructure is preserved only for rollback/history and is separated from the current Paddle launch gate.
 
-The operator launch-readiness gate remains fail-closed and separates these Paddle checks from legacy Stripe/KSeF checks.
+The old Stripe tax-ID reconciliation function remains deployed, but its every-five-minute cron is disabled because there are no reconciliation candidates.
 
-### Legacy/direct Stripe path
+Do not rewrite immutable historical direct-billing evidence just to match current branding/address.
 
-The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as rollback/history. Existing Stripe-backed records remain provider-associated.
+## Public legal documents
 
-Stripe LIVE is OFF. The legacy `reconcile-stripe-tax-ids` function is retained, but its automatic every-five-minutes cron is disabled because the reconciliation candidate set is empty. Re-enable it only if the direct Stripe path is deliberately restored.
-
-Historical direct-billing evidence structures may deliberately use old Stripe-specific fields and immutable legal snapshots. Do not rewrite those merely for branding.
-
-## Seller/operator
-
-Current operator:
-
-- Lumino Games sp. z o.o.
-- KRS: `0000910452`
-- NIP: `6762600090`
-- REGON: `389433660`
-- registered address: `ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Poland`
-- support/privacy: `whoplaysmygame@gmail.com`
-
-A public support telephone is still required before opening paid consumer checkout; do not invent or publish a number without operator confirmation.
-
-## Legal pages
-
-Public legal copy now reflects the public-beta state rather than the old closed-beta state:
-
-- public signup/free service is available;
-- YouTube/Twitch monitoring is live;
-- Discord and opt-in daily email digests are described according to current plan availability;
-- Kick remains unavailable;
-- Paddle Sandbox is internal test history and public Sandbox checkout is disabled;
-- Paddle LIVE real-money sales remain pending;
-- Paddle is described as Merchant of Record for future paid Paddle transactions;
-- legacy Stripe/direct-billing infrastructure is non-default rollback/history;
-- mandatory consumer rights are not excluded.
-
-Current public web legal versions:
+Current versions:
 
 - Terms: `2026-08-17-v1`
 - Privacy: `2026-08-17-v1`
 - Withdrawal: `2026-08-17-v1`
 
-Paddle checkout-consent evidence is synchronized to Terms `2026-08-17-v1` and Privacy `2026-08-17-v1` for future new checkouts.
+Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, Discord/daily email according to plan, Sandbox sales disabled and Paddle LIVE still pending.
 
-The legacy Stripe durable-contract-confirmation core retains its historical immutable version identifiers because it represents a separate direct-billing evidence path.
+Future Paddle checkout consent records use current Terms/Privacy versions.
 
-## Database security
+## Security
 
-A production review confirmed:
+Known reviewed Supabase advisor notices:
 
-- RLS is enabled on current public application/billing tables reviewed;
-- internal billing tables flagged as RLS-without-policy are intentionally service-role-only and do not grant access to `anon`/`authenticated`;
-- workspace RLS helpers use `auth.uid()`, `SECURITY DEFINER`, a fixed search path and no client CREATE privilege in the private schema;
-- `pg_net` remains in place because pg_cron + pg_net is actively used and the installed extension cannot be safely relocated without recreation;
-- performance unused-index notices are not being acted on prematurely.
+- Leaked Password Protection disabled because the current project is on Supabase Free; revisit Pro before paid launch;
+- `pg_net` resides in public and is intentionally retained because the scheduler uses pg_cron + pg_net and relocating it safely requires recreation;
+- RLS-without-policy INFO notices concern internal service-role-only billing tables with no `anon`/`authenticated` access.
 
-Known advisor items remain the previously reviewed Free-plan leaked-password warning, `pg_net` schema warning and informational internal-table RLS notices; no new security issue was introduced by the public-launch migrations/changes.
+RLS is enabled on reviewed public application/billing tables. Workspace helpers use `auth.uid()`, SECURITY DEFINER, fixed search paths and no client CREATE permission in the private schema.
 
-## Email
+## Launch invariants
 
-Resend handles two separate layers:
-
-- Supabase Auth custom SMTP: `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`;
-- opt-in product digest worker using a restricted Sending Access API key: `Who Plays My Game <updates@auth.whoplaysmygame.com>`.
-
-Daily product email is available to active Indie, Studio and Publisher plans. Settings lets an owner/admin enable/disable it, choose the recipient and thresholds. Do not replace this with instant per-signal email delivery.
-
-## Kick
-
-Kick monitoring remains Coming soon. Do not implement scraping or unsupported/private endpoints as a workaround for missing appropriate API/developer access.
-
-## KSeF / direct-billing accounting readiness
-
-KSeF production submission remains locked. The old KSeF/direct-seller implementation is retained only for the legacy/direct billing route and must not be conflated with Paddle MoR customer transactions.
-
-## Security and launch locks
-
-Keep these invariants:
-
-- public beta signup/free use: OPEN;
+- broad Free public beta announcement: WAITING ONLY FOR PUBLIC SUPPORT PHONE + FINAL DURABLE-CONFIRMATION WIRING/TEST;
 - public Paddle Sandbox new checkout: OFF;
-- Paddle LIVE: OFF until LIVE account/domain/catalog/webhook/credentials + final approval;
+- Paddle LIVE: OFF until full LIVE cutover;
 - Stripe LIVE: OFF;
 - KSeF PROD: OFF;
 - Kick: OFF;
-- product email: daily digest only, opt-in, one message per recipient per day;
-- Cloudflare Turnstile: ON for public email/password Auth;
+- Turnstile: ON;
+- Auth email: ON through Resend;
+- product email: opt-in daily digest only;
 - no secrets committed to Git;
-- database/RLS and worker authorization remain intact.
+- preserve RLS and worker authorization.
