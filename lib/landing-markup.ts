@@ -1,6 +1,6 @@
-import { landingRealityMarkup } from "@/lib/landing-reality";
+import { landingSeoMarkup } from "@/lib/landing-seo";
 
-export const landingMarkup = landingRealityMarkup.replace(
+export const landingMarkup = landingSeoMarkup.replace(
   '<a href="/withdrawal">Withdrawal</a> · ',
   '<a href="/withdrawal">Withdrawal</a> · <a href="/refunds">Refund Policy</a> · ',
 );
