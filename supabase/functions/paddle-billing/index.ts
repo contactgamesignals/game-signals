@@ -17,8 +17,8 @@ const headers = {
 };
 
 const PUBLIC_SITE_URL = "https://www.whoplaysmygame.com";
-const TERMS_VERSION = "2026-08-16-v4";
-const PRIVACY_VERSION = "2026-08-16-v4";
+const TERMS_VERSION = "2026-08-17-v1";
+const PRIVACY_VERSION = "2026-08-17-v1";
 
 type BuyerType = "individual" | "company";
 type PaddleObject = Record<string, unknown>;
@@ -164,9 +164,6 @@ Deno.serve(async (request) => {
       return json({ error: "All six Paddle plan prices must be configured before billing is enabled." }, 503);
     }
 
-    // Existing customers must be able to reach Paddle Customer Portal even when
-    // new checkout is temporarily locked. This keeps cancellation and billing
-    // document access independent from the sales switch.
     if (body.action === "portal") {
       if (subscription.billing_provider !== "paddle" || !subscription.billing_customer_id) {
         return json({ error: "No Paddle customer exists for this workspace yet." }, 409);
@@ -183,9 +180,6 @@ Deno.serve(async (request) => {
       return json({ url: general.overview, provider: "paddle" });
     }
 
-    // The canonical public site must never offer Paddle Sandbox as if it were a
-    // real subscription. Sandbox checkout now requires a separate explicit test
-    // switch; LIVE still requires both normal and LIVE billing locks.
     if (runtime.environment === "sandbox" && Deno.env.get("PADDLE_SANDBOX_CHECKOUT_ENABLED") !== "true") {
       return json({ error: "Paid checkout is not available while Paddle LIVE is being activated." }, 503);
     }
