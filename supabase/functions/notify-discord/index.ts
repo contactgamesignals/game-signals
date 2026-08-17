@@ -66,7 +66,7 @@ Deno.serve(async (request) => {
       (subscriptionsData ?? [])
         .filter((subscription) =>
           (subscription.status === "active" || subscription.status === "trialing") &&
-          (subscription.plan === "studio" || subscription.plan === "publisher"),
+          (subscription.plan === "indie" || subscription.plan === "studio" || subscription.plan === "publisher"),
         )
         .map((subscription) => subscription.workspace_id as string),
     );
