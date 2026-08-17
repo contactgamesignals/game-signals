@@ -15,6 +15,15 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      if (next === "/dashboard") {
+        const { error: confirmationError } = await supabase.functions.invoke("send-account-agreement-confirmation", {
+          body: {},
+        });
+        if (confirmationError) {
+          await supabase.auth.signOut();
+          return NextResponse.redirect(new URL("/login?error=agreement_confirmation_failed", origin));
+        }
+      }
       return NextResponse.redirect(new URL(next, origin));
     }
   }
