@@ -10,6 +10,7 @@ const COMPANY_KRS = "0000910452";
 const COMPANY_NIP = "6762600090";
 const COMPANY_REGON = "389433660";
 const SUPPORT_EMAIL = "whoplaysmygame@gmail.com";
+const PUBLIC_SUPPORT_PHONE = "+48 694 366 395";
 const SITE_URL = "https://www.whoplaysmygame.com";
 
 type AcceptanceRow = {
@@ -134,9 +135,6 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (rowError) throw new Error(`Could not read account agreement acceptance: ${rowError.message}`);
 
-    // Accounts created before the public-launch legal evidence flow have no
-    // current acceptance row. They remain valid legacy accounts and must not be
-    // blocked merely because this newer delivery mechanism did not exist yet.
     if (!rowData) return json({ ok: true, legacy_account: true });
 
     let row = rowData as AcceptanceRow;
@@ -147,14 +145,11 @@ Deno.serve(async (request) => {
       return json({ error: "Agreement confirmation delivery needs reconciliation before another send." }, 409);
     }
 
-    // Only current public-signup accounts need the transactional sender and the
-    // public customer-contact phone. Keeping these requirements below the legacy
-    // bypass prevents old accounts from being disrupted before launch.
     const apiKey = required(Deno.env.get("RESEND_API_KEY"), "RESEND_API_KEY");
     const fromEmail = Deno.env.get("ACCOUNT_AGREEMENT_FROM_EMAIL")?.trim()
       || Deno.env.get("RESEND_FROM_EMAIL")?.trim()
       || "Who Plays My Game <updates@auth.whoplaysmygame.com>";
-    const supportPhone = required(Deno.env.get("GAMESIGNAL_SUPPORT_PHONE"), "GAMESIGNAL_SUPPORT_PHONE");
+    const supportPhone = Deno.env.get("GAMESIGNAL_SUPPORT_PHONE")?.trim() || PUBLIC_SUPPORT_PHONE;
 
     if (!row.confirmation_text || !row.confirmation_sha256) {
       const confirmationText = buildConfirmationText({ email: recipient, acceptedAt: row.accepted_at, phone: supportPhone });
