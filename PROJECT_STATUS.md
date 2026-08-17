@@ -89,7 +89,7 @@ Recent production checks show the monitoring workers returning HTTP 200. The pub
 
 ### Current default: Paddle Sandbox
 
-Paddle is the default provider for new subscription checkout in the current code path.
+Paddle is the default provider for new subscription checkout in the current code path. New free subscription rows created by the signup trigger also default explicitly to `billing_provider = 'paddle'`; existing Stripe-backed rows are not rewritten and remain Stripe-associated.
 
 Sandbox catalog:
 
@@ -116,7 +116,7 @@ Paddle LIVE remains OFF and requires a deliberate separate cutover. The operator
 
 The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as a rollback/legacy path. Existing Stripe-backed records must remain provider-associated.
 
-Stripe LIVE is OFF. Legacy Stripe/KSeF checks are explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE.
+Stripe LIVE is OFF. Legacy Stripe/KSeF checks are explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE. The legacy `reconcile-stripe-tax-ids` function is retained for rollback, but its automatic every-five-minutes cron is disabled because the current reconciliation candidate set is empty; it must be deliberately re-enabled if the direct Stripe path is restored.
 
 Some historical direct-billing evidence structures deliberately continue using Stripe-specific field names and immutable legal-version snapshots. Do not rename or rewrite those merely for branding.
 
