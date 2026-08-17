@@ -66,9 +66,11 @@ Production Auth URL configuration is set to the canonical Who Plays My Game doma
 - production callback allowlist: `https://www.whoplaysmygame.com/auth/callback`;
 - localhost may remain allowlisted for development.
 
-Production Auth email delivery is now configured through Resend custom SMTP using the verified `auth.whoplaysmygame.com` sending domain. A real recovery email was delivered successfully from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`, and the Supabase Auth log recorded the recovery request with HTTP 200 and the canonical reset callback.
+Production Auth email delivery is configured through Resend custom SMTP using the verified `auth.whoplaysmygame.com` sending domain. A real recovery email was delivered successfully from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`, and the Supabase Auth log recorded the recovery request with HTTP 200 and the canonical reset callback.
 
-The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect. Bot protection/rate-limit review for public Auth forms should also be completed before a large public launch.
+Cloudflare Turnstile bot protection is enabled in Supabase Auth using a managed widget for the production domain. The production frontend passes the Turnstile `captchaToken` to password login, signup and password-recovery requests. A direct Auth request without any CAPTCHA token was tested after enforcement was enabled and was rejected with HTTP 400 / `captcha_failed`, confirming that the protection is enforced server-side rather than only rendered in the browser.
+
+The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect.
 
 ## Monitoring runtime
 
@@ -159,7 +161,7 @@ A post-domain-cutover review confirmed:
 
 ## Email
 
-Resend now handles both email layers, with separate responsibilities:
+Resend handles both email layers, with separate responsibilities:
 
 - Supabase Auth uses custom SMTP and sends branded account/security emails from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`;
 - product digests use a restricted Resend Sending Access API key in Supabase Edge Function secrets and send from `Who Plays My Game <updates@auth.whoplaysmygame.com>`.
@@ -187,7 +189,8 @@ Keep these invariants:
 - KSeF PROD: OFF;
 - Kick: OFF;
 - product email remains daily-digest-only, opt-in and capped at one message per recipient per day;
+- Cloudflare Turnstile remains enabled for public email/password Auth flows;
 - no secrets committed to Git;
 - database/RLS and custom worker authorization remain intact.
 
-Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security, add/verify public Auth bot protection and rate limits, re-check current seller/company information and complete the final legal/consumer checkout review.
+Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security (including Leaked Password Protection availability), re-check current seller/company information and complete the final legal/consumer checkout review.
