@@ -1,3 +1,4 @@
+import { PDFDocument, PDFFont, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { authorizeRequest, json, jsonHeaders, serviceClient } from "../_shared/core.ts";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -12,6 +13,18 @@ const COMPANY_REGON = "389433660";
 const SUPPORT_EMAIL = "whoplaysmygame@gmail.com";
 const PUBLIC_SUPPORT_PHONE = "+48 694 366 395";
 const SITE_URL = "https://www.whoplaysmygame.com";
+const PDF_FILENAME = "who-plays-my-game-account-agreement.pdf";
+
+const PDF_SECTION_HEADINGS = new Set([
+  "Operator",
+  "Account",
+  "Service agreed at signup",
+  "Duration and termination",
+  "Withdrawal",
+  "Complaints and support",
+  "Personal data",
+  "Applicable documents accepted at signup",
+]);
 
 type AcceptanceRow = {
   id: string;
@@ -47,9 +60,9 @@ async function sha256(value: string) {
 }
 
 function buildConfirmationText(input: { email: string; acceptedAt: string; phone: string }) {
-  return `WHO PLAYS MY GAME — CONFIRMATION OF YOUR ACCOUNT AGREEMENT
+  return `WHO PLAYS MY GAME - ACCOUNT AGREEMENT CONFIRMATION
 
-This email is your durable-medium confirmation of the online agreement concluded when you created and confirmed your Who Plays My Game account.
+This document confirms the online agreement concluded when you created and confirmed your Who Plays My Game account.
 
 Operator
 ${COMPANY_NAME}
@@ -73,9 +86,9 @@ Service agreed at signup
 - The Free public-beta plan costs 0 USD and creates no recurring payment obligation.
 - Free includes one active tracked game, YouTube video monitoring, Twitch live-stream monitoring and the authenticated creator-signal dashboard.
 - Kick monitoring is not currently available.
-- Paid subscriptions are not part of this Free account agreement and require a separate Paddle checkout when Paddle LIVE sales are enabled.
+- Paid subscriptions are not part of this Free account agreement and require a separate Paddle checkout.
 - The service requires internet access, a current mainstream browser and a working email account for authentication.
-- Monitoring relies on third-party platforms/APIs, so complete or immediate detection of every public mention cannot be guaranteed.
+- Monitoring relies on third-party platforms and APIs, so complete or immediate detection of every public mention cannot be guaranteed.
 
 Duration and termination
 The Free account continues until it is deleted or otherwise terminated under the Terms. You can request account deletion through the product subject to legal-record retention and other safeguards described in the Terms and Privacy Policy.
@@ -97,8 +110,205 @@ Terms: ${SITE_URL}/terms
 Privacy Policy: ${SITE_URL}/privacy
 Withdrawal information: ${SITE_URL}/withdrawal
 
-The links above are provided for convenience. The information in this email is itself the stored confirmation sent to you and is intended to remain reproducible in unchanged form.
+This PDF is the account agreement confirmation sent to you for your records. The frozen confirmation text and its SHA-256 digest are retained with the agreement evidence.
 `;
+}
+
+function asciiForPdf(value: string) {
+  const replacements: Record<string, string> = {
+    "ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n", "ó": "o", "ś": "s", "ź": "z", "ż": "z",
+    "Ą": "A", "Ć": "C", "Ę": "E", "Ł": "L", "Ń": "N", "Ó": "O", "Ś": "S", "Ź": "Z", "Ż": "Z",
+    "–": "-", "—": "-", "−": "-", "’": "'", "“": "\"", "”": "\"", " ": " ",
+  };
+  return Array.from(value, (character) => replacements[character] ?? character).join("");
+}
+
+function wrapPdfLine(text: string, font: PDFFont, fontSize: number, maxWidth: number) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [""];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) {
+      current = word;
+      continue;
+    }
+    let fragment = "";
+    for (const character of word) {
+      const next = `${fragment}${character}`;
+      if (fragment && font.widthOfTextAtSize(next, fontSize) > maxWidth) {
+        lines.push(fragment);
+        fragment = character;
+      } else {
+        fragment = next;
+      }
+    }
+    current = fragment;
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+async function buildConfirmationPdf(confirmationText: string) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const bodySize = 9.4;
+  const bodyLineHeight = 13.2;
+  const marginX = 54;
+  const bottomMargin = 50;
+  const safeText = asciiForPdf(confirmationText).replace(/^WHO PLAYS MY GAME - ACCOUNT AGREEMENT CONFIRMATION\n+/, "");
+
+  let page = pdf.addPage([595.28, 841.89]);
+  let y = 0;
+
+  const startPage = () => {
+    const { width, height } = page.getSize();
+    page.drawText("WHO PLAYS MY GAME", { x: marginX, y: height - 58, size: 15, font: bold, color: rgb(0.06, 0.08, 0.14) });
+    page.drawText("Account agreement confirmation", { x: marginX, y: height - 79, size: 11.5, font: regular, color: rgb(0.32, 0.35, 0.42) });
+    page.drawLine({ start: { x: marginX, y: height - 94 }, end: { x: width - marginX, y: height - 94 }, thickness: 0.7, color: rgb(0.84, 0.85, 0.88) });
+    y = height - 116;
+  };
+
+  const newPage = () => {
+    page = pdf.addPage([595.28, 841.89]);
+    startPage();
+  };
+
+  const ensureSpace = (needed: number) => {
+    if (y - needed < bottomMargin) newPage();
+  };
+
+  startPage();
+  const lines = safeText.split("\n");
+  for (const sourceLine of lines) {
+    const trimmed = sourceLine.trim();
+    if (!trimmed) {
+      y -= 7;
+      continue;
+    }
+
+    if (PDF_SECTION_HEADINGS.has(trimmed)) {
+      ensureSpace(28);
+      y -= 5;
+      page.drawText(trimmed, { x: marginX, y, size: 10.6, font: bold, color: rgb(0.06, 0.08, 0.14) });
+      y -= 18;
+      continue;
+    }
+
+    const isBullet = trimmed.startsWith("- ");
+    const text = isBullet ? trimmed.slice(2) : trimmed;
+    const x = isBullet ? marginX + 14 : marginX;
+    const maxWidth = page.getWidth() - marginX - x;
+    const wrapped = wrapPdfLine(text, regular, bodySize, maxWidth);
+    ensureSpace(wrapped.length * bodyLineHeight + 3);
+    if (isBullet) page.drawText("-", { x: marginX + 2, y, size: bodySize, font: regular, color: rgb(0.16, 0.18, 0.23) });
+    for (const wrappedLine of wrapped) {
+      page.drawText(wrappedLine, { x, y, size: bodySize, font: regular, color: rgb(0.16, 0.18, 0.23) });
+      y -= bodyLineHeight;
+    }
+  }
+
+  const pages = pdf.getPages();
+  pages.forEach((currentPage, index) => {
+    const { width } = currentPage.getSize();
+    const footer = `Page ${index + 1} of ${pages.length}`;
+    const footerWidth = regular.widthOfTextAtSize(footer, 8);
+    currentPage.drawText("Who Plays My Game", { x: marginX, y: 27, size: 8, font: regular, color: rgb(0.48, 0.5, 0.56) });
+    currentPage.drawText(footer, { x: width - marginX - footerWidth, y: 27, size: 8, font: regular, color: rgb(0.48, 0.5, 0.56) });
+  });
+
+  pdf.setTitle("Who Plays My Game - Account Agreement Confirmation");
+  pdf.setAuthor(COMPANY_NAME);
+  pdf.setSubject("Account agreement confirmation");
+  pdf.setCreator("Who Plays My Game");
+  return new Uint8Array(await pdf.save());
+}
+
+function toBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+function formatAcceptedDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function buildEmailText(input: { email: string; acceptedAt: string }) {
+  return `Welcome to Who Plays My Game
+
+Your account is ready.
+
+Plan: Free
+Price: 0 USD
+Account: ${input.email}
+Agreement accepted: ${formatAcceptedDate(input.acceptedAt)}
+
+Your full account agreement confirmation is attached as a PDF. Please keep it for your records.
+
+Open dashboard: ${SITE_URL}/dashboard
+Terms: ${SITE_URL}/terms
+Privacy: ${SITE_URL}/privacy
+Withdrawal information: ${SITE_URL}/withdrawal
+
+Need help? Contact ${SUPPORT_EMAIL}.
+
+Who Plays My Game
+${COMPANY_NAME}
+`;
+}
+
+function buildEmailHtml(input: { email: string; acceptedAt: string }) {
+  const email = escapeHtml(input.email);
+  const acceptedAt = escapeHtml(formatAcceptedDate(input.acceptedAt));
+  return `
+  <div style="background:#f5f7fb;padding:28px 12px;font-family:Inter,Arial,sans-serif;color:#171a23">
+    <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e7e9ef;border-radius:16px;overflow:hidden">
+      <div style="padding:30px 34px 22px">
+        <div style="font-size:14px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#545b6b">Who Plays My Game</div>
+        <h1 style="font-size:28px;line-height:1.2;margin:14px 0 10px;color:#10131a">Your account is ready</h1>
+        <p style="font-size:16px;line-height:1.65;margin:0;color:#4b5260">Thanks for creating your Who Plays My Game account.</p>
+      </div>
+      <div style="padding:0 34px 28px">
+        <div style="background:#f7f8fb;border:1px solid #e7e9ef;border-radius:12px;padding:18px 20px;line-height:1.7;font-size:14px">
+          <div><strong>Plan:</strong> Free</div>
+          <div><strong>Price:</strong> 0 USD</div>
+          <div><strong>Account:</strong> ${email}</div>
+          <div><strong>Agreement accepted:</strong> ${acceptedAt}</div>
+        </div>
+        <p style="font-size:15px;line-height:1.65;margin:22px 0;color:#4b5260">Your full account agreement confirmation is attached as a PDF. Please keep it for your records.</p>
+        <a href="${SITE_URL}/dashboard" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:9px">Open dashboard</a>
+        <div style="margin-top:26px;font-size:13px;line-height:1.7;color:#697080">
+          <a href="${SITE_URL}/terms" style="color:#4f46e5;text-decoration:none">Terms</a>
+          <span style="padding:0 7px">|</span>
+          <a href="${SITE_URL}/privacy" style="color:#4f46e5;text-decoration:none">Privacy</a>
+          <span style="padding:0 7px">|</span>
+          <a href="${SITE_URL}/withdrawal" style="color:#4f46e5;text-decoration:none">Withdrawal information</a>
+        </div>
+      </div>
+      <div style="border-top:1px solid #eceef3;padding:20px 34px;font-size:12px;line-height:1.65;color:#7a8190">
+        Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#4f46e5;text-decoration:none">${SUPPORT_EMAIL}</a><br>
+        ${COMPANY_NAME}
+      </div>
+    </div>
+  </div>`;
 }
 
 function providerError(payload: unknown, status: number) {
@@ -189,6 +399,7 @@ Deno.serve(async (request) => {
 
     let response: Response;
     try {
+      const pdfBytes = await buildConfirmationPdf(row.confirmation_text);
       response = await fetch(RESEND_ENDPOINT, {
         method: "POST",
         headers: {
@@ -199,9 +410,10 @@ Deno.serve(async (request) => {
         body: JSON.stringify({
           from: fromEmail,
           to: [recipient],
-          subject: "Who Plays My Game — confirmation of your account agreement",
-          text: row.confirmation_text,
-          html: `<pre style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.55">${escapeHtml(row.confirmation_text)}</pre>`,
+          subject: "Who Plays My Game - your account is ready",
+          text: buildEmailText({ email: recipient, acceptedAt: row.accepted_at }),
+          html: buildEmailHtml({ email: recipient, acceptedAt: row.accepted_at }),
+          attachments: [{ content: toBase64(pdfBytes), filename: PDF_FILENAME }],
         }),
         signal: AbortSignal.timeout(15_000),
       });
