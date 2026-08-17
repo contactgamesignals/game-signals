@@ -9,6 +9,7 @@ const privacy = readFileSync("app/privacy/page.tsx", "utf8");
 const withdrawal = readFileSync("app/withdrawal/page.tsx", "utf8");
 const signup = readFileSync("components/AuthCard.tsx", "utf8");
 const signupEvidence = readFileSync("supabase/migrations/20260817003838_add_account_legal_acceptance_evidence.sql", "utf8");
+const signupEnforcement = readFileSync("supabase/migrations/20260817004228_require_current_legal_acceptance_on_signup.sql", "utf8");
 const contractMigration = readFileSync("supabase/migrations/20260815133000_add_contract_confirmation_evidence.sql", "utf8");
 const envExample = readFileSync(".env.example", "utf8");
 
@@ -74,8 +75,16 @@ assert.match(signupEvidence, /accepted_at timestamptz not null default now\(\)/)
 assert.match(signupEvidence, /alter table public\.account_legal_acceptances enable row level security/);
 assert.match(signupEvidence, /revoke all on table public\.account_legal_acceptances from anon, authenticated/);
 assert.match(signupEvidence, /grant select, insert, update, delete on table public\.account_legal_acceptances to service_role/);
-assert.match(signupEvidence, /new\.raw_user_meta_data ->> 'terms_version'/);
-assert.match(signupEvidence, /new\.raw_user_meta_data ->> 'privacy_version'/);
+
+for (const metadataField of ["terms_accepted", "terms_version", "privacy_acknowledged", "privacy_version"]) {
+  assert.ok(signupEnforcement.includes(`new.raw_user_meta_data ->> '${metadataField}'`) || signupEnforcement.includes(`new.raw_user_meta_data ->> '${metadataField.replace("_accepted", "")}'`), `Signup enforcement must inspect ${metadataField}.`);
+}
+assert.match(signupEnforcement, /accepted_terms_version is distinct from '2026-08-17-v1'/);
+assert.match(signupEnforcement, /acknowledged_privacy_version is distinct from '2026-08-17-v1'/);
+assert.match(signupEnforcement, /Current Terms and Privacy Policy must be acknowledged before signup\./);
+assert.match(signupEnforcement, /insert into public\.account_legal_acceptances/);
+assert.match(signupEnforcement, /insert into public\.subscriptions \(workspace_id, plan, status, stripe_status_raw, billing_provider\)/);
+assert.match(signupEnforcement, /values \(workspace_id, 'free', 'trialing', 'trialing', 'paddle'\)/);
 
 assert.match(contractMigration, /create table public\.billing_contract_confirmations/);
 assert.match(contractMigration, /billing_account_id uuid not null references public\.billing_accounts\(id\) on delete restrict/);
@@ -104,4 +113,4 @@ for (const line of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_GAMESIGNAL_SUPPORT_PHONE/);
 
-console.log("Public-beta legal documents, signup legal evidence, launch blockers and immutable seller/contract confirmation evidence are fail-closed.");
+console.log("Public-beta legal documents, server-enforced signup legal evidence, launch blockers and immutable seller/contract confirmation evidence are fail-closed.");
