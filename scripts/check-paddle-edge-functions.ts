@@ -17,6 +17,11 @@ assert.ok(
 assert.match(billing, /collection_mode: "automatic"/);
 assert.doesNotMatch(billing, /pdl_(?:sdbx|live)_apikey_[A-Za-z0-9_]+/, "Paddle API keys must never be committed.");
 
+const paddlePage = readFileSync("components/PaddleCheckoutPage.tsx", "utf8");
+assert.match(paddlePage, /if \(environment === "sandbox"\) paddle\.Environment\.set\("sandbox"\)/);
+assert.match(paddlePage, /pwCustomer:\s*\{\s*\}/, "Paddle.js must initialize pwCustomer for LIVE Retain readiness.");
+assert.doesNotMatch(paddlePage, /Environment\.set\("production"\)/, "Paddle.js should default to production rather than explicitly setting it.");
+
 const webhook = readFileSync("supabase/functions/paddle-webhook/index.ts", "utf8");
 assert.match(webhook, /request\.arrayBuffer\(\)/, "Webhook must verify the untouched raw body bytes.");
 assert.match(webhook, /Paddle-Signature/);
@@ -58,4 +63,4 @@ assert.doesNotMatch(
   "Legacy Stripe/KSeF readiness must not block the current Paddle launch gate.",
 );
 
-console.log("Paddle Edge Function, provider-neutral migration and Paddle launch-gate safeguards passed.");
+console.log("Paddle Edge Function, Paddle.js, provider-neutral migration and Paddle launch-gate safeguards passed.");
