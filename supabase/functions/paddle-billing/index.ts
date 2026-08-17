@@ -56,7 +56,8 @@ function serviceClient() {
 
 function paddleRuntime() {
   const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
-  const apiKey = validatePaddleApiKey(environment, Deno.env.get("PADDLE_API_KEY") ?? undefined);
+  const apiKeyName = environment === "live" ? "PADDLE_LIVE_API_KEY" : "PADDLE_API_KEY";
+  const apiKey = validatePaddleApiKey(environment, Deno.env.get(apiKeyName) ?? undefined);
   const catalog = buildPaddleRuntimePriceCatalog(environment, (key) => Deno.env.get(key) ?? undefined);
   return { environment, apiKey, catalog, baseUrl: paddleApiBase(environment) };
 }
