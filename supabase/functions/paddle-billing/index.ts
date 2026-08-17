@@ -119,7 +119,7 @@ Deno.serve(async (request) => {
         .maybeSingle(),
       userClient
         .from("subscriptions")
-        .select("plan, status, billing_provider, billing_customer_id, billing_subscription_id")
+        .select("plan, status, billing_provider, billing_environment, billing_customer_id, billing_subscription_id")
         .eq("workspace_id", body.workspace_id)
         .maybeSingle(),
     ]);
@@ -142,6 +142,8 @@ Deno.serve(async (request) => {
     const sandboxCheckoutEnabled = Deno.env.get("PADDLE_SANDBOX_CHECKOUT_ENABLED") === "true";
     const checkoutEnabled = runtimeConfigured && billingEnabled &&
       (environment === "live" ? liveBillingEnabled : sandboxCheckoutEnabled);
+    const paddleIdentityMatchesRuntime = subscription.billing_provider === "paddle" &&
+      subscription.billing_environment === environment;
 
     if (body.action === "status") {
       return json({
@@ -149,10 +151,11 @@ Deno.serve(async (request) => {
         checkout_enabled: checkoutEnabled,
         provider: "paddle",
         paddle_mode: environment,
+        billing_environment: subscription.billing_environment ?? "live",
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
-        has_customer: subscription.billing_provider === "paddle" && Boolean(subscription.billing_customer_id),
-        has_subscription: subscription.billing_provider === "paddle" && Boolean(subscription.billing_subscription_id),
+        has_customer: paddleIdentityMatchesRuntime && Boolean(subscription.billing_customer_id),
+        has_subscription: paddleIdentityMatchesRuntime && Boolean(subscription.billing_subscription_id),
       });
     }
 
@@ -168,6 +171,11 @@ Deno.serve(async (request) => {
     if (body.action === "portal") {
       if (subscription.billing_provider !== "paddle" || !subscription.billing_customer_id) {
         return json({ error: "No Paddle customer exists for this workspace yet." }, 409);
+      }
+      if (subscription.billing_environment !== runtime.environment) {
+        return json({
+          error: "This workspace contains historical Paddle Sandbox billing data and cannot open it in the LIVE Customer Portal.",
+        }, 409);
       }
       const subscriptionIds = subscription.billing_subscription_id ? [String(subscription.billing_subscription_id)] : [];
       const portal = await paddleRequest(`/customers/${encodeURIComponent(String(subscription.billing_customer_id))}/portal-sessions`, {
@@ -204,6 +212,7 @@ Deno.serve(async (request) => {
     }
 
     const existingPaddleSubscriptionNeedsPortal = subscription.billing_provider === "paddle" &&
+      subscription.billing_environment === runtime.environment &&
       Boolean(subscription.billing_subscription_id) && subscription.status !== "canceled";
     const alreadyPaid = subscription.plan !== "free" &&
       (subscription.status === "active" || subscription.status === "trialing");
