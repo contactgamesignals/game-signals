@@ -17,6 +17,14 @@ Current public brand:
 
 Historical technical identifiers such as `GAMESIGNAL_*`, migration names and some database evidence labels are intentionally retained where changing them could break compatibility or audit continuity.
 
+## Public launch state
+
+The public beta is authorized/open for normal account registration and free product use.
+
+A new Free workspace can track one active game. Public users can create an account, confirm their email, sign in, add a game and use the real YouTube/Twitch monitoring dashboard. Free signup must not be confused with a paid Paddle subscription.
+
+New real-money checkout remains deliberately locked until the separate Paddle LIVE account/domain/catalog/webhook/credentials cutover is complete. Public Paddle Sandbox checkout is fail-closed and cannot be presented as a real purchase.
+
 ## Live product
 
 Currently implemented:
@@ -33,7 +41,7 @@ Currently implemented:
 - Publisher CSV export;
 - account/workspace settings, export and guarded deletion;
 - public Terms, Privacy and Withdrawal pages;
-- Paddle Merchant-of-Record billing integration in SANDBOX;
+- Paddle Merchant-of-Record integration, verified in Sandbox;
 - Paddle Customer Portal integration;
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe.
 
@@ -46,31 +54,25 @@ Vercel hosts the application.
 - `https://whoplaysmygame.com` redirects to `https://www.whoplaysmygame.com`;
 - both domains are attached to the Vercel project and have valid DNS configuration;
 - Cloudflare is used for DNS, with the Vercel records kept DNS-only;
-- `https://game-signals.vercel.app` is retained only as a legacy Vercel alias and now permanently redirects every path to the matching path on `https://www.whoplaysmygame.com`;
-- the root and all three public legal pages use canonical URLs on `www.whoplaysmygame.com`;
+- `https://game-signals.vercel.app` is retained only as a legacy Vercel alias and permanently redirects matching paths to `https://www.whoplaysmygame.com`;
+- the root and public legal pages use canonical URLs on `www.whoplaysmygame.com`;
 - `/robots.txt` is live and blocks private/auth/API routes from crawling;
 - `/sitemap.xml` is live and contains only the public homepage and legal pages.
 
 ## Authentication
 
-Supabase email/password authentication supports:
+Supabase email/password authentication supports signup confirmation, login, forgot/reset password and protected dashboard/settings.
 
-- signup confirmation;
-- login;
-- forgot/reset password;
-- protected dashboard/settings.
-
-Production Auth URL configuration is set to the canonical Who Plays My Game domain:
+Production Auth configuration:
 
 - Site URL: `https://www.whoplaysmygame.com`;
-- production callback allowlist: `https://www.whoplaysmygame.com/auth/callback`;
-- localhost may remain allowlisted for development.
+- production callback: `https://www.whoplaysmygame.com/auth/callback`;
+- Resend custom SMTP on verified `auth.whoplaysmygame.com`;
+- Cloudflare Turnstile enforced server-side for public email/password auth flows.
 
-Production Auth email delivery is configured through Resend custom SMTP using the verified `auth.whoplaysmygame.com` sending domain. A real recovery email was delivered successfully from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`, and the Supabase Auth log recorded the recovery request with HTTP 200 and the canonical reset callback.
+A real recovery email was delivered successfully. Direct Auth login/recovery without CAPTCHA was rejected with `captcha_failed`, while a real browser password login with Turnstile succeeded with HTTP 200.
 
-Cloudflare Turnstile bot protection is enabled in Supabase Auth using a managed widget for the production domain. The production frontend passes the Turnstile `captchaToken` to password login, signup and password-recovery requests. Direct Auth login and password-recovery requests without any CAPTCHA token were tested after enforcement was enabled and were rejected with HTTP 400 / `captcha_failed`, confirming server-side enforcement. A real browser password login through `https://www.whoplaysmygame.com` then succeeded with HTTP 200 after Turnstile enforcement was active, confirming the production frontend/token path end to end.
-
-The Supabase security advisor currently reports Leaked Password Protection as unavailable/disabled. The project is on the Supabase Free plan and Supabase documents this protection as a Pro-plan feature, so it remains a pre-LIVE upgrade/security-review item rather than a closed-beta code defect.
+The Supabase Free plan still reports Leaked Password Protection disabled. Treat upgrading/reviewing Supabase Auth security as a paid-launch hardening item, not as a defect in the current free public beta.
 
 ## Monitoring runtime
 
@@ -81,44 +83,70 @@ Real monitoring is active:
 - Discord notification worker and scheduler;
 - daily email digest worker and scheduler.
 
-The product-email scheduler runs once daily at `06:00 UTC`. It processes the previous complete UTC day, sends nothing when no matching signals exist, groups matching games/workspaces by recipient address, and is capped at one digest per recipient per day. Resend idempotency is also used to protect against retry duplicates.
+The product-email scheduler runs once daily at `06:00 UTC`. It processes the previous complete UTC day, sends nothing when no matching signals exist, groups matching games/workspaces by recipient address and is capped at one digest per recipient per day. Resend idempotency protects against retry duplicates.
 
-Recent production checks show the monitoring workers returning HTTP 200. The public Signal Lab is a marketing demo; the authenticated dashboard is backed by real Supabase data.
+The public Signal Lab is only an interactive marketing demo; the authenticated dashboard is backed by real Supabase data.
 
 ## Billing
 
-### Current default: Paddle Sandbox
+### Current customer route: Paddle Merchant of Record
 
-Paddle is the default provider for new subscription checkout in the current code path. New free subscription rows created by the signup trigger also default explicitly to `billing_provider = 'paddle'`; existing Stripe-backed rows are not rewritten and remain Stripe-associated.
+New subscription records default to `billing_provider = 'paddle'`. Existing Stripe-backed rows are not rewritten and remain Stripe-associated.
 
-Sandbox catalog:
+Planned Paddle catalog:
 
 - Indie: $2.99/month or $29.90/year
 - Studio: $7.99/month or $79.90/year
 - Publisher: $14.99/month or $149.90/year
 
-Implemented/tested:
+Sandbox has already verified:
 
 - checkout transaction creation;
 - webhook subscription synchronization;
 - raw-body Paddle-Signature verification with a five-second timestamp tolerance;
 - active subscription state in Supabase;
 - customer/subscription identifiers;
-- Paddle Customer Portal;
+- Customer Portal;
 - cancellation at the end of the paid period;
 - duplicate-subscription protection;
-- provider-aware Settings UI;
-- explicit Sandbox/LIVE locks.
+- provider-aware Settings UI.
 
-Paddle LIVE remains OFF and requires a deliberate separate cutover. The operator launch-readiness gate follows the current Paddle MoR architecture: LIVE account verification, domain approval, LIVE catalog, LIVE webhook, portal, accounting route, legal review, Auth production review and a final explicit Paddle approval all fail closed.
+One internal historical Paddle Sandbox subscription remains on the `luminotax@gmail.com` test workspace. Its Sandbox customer/subscription IDs are test history and must not be treated as LIVE Paddle identifiers.
+
+### Public Sandbox sales lock
+
+Production `paddle-billing` is deployed with an explicit Sandbox checkout lock. New Sandbox checkout requires `PADDLE_SANDBOX_CHECKOUT_ENABLED=true`; keep that flag absent/false on the public production service.
+
+The lock does not remove Customer Portal access for an already existing Paddle customer. This preserves cancellation/billing-management access independently from the switch that opens new sales.
+
+Current Paddle billing Edge Function version after the public-launch update: v15 ACTIVE.
+
+### Paddle LIVE
+
+Paddle LIVE remains OFF until the real LIVE environment is configured. Sandbox and LIVE credentials/catalog IDs are separate.
+
+Required paid-launch work still includes:
+
+- Paddle LIVE business/account verification;
+- LIVE domain/default payment-link approval;
+- six LIVE plan price IDs;
+- LIVE API key and client-side token;
+- LIVE webhook destination/signing secret;
+- LIVE Customer Portal validation;
+- support telephone published for consumer contact before paid consumer sales;
+- accounting reconciliation route confirmed for Paddle MoR proceeds;
+- final legal/consumer checkout review;
+- final explicit `PADDLE_LIVE_BILLING_ENABLED=true` only after smoke checks.
+
+The operator launch-readiness gate remains fail-closed and separates these Paddle checks from legacy Stripe/KSeF checks.
 
 ### Legacy/direct Stripe path
 
-The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as a rollback/legacy path. Existing Stripe-backed records must remain provider-associated.
+The repository retains the previously built Stripe sandbox/direct-billing, tax, accounting, contract-confirmation and KSeF-readiness infrastructure as rollback/history. Existing Stripe-backed records remain provider-associated.
 
-Stripe LIVE is OFF. Legacy Stripe/KSeF checks are explicitly separated from the current Paddle `liveAllowed` gate so historical rollback infrastructure cannot accidentally block or authorize Paddle LIVE. The legacy `reconcile-stripe-tax-ids` function is retained for rollback, but its automatic every-five-minutes cron is disabled because the current reconciliation candidate set is empty; it must be deliberately re-enabled if the direct Stripe path is restored.
+Stripe LIVE is OFF. The legacy `reconcile-stripe-tax-ids` function is retained, but its automatic every-five-minutes cron is disabled because the reconciliation candidate set is empty. Re-enable it only if the direct Stripe path is deliberately restored.
 
-Some historical direct-billing evidence structures deliberately continue using Stripe-specific field names and immutable legal-version snapshots. Do not rename or rewrite those merely for branding.
+Historical direct-billing evidence structures may deliberately use old Stripe-specific fields and immutable legal snapshots. Do not rewrite those merely for branding.
 
 ## Seller/operator
 
@@ -131,44 +159,52 @@ Current operator:
 - registered address: `ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Poland`
 - support/privacy: `whoplaysmygame@gmail.com`
 
+A public support telephone is still required before opening paid consumer checkout; do not invent or publish a number without operator confirmation.
+
 ## Legal pages
 
-Public legal pages are aligned to the Who Plays My Game brand and current closed-beta architecture:
+Public legal copy now reflects the public-beta state rather than the old closed-beta state:
 
-- Paddle Sandbox is the current default test checkout;
-- no real-money billing is enabled;
-- Paddle is described as Merchant of Record for a future Paddle transaction;
-- legacy Stripe/direct-billing infrastructure is identified as non-default rollback/history rather than the active customer route;
+- public signup/free service is available;
+- YouTube/Twitch monitoring is live;
+- Discord and opt-in daily email digests are described according to current plan availability;
+- Kick remains unavailable;
+- Paddle Sandbox is internal test history and public Sandbox checkout is disabled;
+- Paddle LIVE real-money sales remain pending;
+- Paddle is described as Merchant of Record for future paid Paddle transactions;
+- legacy Stripe/direct-billing infrastructure is non-default rollback/history;
 - mandatory consumer rights are not excluded.
 
-Current web legal versions:
+Current public web legal versions:
 
-- Terms: `2026-08-16-v4`
-- Privacy: `2026-08-16-v4`
-- Withdrawal: `2026-08-16-v2`
+- Terms: `2026-08-17-v1`
+- Privacy: `2026-08-17-v1`
+- Withdrawal: `2026-08-17-v1`
 
-The legacy Stripe durable-contract-confirmation core retains its own historical immutable version identifiers because it represents a separate direct-billing evidence path.
+Paddle checkout-consent evidence is synchronized to Terms `2026-08-17-v1` and Privacy `2026-08-17-v1` for future new checkouts.
+
+The legacy Stripe durable-contract-confirmation core retains its historical immutable version identifiers because it represents a separate direct-billing evidence path.
 
 ## Database security
 
-A post-domain-cutover review confirmed:
+A production review confirmed:
 
-- RLS is enabled on all current public application/billing tables reviewed;
-- internal billing tables flagged by the advisor as having RLS without policies are intentionally service-role-only and do not grant table access to `anon` or `authenticated`;
+- RLS is enabled on current public application/billing tables reviewed;
+- internal billing tables flagged as RLS-without-policy are intentionally service-role-only and do not grant access to `anon`/`authenticated`;
 - workspace RLS helpers use `auth.uid()`, `SECURITY DEFINER`, a fixed search path and no client CREATE privilege in the private schema;
-- the active `pg_net` extension is intentionally left in place because the scheduler stack uses pg_cron + pg_net and the installed extension is not relocatable without recreation;
-- performance-advisor unused-index notices are not being acted on during closed beta because many indexes protect low-frequency billing/history paths and premature removal would create more risk than value.
+- `pg_net` remains in place because pg_cron + pg_net is actively used and the installed extension cannot be safely relocated without recreation;
+- performance unused-index notices are not being acted on prematurely.
+
+Known advisor items remain the previously reviewed Free-plan leaked-password warning, `pg_net` schema warning and informational internal-table RLS notices; no new security issue was introduced by the public-launch migrations/changes.
 
 ## Email
 
-Resend handles both email layers, with separate responsibilities:
+Resend handles two separate layers:
 
-- Supabase Auth uses custom SMTP and sends branded account/security emails from `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`;
-- product digests use a restricted Resend Sending Access API key in Supabase Edge Function secrets and send from `Who Plays My Game <updates@auth.whoplaysmygame.com>`.
+- Supabase Auth custom SMTP: `Who Plays My Game <no-reply@auth.whoplaysmygame.com>`;
+- opt-in product digest worker using a restricted Sending Access API key: `Who Plays My Game <updates@auth.whoplaysmygame.com>`.
 
-Daily product email is opt-in per workspace and available to active Indie, Studio and Publisher plans. The Settings page lets an owner/admin enable or turn off the digest, choose the recipient and configure minimum signal score / Twitch viewer thresholds. The worker groups all eligible signals for the same recipient into one message and sends no email on empty days.
-
-Do not replace this with instant per-signal email delivery. Realtime delivery belongs in the dashboard and Discord; email remains the low-volume daily summary channel.
+Daily product email is available to active Indie, Studio and Publisher plans. Settings lets an owner/admin enable/disable it, choose the recipient and thresholds. Do not replace this with instant per-signal email delivery.
 
 ## Kick
 
@@ -176,21 +212,19 @@ Kick monitoring remains Coming soon. Do not implement scraping or unsupported/pr
 
 ## KSeF / direct-billing accounting readiness
 
-A substantial fail-closed KSeF and seller-document implementation remains in the repository for the legacy/direct seller billing route. KSeF production submission remains locked.
-
-The Paddle Merchant-of-Record customer route must not be conflated with the old direct Stripe seller-invoice architecture. Preserve old evidence code where needed for history/rollback; do not activate KSeF PROD unless the direct-billing route is separately re-authorized.
+KSeF production submission remains locked. The old KSeF/direct-seller implementation is retained only for the legacy/direct billing route and must not be conflated with Paddle MoR customer transactions.
 
 ## Security and launch locks
 
 Keep these invariants:
 
-- Paddle LIVE: OFF until separately approved;
+- public beta signup/free use: OPEN;
+- public Paddle Sandbox new checkout: OFF;
+- Paddle LIVE: OFF until LIVE account/domain/catalog/webhook/credentials + final approval;
 - Stripe LIVE: OFF;
 - KSeF PROD: OFF;
 - Kick: OFF;
-- product email remains daily-digest-only, opt-in and capped at one message per recipient per day;
-- Cloudflare Turnstile remains enabled for public email/password Auth flows;
+- product email: daily digest only, opt-in, one message per recipient per day;
+- Cloudflare Turnstile: ON for public email/password Auth;
 - no secrets committed to Git;
-- database/RLS and custom worker authorization remain intact.
-
-Before a public paid launch, complete Paddle LIVE account/domain/catalog/webhook/portal configuration, verify Paddle accounting reconciliation, upgrade/review Supabase Auth security (including Leaked Password Protection availability), re-check current seller/company information and complete the final legal/consumer checkout review.
+- database/RLS and worker authorization remain intact.
