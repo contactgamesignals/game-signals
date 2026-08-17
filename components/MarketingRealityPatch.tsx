@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { BRAND } from "@/lib/brand";
 
 function findTextElement(selector: string, startsWith: string) {
-  return Array.from(document.querySelectorAll<HTMLElement>>(selector)).find((element) =>
+  return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) =>
     (element.textContent ?? "").trim().startsWith(startsWith),
   );
 }
