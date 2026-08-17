@@ -14,11 +14,9 @@ This file is the compact source of truth for the current product state. Historic
 - KRS: `0000910452`
 - NIP: `6762600090`
 - REGON: `389433660`
-- Current registered address: `ul. Ujastek 1, 31-752 Kraków, Poland`
+- Current registered address in the app still needs to be reconciled with the company's latest registered-address change before paid LIVE launch.
 
 The support phone is intentionally kept in operator/legal contact information and transactional agreement confirmation rather than promoted in marketing copy.
-
-Do not use the old `Kazimierza Morawskiego 5/127` address for Lumino Games. Historical immutable Stripe/direct-billing evidence snapshots are not rewritten merely for this correction.
 
 Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility/audit continuity.
 
@@ -30,6 +28,16 @@ A new Free workspace can track one active game. Free signup creates no payment o
 
 New real-money checkout remains deliberately locked until the separate Paddle LIVE cutover is complete. Public Paddle Sandbox checkout is fail-closed and cannot be presented as a real purchase.
 
+## Paid plan model
+
+Indie, Studio and Publisher intentionally have the same paid feature set and the same paid monitoring cadence. The only commercial difference between paid tiers is the number of active monitored games:
+
+- Indie: 1 active game;
+- Studio: up to 3 active games;
+- Publisher: up to 10 active games.
+
+Every active paid plan includes YouTube + Twitch monitoring, Discord alerts, opt-in daily email digest, CSV signal export, aliases/exclusion terms, pause/resume, billing portal access and the fastest paid monitoring cadence. Do not reintroduce feature gating between Indie, Studio and Publisher unless the product model is explicitly changed again.
+
 ## Live product
 
 Implemented and production-backed:
@@ -40,10 +48,10 @@ Implemented and production-backed:
 - aliases and exclusion terms;
 - game create/edit/pause/resume/remove flows;
 - realtime mention updates;
-- Discord alerts for eligible paid plans;
-- opt-in daily email digests for eligible paid plans;
+- Discord alerts for every active paid plan;
+- opt-in daily email digests for every active paid plan;
 - plan-based active-game limits;
-- Publisher CSV export;
+- CSV signal export for every active paid plan;
 - account/workspace settings, export and guarded deletion;
 - public Terms, Privacy and Withdrawal pages;
 - Paddle Merchant-of-Record billing integration verified in Sandbox;
@@ -98,6 +106,8 @@ Active:
 - Discord notification worker + scheduler;
 - daily email digest worker + scheduler.
 
+Paid monitoring cadence is intentionally uniform across Indie, Studio and Publisher: Twitch every 2 minutes and YouTube every 30 minutes when due. Free remains on the slower Free cadence.
+
 The product digest runs once daily at `06:00 UTC`, processes the previous complete UTC day, sends nothing when no matching signals exist, groups by recipient and is capped at one digest per recipient per day. Resend idempotency protects against retry duplicates.
 
 Do not replace daily digest email with instant per-signal email. Realtime belongs in dashboard/Discord.
@@ -123,6 +133,8 @@ Planned prices:
 - Studio: $7.99/month or $79.90/year
 - Publisher: $14.99/month or $149.90/year
 
+The price difference represents active-game capacity only, not feature access.
+
 Sandbox has verified transaction creation, webhook synchronization, Paddle-Signature verification, active subscription state, customer/subscription IDs, Customer Portal, end-of-period cancellation and duplicate-subscription protection.
 
 One historical Paddle Sandbox subscription remains on the internal `luminotax@gmail.com` test workspace. Sandbox IDs are test history and are not valid LIVE identifiers.
@@ -146,6 +158,7 @@ Before real-money sales:
 - configure LIVE webhook/signing secret;
 - verify LIVE Customer Portal;
 - confirm Paddle MoR accounting/reconciliation route;
+- reconcile the latest Lumino Games registered address across Paddle and public legal/operator data;
 - smoke-test with `PADDLE_LIVE_BILLING_ENABLED=false` first;
 - only then explicitly set `PADDLE_LIVE_BILLING_ENABLED=true`.
 
@@ -167,7 +180,7 @@ Current versions:
 - Privacy: `2026-08-17-v1`
 - Withdrawal: `2026-08-17-v1`
 
-Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, Discord/daily email according to plan, Sandbox sales disabled and Paddle LIVE still pending. Operator contact includes the current Lumino Games address, email and public support phone.
+Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, paid-plan feature access is uniform, Sandbox sales disabled and Paddle LIVE still pending. Operator contact includes the support email and public support phone. The registered address must be reconciled to the company's latest official address before paid LIVE launch.
 
 Future Paddle checkout consent records use current Terms/Privacy versions.
 
@@ -184,6 +197,7 @@ RLS is enabled on reviewed public application/billing tables. Workspace helpers 
 ## Launch invariants
 
 - Free public beta signup: OPEN;
+- paid-plan features: SAME across Indie/Studio/Publisher; only active-game limit differs;
 - public Paddle Sandbox new checkout: OFF;
 - Paddle LIVE: OFF until full LIVE cutover;
 - Stripe LIVE: OFF;
