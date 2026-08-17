@@ -296,7 +296,7 @@ export default function DashboardClient({
             </div>
             <div className="dashboard-actions">
               <span className="plan-pill">{planLabel} · {activeGames}/{gameLimit} active games</span>
-              {plan === "publisher" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
+              {plan !== "free" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
               <button className="btn btn-primary" disabled={atGameLimit || busy} onClick={openNewMonitor}>
                 {atGameLimit ? "Active game limit reached" : "Add game"}
               </button>
@@ -304,7 +304,7 @@ export default function DashboardClient({
           </div>
 
           {message ? <div className="status-message">{message}</div> : null}
-          {atGameLimit && plan !== "publisher" ? (
+          {atGameLimit ? (
             <div className="status-message">
               You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or manage your plan in Settings to monitor another title.
             </div>
