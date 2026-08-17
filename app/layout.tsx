@@ -15,13 +15,29 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap",
 });
 
+const title = `Twitch & YouTube Game Monitoring | ${BRAND.name}`;
+const description =
+  "Get alerts when Twitch streamers play your game or new YouTube videos cover it. Creator monitoring for indie developers, studios and publishers.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(BRAND.siteUrl),
-  title: `${BRAND.name} — creator intelligence for game developers`,
-  description:
-    "Monitor YouTube videos and Twitch live streams about your game. Kick monitoring is planned, pending KICK developer approval.",
+  title,
+  description,
+  applicationName: BRAND.name,
   alternates: {
     canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: BRAND.siteUrl,
+    siteName: BRAND.name,
+    title,
+    description,
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
   },
   icons: {
     icon: "/favicon.svg",
