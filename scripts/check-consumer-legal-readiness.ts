@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const company = readFileSync("lib/company.ts", "utf8");
 const legal = readFileSync("lib/legal.ts", "utf8");
 const legalVersions = readFileSync("lib/legal-versions.ts", "utf8");
 const launch = readFileSync("lib/launch-readiness.ts", "utf8");
@@ -10,8 +11,13 @@ const withdrawal = readFileSync("app/withdrawal/page.tsx", "utf8");
 const signup = readFileSync("components/AuthCard.tsx", "utf8");
 const signupEvidence = readFileSync("supabase/migrations/20260817003838_add_account_legal_acceptance_evidence.sql", "utf8");
 const signupEnforcement = readFileSync("supabase/migrations/20260817004228_require_current_legal_acceptance_on_signup.sql", "utf8");
+const accountConfirmationMigration = readFileSync("supabase/migrations/20260817005000_add_account_agreement_confirmation_delivery.sql", "utf8");
+const accountConfirmationSender = readFileSync("supabase/functions/send-account-agreement-confirmation/index.ts", "utf8");
 const contractMigration = readFileSync("supabase/migrations/20260815133000_add_contract_confirmation_evidence.sql", "utf8");
 const envExample = readFileSync(".env.example", "utf8");
+
+assert.match(company, /registeredAddress: "ul\. Ujastek 1, 31-752 Kraków, Poland"/);
+assert.doesNotMatch(company, /Kazimierza Morawskiego/);
 
 assert.match(legalVersions, /terms: "2026-08-17-v1"/);
 assert.match(legalVersions, /privacy: "2026-08-17-v1"/);
@@ -86,6 +92,25 @@ assert.match(signupEnforcement, /insert into public\.account_legal_acceptances/)
 assert.match(signupEnforcement, /insert into public\.subscriptions \(workspace_id, plan, status, stripe_status_raw, billing_provider\)/);
 assert.match(signupEnforcement, /values \(workspace_id, 'free', 'trialing', 'trialing', 'paddle'\)/);
 
+assert.match(accountConfirmationMigration, /confirmation_text text/);
+assert.match(accountConfirmationMigration, /confirmation_sha256 text/);
+assert.match(accountConfirmationMigration, /confirmation_status text not null default 'pending'/);
+assert.match(accountConfirmationMigration, /confirmation_provider_message_id text/);
+assert.match(accountConfirmationMigration, /confirmation_sent_at timestamptz/);
+assert.match(accountConfirmationMigration, /confirmation_status in \('pending','sending','delivered','failed','needs_review'\)/);
+
+assert.match(accountConfirmationSender, /GAMESIGNAL_SUPPORT_PHONE/);
+assert.match(accountConfirmationSender, /RESEND_API_KEY/);
+assert.match(accountConfirmationSender, /Idempotency-Key/);
+assert.match(accountConfirmationSender, /Who Plays My Game — confirmation of your account agreement/);
+assert.match(accountConfirmationSender, /durable-medium confirmation/i);
+assert.match(accountConfirmationSender, /The Free public-beta plan costs 0 USD/);
+assert.match(accountConfirmationSender, /generally 14 days/);
+assert.match(accountConfirmationSender, /confirmation_status: "sending"/);
+assert.match(accountConfirmationSender, /confirmation_status: "delivered"/);
+assert.match(accountConfirmationSender, /confirmation_status: "needs_review"/);
+assert.match(accountConfirmationSender, /confirmation_sha256/);
+
 assert.match(contractMigration, /create table public\.billing_contract_confirmations/);
 assert.match(contractMigration, /billing_account_id uuid not null references public\.billing_accounts\(id\) on delete restrict/);
 assert.match(contractMigration, /checkout_consent_id uuid not null unique references public\.billing_checkout_consents\(id\) on delete restrict/);
@@ -113,4 +138,4 @@ for (const line of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_GAMESIGNAL_SUPPORT_PHONE/);
 
-console.log("Public-beta legal documents, server-enforced signup legal evidence, launch blockers and immutable seller/contract confirmation evidence are fail-closed.");
+console.log("Public-beta legal documents, server-enforced signup evidence and durable confirmation sender are fail-closed.");
