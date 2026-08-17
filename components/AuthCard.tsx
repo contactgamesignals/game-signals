@@ -8,6 +8,8 @@ import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { createClient } from "@/lib/supabase/client";
 import TurnstileChallenge from "@/components/TurnstileChallenge";
 
+const PUBLIC_SIGNUP_ENABLED = false;
+
 type Props = {
   mode: "login" | "signup";
   configured: boolean;
@@ -34,6 +36,10 @@ export default function AuthCard({ mode, configured }: Props) {
 
     if (!configured) {
       setMessage("Authentication is temporarily unavailable.");
+      return;
+    }
+    if (!isLogin && !PUBLIC_SIGNUP_ENABLED) {
+      setMessage("Public beta signup is opening shortly after final launch contact configuration.");
       return;
     }
     if (!isLogin && !legalAccepted) {
@@ -106,57 +112,35 @@ export default function AuthCard({ mode, configured }: Props) {
         <p>
           {isLogin
             ? "Open your creator intelligence dashboard."
-            : "Create an account and your first monitoring workspace."}
+            : PUBLIC_SIGNUP_ENABLED
+              ? "Create an account and your first monitoring workspace."
+              : "Public beta signup is ready and will open after the final customer-contact detail is configured."}
         </p>
 
+        {!isLogin && !PUBLIC_SIGNUP_ENABLED ? (
+          <div className="status-message">Signup is temporarily locked for the final launch check. Existing accounts can still log in normally.</div>
+        ) : null}
         {message ? <div className={success ? "auth-success" : "auth-error"}>{message}</div> : null}
 
         <form className="auth-form" onSubmit={submit}>
           {!isLogin ? (
             <label>
               Display name
-              <input
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Your name"
-                autoComplete="name"
-              />
+              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Your name" autoComplete="name" disabled={!PUBLIC_SIGNUP_ENABLED} />
             </label>
           ) : null}
           <label>
             Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@studio.com"
-              autoComplete="email"
-              required
-            />
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@studio.com" autoComplete="email" required disabled={!isLogin && !PUBLIC_SIGNUP_ENABLED} />
           </label>
           <label>
             Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 8 characters"
-              autoComplete={isLogin ? "current-password" : "new-password"}
-              minLength={8}
-              required
-            />
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete={isLogin ? "current-password" : "new-password"} minLength={8} required disabled={!isLogin && !PUBLIC_SIGNUP_ENABLED} />
           </label>
 
           {!isLogin ? (
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, lineHeight: 1.5 }}>
-              <input
-                id="signup-legal-acceptance"
-                type="checkbox"
-                checked={legalAccepted}
-                onChange={(event) => setLegalAccepted(event.target.checked)}
-                required
-                style={{ width: 16, height: 16, marginTop: 2, flex: "0 0 auto" }}
-              />
+              <input id="signup-legal-acceptance" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required disabled={!PUBLIC_SIGNUP_ENABLED} style={{ width: 16, height: 16, marginTop: 2, flex: "0 0 auto" }} />
               <label htmlFor="signup-legal-acceptance" style={{ margin: 0, fontWeight: 400 }}>
                 I agree to the <Link href="/terms" target="_blank" rel="noreferrer">Terms</Link> and acknowledge the{" "}
                 <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.
@@ -164,18 +148,16 @@ export default function AuthCard({ mode, configured }: Props) {
             </div>
           ) : null}
 
-          <TurnstileChallenge
-            action={isLogin ? "auth_login" : "auth_signup"}
-            onTokenChange={setCaptchaToken}
-            resetKey={captchaResetKey}
-          />
+          {(isLogin || PUBLIC_SIGNUP_ENABLED) ? (
+            <TurnstileChallenge action={isLogin ? "auth_login" : "auth_signup"} onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+          ) : null}
           {isLogin ? (
             <div style={{ textAlign: "right", marginTop: -6 }}>
               <Link href="/forgot-password" className="tiny">Forgot password?</Link>
             </div>
           ) : null}
-          <button className="btn btn-primary" disabled={loading || !captchaToken || success || (!isLogin && !legalAccepted)}>
-            {loading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
+          <button className="btn btn-primary" disabled={loading || (!isLogin && !PUBLIC_SIGNUP_ENABLED) || !captchaToken || success || (!isLogin && !legalAccepted)}>
+            {loading ? "Please wait…" : isLogin ? "Log in" : PUBLIC_SIGNUP_ENABLED ? "Create account" : "Signup opening shortly"}
           </button>
         </form>
 
