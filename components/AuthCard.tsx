@@ -8,7 +8,7 @@ import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { createClient } from "@/lib/supabase/client";
 import TurnstileChallenge from "@/components/TurnstileChallenge";
 
-const PUBLIC_SIGNUP_ENABLED = false;
+const PUBLIC_SIGNUP_ENABLED = true;
 
 type Props = {
   mode: "login" | "signup";
