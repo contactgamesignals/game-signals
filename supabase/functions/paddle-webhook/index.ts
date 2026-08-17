@@ -157,6 +157,15 @@ async function syncSubscription(
     p_current_period_end: currentPeriodEnd(subscription),
   });
   if (error) throw error;
+
+  if (data) {
+    const { error: environmentError } = await service
+      .from("subscriptions")
+      .update({ billing_environment: environment })
+      .eq("workspace_id", workspaceId);
+    if (environmentError) throw environmentError;
+  }
+
   return Boolean(data);
 }
 
