@@ -53,7 +53,7 @@ export default function MarketingRealityPatch() {
 
       const alertStep = Array.from(document.querySelectorAll<HTMLElement>(".step")).find((step) => (step.querySelector("h3")?.textContent ?? "").trim() === "Alert");
       const alertCopy = alertStep?.querySelector<HTMLElement>("p");
-      if (alertCopy) alertCopy.textContent = "Eligible paid plans can receive one opt-in daily email digest. Studio and Publisher can also send matching signals to Discord.";
+      if (alertCopy) alertCopy.textContent = "Every paid plan includes Discord alerts and one opt-in daily email digest, alongside the live dashboard.";
 
       const kickMapLabel = document.querySelector<HTMLElement>(".map-label.l3");
       if (kickMapLabel) kickMapLabel.textContent = "Kick / coming soon";
@@ -105,7 +105,7 @@ export default function MarketingRealityPatch() {
       }
 
       const notice = document.querySelector<HTMLElement>(".controls .notice");
-      if (notice) notice.textContent = "Interactive demo. Production monitoring is live for YouTube and Twitch; Discord alerts and opt-in daily email digests are available on eligible plans. Kick is coming soon.";
+      if (notice) notice.textContent = "Interactive demo. Production monitoring is live for YouTube and Twitch; every paid plan includes Discord alerts, CSV export and opt-in daily email digests. Kick is coming soon.";
 
       const onboardingNotice = document.querySelector<HTMLElement>("#onboardingModal .notice");
       if (onboardingNotice) onboardingNotice.textContent = "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
@@ -114,12 +114,18 @@ export default function MarketingRealityPatch() {
       if (planNotice) planNotice.textContent = "New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
-      if (pricingLead) pricingLead.textContent = "Public beta pricing. Free accounts can start monitoring now; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
+      if (pricingLead) pricingLead.textContent = "Public beta pricing. Every paid plan includes the same features and monitoring cadence; the only difference is the number of active games. Paid checkout will open after Paddle LIVE activation.";
 
+      const sharedPaidFeatures = [
+        "YouTube + Twitch monitoring",
+        "Discord + daily email digest",
+        "CSV signal export",
+        "Fastest paid monitoring cadence",
+      ];
       const planFeatures: Record<string, string[]> = {
-        Indie: ["1 active tracked game", "YouTube + Twitch monitoring", "Creator signal dashboard", "Opt-in daily email digest", "Aliases and exclusion terms"],
-        Studio: ["Up to 3 active games", "Everything in Indie", "Discord alerts", "Faster monitoring cadence", "Paddle self-service billing"],
-        Publisher: ["Up to 10 active games", "Everything in Studio", "CSV signal export", "Highest monitoring cadence", "Pause and resume active monitors"],
+        Indie: ["1 active tracked game", ...sharedPaidFeatures],
+        Studio: ["Up to 3 active games", ...sharedPaidFeatures],
+        Publisher: ["Up to 10 active games", ...sharedPaidFeatures],
       };
 
       document.querySelectorAll<HTMLElement>(".plan").forEach((plan) => {
