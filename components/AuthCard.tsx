@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { BRAND } from "@/lib/brand";
+import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { createClient } from "@/lib/supabase/client";
 import TurnstileChallenge from "@/components/TurnstileChallenge";
 
@@ -17,6 +18,7 @@ export default function AuthCard({ mode, configured }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -32,6 +34,10 @@ export default function AuthCard({ mode, configured }: Props) {
 
     if (!configured) {
       setMessage("Authentication is temporarily unavailable.");
+      return;
+    }
+    if (!isLogin && !legalAccepted) {
+      setMessage("Please agree to the Terms and acknowledge the Privacy Policy to create an account.");
       return;
     }
     if (!captchaToken) {
@@ -58,7 +64,13 @@ export default function AuthCard({ mode, configured }: Props) {
           password,
           options: {
             emailRedirectTo: redirectTo,
-            data: { display_name: displayName.trim() || email.split("@")[0] },
+            data: {
+              display_name: displayName.trim() || email.split("@")[0],
+              terms_accepted: true,
+              terms_version: LEGAL_VERSIONS.terms,
+              privacy_acknowledged: true,
+              privacy_version: LEGAL_VERSIONS.privacy,
+            },
             captchaToken,
           },
         });
@@ -134,6 +146,24 @@ export default function AuthCard({ mode, configured }: Props) {
               required
             />
           </label>
+
+          {!isLogin ? (
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, lineHeight: 1.5 }}>
+              <input
+                id="signup-legal-acceptance"
+                type="checkbox"
+                checked={legalAccepted}
+                onChange={(event) => setLegalAccepted(event.target.checked)}
+                required
+                style={{ width: 16, height: 16, marginTop: 2, flex: "0 0 auto" }}
+              />
+              <label htmlFor="signup-legal-acceptance" style={{ margin: 0, fontWeight: 400 }}>
+                I agree to the <Link href="/terms" target="_blank" rel="noreferrer">Terms</Link> and acknowledge the{" "}
+                <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.
+              </label>
+            </div>
+          ) : null}
+
           <TurnstileChallenge
             action={isLogin ? "auth_login" : "auth_signup"}
             onTokenChange={setCaptchaToken}
@@ -144,7 +174,7 @@ export default function AuthCard({ mode, configured }: Props) {
               <Link href="/forgot-password" className="tiny">Forgot password?</Link>
             </div>
           ) : null}
-          <button className="btn btn-primary" disabled={loading || !captchaToken || success}>
+          <button className="btn btn-primary" disabled={loading || !captchaToken || success || (!isLogin && !legalAccepted)}>
             {loading ? "Please wait…" : isLogin ? "Log in" : "Create account"}
           </button>
         </form>
