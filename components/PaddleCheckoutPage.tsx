@@ -28,6 +28,7 @@ export default function PaddleCheckoutPage({ clientToken, environment }: Props) 
       if (environment === "sandbox") paddle.Environment.set("sandbox");
       paddle.Initialize({
         token: clientToken,
+        pwCustomer: {},
         checkout: {
           settings: {
             displayMode: "overlay",
