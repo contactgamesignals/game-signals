@@ -121,16 +121,16 @@ export function chunks<T>(items: T[], size: number) {
 
 export type Plan = "free" | "indie" | "studio" | "publisher";
 
+function isPaidPlan(plan: Plan) {
+  return plan === "indie" || plan === "studio" || plan === "publisher";
+}
+
 export function twitchCadenceMinutes(plan: Plan) {
-  if (plan === "publisher") return 2;
-  if (plan === "studio") return 3;
-  return 5;
+  return isPaidPlan(plan) ? 2 : 5;
 }
 
 export function youtubeCadenceMinutes(plan: Plan) {
-  if (plan === "publisher") return 30;
-  if (plan === "studio") return 60;
-  return 120;
+  return isPaidPlan(plan) ? 30 : 120;
 }
 
 export function signalScore(reach: number, isLive: boolean) {
