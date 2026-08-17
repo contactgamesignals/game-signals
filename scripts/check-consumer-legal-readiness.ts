@@ -16,8 +16,8 @@ const accountConfirmationSender = readFileSync("supabase/functions/send-account-
 const contractMigration = readFileSync("supabase/migrations/20260815133000_add_contract_confirmation_evidence.sql", "utf8");
 const envExample = readFileSync(".env.example", "utf8");
 
-assert.match(company, /registeredAddress: "ul\. Ujastek 1, 31-752 Kraków, Poland"/);
-assert.doesNotMatch(company, /Kazimierza Morawskiego/);
+assert.match(company, /registeredAddress: "ul\. Kazimierza Morawskiego 5\/127, 30-102 Kraków, Małopolskie, Poland"/);
+assert.doesNotMatch(company, /Ujastek 1/);
 
 assert.match(legalVersions, /terms: "2026-08-17-v1"/);
 assert.match(legalVersions, /privacy: "2026-08-17-v1"/);
@@ -110,6 +110,8 @@ assert.match(accountConfirmationSender, /confirmation_status: "sending"/);
 assert.match(accountConfirmationSender, /confirmation_status: "delivered"/);
 assert.match(accountConfirmationSender, /confirmation_status: "needs_review"/);
 assert.match(accountConfirmationSender, /confirmation_sha256/);
+assert.match(accountConfirmationSender, /Kazimierza Morawskiego 5\/127/);
+assert.doesNotMatch(accountConfirmationSender, /Ujastek 1/);
 
 assert.match(contractMigration, /create table public\.billing_contract_confirmations/);
 assert.match(contractMigration, /billing_account_id uuid not null references public\.billing_accounts\(id\) on delete restrict/);
