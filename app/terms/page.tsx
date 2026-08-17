@@ -5,7 +5,7 @@ import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/
 
 export const metadata: Metadata = {
   title: `Terms — ${COMPANY.productName}`,
-  description: `Closed beta subscription terms for ${COMPANY.productName}, operated by ${COMPANY.legalName}.`,
+  description: `Subscription terms for ${COMPANY.productName}, operated by ${COMPANY.legalName}`,
 };
 
 export default function TermsPage() {
@@ -19,11 +19,11 @@ export default function TermsPage() {
           <span>{COMPANY.productName}</span>
         </Link>
 
-        <div className="kicker" style={{ marginTop: 24 }}>Legal · closed beta</div>
+        <div className="kicker" style={{ marginTop: 24 }}>Legal · public beta</div>
         <h1>{COMPANY.productName} Subscription Terms</h1>
         <p>Last updated: {LEGAL_UPDATED_DATE} · Terms version: {LEGAL_VERSIONS.terms}</p>
         <p>
-          These Terms govern access to {COMPANY.productName}, a software-as-a-service product operated by {COMPANY.legalName}. The product is currently in closed beta. Paddle Sandbox is the default test billing integration and does not charge real money.
+          These Terms govern access to {COMPANY.productName}, a software-as-a-service product operated by {COMPANY.legalName}. Public account registration and the core monitoring service are available in beta. New real-money subscriptions remain unavailable until the separate Paddle LIVE checkout is activated.
         </p>
 
         <h2>1. Operator and contact</h2>
@@ -32,15 +32,15 @@ export default function TermsPage() {
           {COMPANY.registeredAddress}<br />
           KRS {COMPANY.krs} · NIP {COMPANY.nip} · REGON {COMPANY.regon}<br />
           Email: <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a><br />
-          {supportPhone ? <><span>Phone: </span><a href={`tel:${supportPhone.replaceAll(" ", "")}`}>{supportPhone}</a></> : <span>Phone: will be published before any paid consumer launch if required for the final sales route.</span>}
+          {supportPhone ? <><span>Phone: </span><a href={`tel:${supportPhone.replaceAll(" ", "")}`}>{supportPhone}</a></> : <span>Phone: will be published before any paid consumer launch.</span>}
         </p>
 
-        <h2>2. Closed beta and billing provider</h2>
+        <h2>2. Public beta and billing provider</h2>
         <p>
-          Real paid billing is not enabled. The current checkout is a Paddle Sandbox integration used only for testing. A separate explicit production change is required before real charges can be accepted.
+          Public signup and the free product experience are available. New paid checkout is temporarily locked while Paddle LIVE account, domain, catalog and webhook configuration are completed. Paddle Sandbox remains only as internal test history and cannot create a real-money charge.
         </p>
         <p>
-          For a future transaction completed through Paddle, Paddle acts as Merchant of Record for the customer transaction. Paddle handles the payment transaction, applicable indirect transaction taxes and customer billing documents under its own buyer terms and checkout disclosures. {COMPANY.legalName} remains the operator of the {COMPANY.productName} software and is responsible for the product access and functionality described in these Terms.
+          For a transaction completed through Paddle, Paddle acts as Merchant of Record for the customer transaction. Paddle handles the payment transaction, applicable indirect transaction taxes and customer billing documents under its own buyer terms and checkout disclosures. {COMPANY.legalName} remains the operator of the {COMPANY.productName} software and is responsible for the product access and functionality described in these Terms.
         </p>
         <p>
           The codebase also retains a Stripe sandbox/direct-billing fallback for technical rollback and legacy testing. It is not the default checkout for new subscriptions. No direct LIVE billing route will be enabled without separate legal, tax and operational approval.
@@ -56,7 +56,7 @@ export default function TermsPage() {
 
         <h2>4. Service, functionality and technical requirements</h2>
         <p>
-          {COMPANY.productName} helps users monitor public creator activity connected with games. The closed beta currently supports YouTube video monitoring and Twitch stream monitoring. Discord alerts are available on eligible plans. Kick monitoring and production email alerts are not currently live features.
+          {COMPANY.productName} helps users monitor public creator activity connected with games. The public beta currently supports YouTube video monitoring and Twitch stream monitoring. Discord alerts and opt-in daily email digests are available on eligible plans. Kick monitoring remains unavailable until the required API/commercial access is in place.
         </p>
         <p>
           The service is web-based and requires a current mainstream browser, internet access and an account capable of receiving authentication messages. Connected features may require an account, webhook or other access on the relevant third-party service.
@@ -70,7 +70,7 @@ export default function TermsPage() {
           Paid plans are intended to be recurring monthly or yearly subscriptions. Before any real payment order, the checkout provider must show the selected product, billing period, recurring nature of the subscription and the final amount due, including applicable transaction taxes handled by that provider.
         </p>
         <p>
-          Prices shown on the website before LIVE billing are a preview and may change before launch. The amount displayed in the final checkout is controlling for that transaction. Sandbox checkouts are tests and do not create a real-money subscription charge.
+          Prices shown on the website before Paddle LIVE activation describe the planned paid plans and do not themselves create a charge. Once LIVE checkout is enabled, the amount displayed in the final Paddle Checkout is controlling for that transaction.
         </p>
 
         <h2>6. Cancellation and subscription management</h2>
