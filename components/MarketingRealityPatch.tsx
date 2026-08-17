@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { BRAND } from "@/lib/brand";
 
 function findTextElement(selector: string, startsWith: string) {
-  return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) =>
+  return Array.from(document.querySelectorAll<HTMLElement>>(selector)).find((element) =>
     (element.textContent ?? "").trim().startsWith(startsWith),
   );
 }
@@ -36,7 +36,7 @@ export default function MarketingRealityPatch() {
       if (heroCopy) heroCopy.textContent = `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
 
       const heroMicro = document.querySelector<HTMLElement>(".hero .micro");
-      if (heroMicro) heroMicro.textContent = "Public beta is opening shortly. Signup is temporarily locked for the final customer-contact setup; paid checkout will open after Paddle LIVE activation.";
+      if (heroMicro) heroMicro.textContent = "Public beta is open. Create a free account and start monitoring YouTube and Twitch; paid checkout will open after Paddle LIVE activation.";
 
       const systemState = document.querySelector<HTMLElement>(".system-state");
       if (systemState) systemState.innerHTML = "<i></i> 2 sources online";
@@ -108,13 +108,13 @@ export default function MarketingRealityPatch() {
       if (notice) notice.textContent = "Interactive demo. Production monitoring is live for YouTube and Twitch; Discord alerts and opt-in daily email digests are available on eligible plans. Kick is coming soon.";
 
       const onboardingNotice = document.querySelector<HTMLElement>("#onboardingModal .notice");
-      if (onboardingNotice) onboardingNotice.textContent = "After signup opens, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
+      if (onboardingNotice) onboardingNotice.textContent = "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
 
       const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
-      if (planNotice) planNotice.textContent = "New account signup is temporarily locked for final launch contact setup. Paid checkout remains unavailable until Paddle LIVE activation is completed.";
+      if (planNotice) planNotice.textContent = "New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
-      if (pricingLead) pricingLead.textContent = "Public beta pricing. Free signup will open after the final customer-contact setup; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
+      if (pricingLead) pricingLead.textContent = "Public beta pricing. Free accounts can start monitoring now; new paid subscriptions will open when Paddle LIVE activation is complete. Paddle will act as Merchant of Record for paid customer transactions.";
 
       const planFeatures: Record<string, string[]> = {
         Indie: ["1 active tracked game", "YouTube + Twitch monitoring", "Creator signal dashboard", "Opt-in daily email digest", "Aliases and exclusion terms"],
