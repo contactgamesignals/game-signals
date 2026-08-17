@@ -9,23 +9,24 @@ This file is the compact source of truth for the current product state. Historic
 - Product: Who Plays My Game
 - Canonical production URL: `https://www.whoplaysmygame.com`
 - Support/privacy email: `whoplaysmygame@gmail.com`
+- Public support phone: `+48 694 366 395`
 - Operator: Lumino Games sp. z o.o.
 - KRS: `0000910452`
 - NIP: `6762600090`
 - REGON: `389433660`
 - Current registered address: `ul. Ujastek 1, 31-752 Kraków, Poland`
 
-Do not use the old `Kazimierza Morawskiego 5/127` address for Lumino Games. That address was incorrectly mixed into current operator data and has been corrected in `lib/company.ts` and the current `billing_seller_profiles` row. Historical immutable Stripe/direct-billing evidence snapshots are not rewritten merely for this correction.
+The support phone is intentionally kept in operator/legal contact information and transactional agreement confirmation rather than promoted in marketing copy.
+
+Do not use the old `Kazimierza Morawskiego 5/127` address for Lumino Games. Historical immutable Stripe/direct-billing evidence snapshots are not rewritten merely for this correction.
 
 Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility/audit continuity.
 
 ## Public launch state
 
-The application is technically ready for public Free beta use, but final public consumer launch should wait for the one remaining operator datum: a real public customer-contact telephone number for Lumino Games / Who Plays My Game.
+**Free public beta signup is OPEN.**
 
-Once that number is configured and the durable account-agreement confirmation sender is wired into the signup-confirmation callback, the Free public beta can be announced broadly.
-
-A new Free workspace can track one active game. Free signup creates no payment obligation.
+A new Free workspace can track one active game. Free signup creates no payment obligation. Public registration is enabled in both the frontend and the database (`public_signup_enabled=true`).
 
 New real-money checkout remains deliberately locked until the separate Paddle LIVE cutover is complete. Public Paddle Sandbox checkout is fail-closed and cannot be presented as a real purchase.
 
@@ -62,7 +63,7 @@ Production Auth is configured on the canonical domain with:
 
 Real recovery email delivery and real browser login with Turnstile were verified. Requests without CAPTCHA were rejected with `captcha_failed`.
 
-Public signup now requires a visible checkbox agreeing to current Terms and acknowledging the Privacy Policy. The frontend sends the exact legal versions in Supabase user metadata.
+Public signup requires a visible checkbox agreeing to current Terms and acknowledging the Privacy Policy. The frontend sends exact legal versions in Supabase user metadata.
 
 The database trigger `handle_new_user()` independently fail-closes signup unless it receives:
 
@@ -73,24 +74,20 @@ The database trigger `handle_new_user()` independently fail-closes signup unless
 
 Accepted versions and a database timestamp are stored in service-role-only `account_legal_acceptances`. New subscriptions created by signup are Free, `billing_provider='paddle'`, and keep legacy `stripe_status_raw='trialing'` compatibility.
 
-## Durable account-agreement confirmation
+## Account agreement confirmation
 
-UOKiK guidance for distance contracts requires confirmation on a durable medium no later than the start of the service; email is a durable medium while a mutable web page is not.
+The database stores delivery evidence for the signup agreement confirmation: frozen confirmation text, SHA-256, status, provider message ID, attempts, sent timestamp and error state.
 
-The database now stores delivery evidence fields for the signup agreement confirmation: frozen confirmation text, SHA-256, status, provider message ID, attempts, sent timestamp and error state.
+Supabase Edge Function `send-account-agreement-confirmation` v3 is ACTIVE. It:
 
-Supabase Edge Function `send-account-agreement-confirmation` v1 is ACTIVE and implements:
+- authenticates the current user;
+- bypasses legacy accounts created before the current signup-evidence flow;
+- freezes the confirmation text and verifies its SHA-256;
+- uses a Resend idempotency key;
+- persists sending/delivered/failed/needs_review state;
+- sends current operator/contact information, Free plan status and accepted document versions.
 
-- authenticated-user-only custom authorization;
-- current legal-version lookup;
-- frozen confirmation text + SHA-256 verification;
-- Resend idempotency key;
-- explicit sending/delivered/failed/needs_review state;
-- durable email content covering operator identity, Free plan/service, 0-price status, technical requirements, withdrawal information, complaint contact and accepted document versions.
-
-The sender intentionally requires `GAMESIGNAL_SUPPORT_PHONE` and therefore remains fail-closed until a genuine public Lumino Games / Who Plays My Game phone number is supplied. Do not invent or substitute a Lumino Tax/private number.
-
-After the phone is configured, wire this sender into successful signup confirmation (`/auth/callback?next=/dashboard`) and perform one end-to-end external signup test before broad announcement.
+The public phone is `+48 694 366 395`; an environment override may still be used later if needed. Successful signup confirmation routes through this sender before dashboard access. Existing legacy accounts remain unaffected.
 
 ## Monitoring and email runtime
 
@@ -136,6 +133,8 @@ One historical Paddle Sandbox subscription remains on the internal `luminotax@gm
 
 ### Paddle LIVE — still OFF
 
+Paddle is the intended Merchant of Record for new paid customer transactions. Its role is to handle the payment transaction, applicable sales tax/VAT/GST, customer billing documents and payment-side refund/chargeback handling. Do not rebuild a second new direct-payment/tax stack for Paddle customers.
+
 Sandbox and LIVE use separate credentials, catalog IDs and webhook configuration.
 
 Before real-money sales:
@@ -146,9 +145,7 @@ Before real-money sales:
 - create LIVE API key and client-side token;
 - configure LIVE webhook/signing secret;
 - verify LIVE Customer Portal;
-- publish the support telephone;
 - confirm Paddle MoR accounting/reconciliation route;
-- complete final consumer checkout/legal review;
 - smoke-test with `PADDLE_LIVE_BILLING_ENABLED=false` first;
 - only then explicitly set `PADDLE_LIVE_BILLING_ENABLED=true`.
 
@@ -170,7 +167,7 @@ Current versions:
 - Privacy: `2026-08-17-v1`
 - Withdrawal: `2026-08-17-v1`
 
-Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, Discord/daily email according to plan, Sandbox sales disabled and Paddle LIVE still pending.
+Public copy reflects Public Beta, not old Closed Beta: YouTube/Twitch live, Kick unavailable, Discord/daily email according to plan, Sandbox sales disabled and Paddle LIVE still pending. Operator contact includes the current Lumino Games address, email and public support phone.
 
 Future Paddle checkout consent records use current Terms/Privacy versions.
 
@@ -186,7 +183,7 @@ RLS is enabled on reviewed public application/billing tables. Workspace helpers 
 
 ## Launch invariants
 
-- broad Free public beta announcement: WAITING ONLY FOR PUBLIC SUPPORT PHONE + FINAL DURABLE-CONFIRMATION WIRING/TEST;
+- Free public beta signup: OPEN;
 - public Paddle Sandbox new checkout: OFF;
 - Paddle LIVE: OFF until full LIVE cutover;
 - Stripe LIVE: OFF;
