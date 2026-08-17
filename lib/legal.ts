@@ -1,12 +1,6 @@
 import "server-only";
 
-export const LEGAL_VERSIONS = {
-  terms: "2026-08-17-v1",
-  privacy: "2026-08-17-v1",
-  withdrawal: "2026-08-17-v1",
-} as const;
-
-export const LEGAL_UPDATED_DATE = "17 August 2026";
+export { LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal-versions";
 
 export function getLegalSupportPhone() {
   const value = process.env.GAMESIGNAL_SUPPORT_PHONE?.trim();
