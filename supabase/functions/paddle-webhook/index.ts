@@ -164,7 +164,9 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
 
   const rawBodyBytes = new Uint8Array(await request.arrayBuffer());
-  const secret = Deno.env.get("PADDLE_WEBHOOK_SECRET");
+  const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
+  const secretName = environment === "live" ? "PADDLE_LIVE_WEBHOOK_SECRET" : "PADDLE_WEBHOOK_SECRET";
+  const secret = Deno.env.get(secretName);
   if (!secret) return json({ error: "Paddle webhook secret is not configured." }, 503);
   if (!(await verifyPaddleSignature(rawBodyBytes, request.headers.get("Paddle-Signature"), secret))) {
     return json({ error: "Invalid Paddle signature." }, 400);
@@ -196,9 +198,6 @@ Deno.serve(async (request) => {
       }
     }
 
-    // transaction.completed remains useful audit/analytics evidence in Paddle, but
-    // GameSignal grants subscription entitlements from authoritative subscription
-    // lifecycle events so a completed one-off transaction can never unlock a plan.
     return json({ received: true, ignored: true });
   } catch (error) {
     console.error(error);
