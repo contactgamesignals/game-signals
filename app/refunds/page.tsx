@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { COMPANY } from "@/lib/company";
+import { BRAND } from "@/lib/brand";
 import { LEGAL_UPDATED_DATE } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Refund Policy — Who Plays My Game",
   description: "Refund and cancellation policy for Who Plays My Game subscriptions.",
+  alternates: { canonical: `${BRAND.siteUrl}/refunds` },
 };
 
 export default function RefundPolicyPage() {
