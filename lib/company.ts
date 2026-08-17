@@ -6,4 +6,5 @@ export const COMPANY = {
   regon: "389433660",
   productName: "Who Plays My Game",
   supportEmail: "whoplaysmygame@gmail.com",
+  supportPhone: "+48 694 366 395",
 } as const;
