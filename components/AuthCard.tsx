@@ -29,6 +29,13 @@ export default function AuthCard({ mode, configured }: Props) {
 
   const isLogin = mode === "login";
 
+  async function ensureAgreementConfirmation(supabase: ReturnType<typeof createClient>) {
+    const { error } = await supabase.functions.invoke("send-account-agreement-confirmation", { body: {} });
+    if (!error) return;
+    await supabase.auth.signOut();
+    throw new Error("We could not finish the required account-agreement confirmation email. Please try logging in again in a moment.");
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
@@ -61,6 +68,7 @@ export default function AuthCard({ mode, configured }: Props) {
           options: { captchaToken },
         });
         if (error) throw error;
+        await ensureAgreementConfirmation(supabase);
         router.push("/dashboard");
         router.refresh();
       } else {
@@ -83,6 +91,7 @@ export default function AuthCard({ mode, configured }: Props) {
         if (error) throw error;
 
         if (data.session) {
+          await ensureAgreementConfirmation(supabase);
           router.push("/dashboard");
           router.refresh();
         } else {
