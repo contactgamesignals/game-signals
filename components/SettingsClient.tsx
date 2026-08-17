@@ -55,7 +55,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "245 PLN / yr",
     paddleMonthly: "$2.99 / mo",
     paddleYearly: "$29.90 / yr",
-    summary: "1 active game",
+    summary: "1 active game · all paid features",
   },
   {
     plan: "studio",
@@ -63,7 +63,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "645 PLN / yr",
     paddleMonthly: "$7.99 / mo",
     paddleYearly: "$79.90 / yr",
-    summary: "Up to 3 active games + Discord",
+    summary: "Up to 3 active games · all paid features",
   },
   {
     plan: "publisher",
@@ -71,7 +71,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "1495 PLN / yr",
     paddleMonthly: "$14.99 / mo",
     paddleYearly: "$149.90 / yr",
-    summary: "Up to 10 active games + export",
+    summary: "Up to 10 active games · all paid features",
   },
 ];
 
@@ -428,6 +428,10 @@ export default function SettingsClient({
           </div>
         ) : null}
 
+        <div className="status-message" style={{ marginBottom: 14 }}>
+          All paid plans include the same product features, alerts, export and monitoring cadence. The only plan difference is the number of active games you can monitor.
+        </div>
+
         <div className="form-grid">
           {PAID_PLANS.map((item) => {
             const isCurrent = effectivePlan === item.plan;
@@ -470,13 +474,13 @@ export default function SettingsClient({
             <p>Get creator signals in a Discord channel. The webhook URL stays server-side and is never returned after saving.</p>
           </div>
           <span className="plan-pill">
-            {!status ? "Checking…" : !status.allowed ? "Studio+ required" : discordConnected ? "Connected" : "Not connected"}
+            {!status ? "Checking…" : !status.allowed ? "Paid plan required" : discordConnected ? "Connected" : "Not connected"}
           </span>
         </div>
 
         {discordLocked ? (
           <div className="status-message" style={{ marginBottom: 14 }}>
-            Discord alerts are included in Studio and Publisher. A saved webhook is not used while the workspace is on an ineligible plan.
+            Discord alerts are included in every paid plan. A saved webhook is not used while the workspace is on Free or an inactive subscription.
           </div>
         ) : null}
         {message ? <div className="auth-success" style={{ marginBottom: 14 }}>{message}</div> : null}
