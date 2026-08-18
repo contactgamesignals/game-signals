@@ -1,13 +1,8 @@
-import { redirect } from "next/navigation";
-import LandingPage from "@/components/LandingPage";
-import MarketingRealityPatch from "@/components/MarketingRealityPatch";
-import PricingCyclePatch from "@/components/PricingCyclePatch";
+import MarketingHome from "@/components/MarketingHome";
 import { BRAND } from "@/lib/brand";
 import { COMPANY } from "@/lib/company";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -17,9 +12,21 @@ const structuredData = {
       "@id": `${BRAND.siteUrl}/#website`,
       name: BRAND.name,
       url: BRAND.siteUrl,
-      description:
-        "Twitch and YouTube creator monitoring for game developers, studios and publishers.",
+      description: "Twitch and YouTube creator monitoring for game developers, studios and publishers.",
       publisher: { "@id": `${BRAND.siteUrl}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: BRAND.name,
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: BRAND.siteUrl,
+      description: "Monitor new YouTube videos and Twitch live streams related to your game, then review creator signals in a dashboard with Discord alerts and daily email digests on paid plans.",
+      offers: [
+        { "@type": "Offer", name: "Indie", price: "2.99", priceCurrency: "USD" },
+        { "@type": "Offer", name: "Studio", price: "7.99", priceCurrency: "USD" },
+        { "@type": "Offer", name: "Publisher", price: "14.99", priceCurrency: "USD" },
+      ],
     },
     {
       "@type": "Organization",
@@ -45,22 +52,14 @@ const structuredData = {
   ],
 };
 
-export default async function HomePage() {
-  if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) redirect("/dashboard");
-  }
-
+export default function HomePage() {
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replaceAll("<", "\\u003c") }}
       />
-      <LandingPage />
-      <MarketingRealityPatch />
-      <PricingCyclePatch />
+      <MarketingHome />
     </>
   );
 }
