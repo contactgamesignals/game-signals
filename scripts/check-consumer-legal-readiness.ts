@@ -102,7 +102,7 @@ assert.match(accountConfirmationMigration, /confirmation_status in \('pending','
 assert.match(accountConfirmationSender, /GAMESIGNAL_SUPPORT_PHONE/);
 assert.match(accountConfirmationSender, /RESEND_API_KEY/);
 assert.match(accountConfirmationSender, /Idempotency-Key/);
-assert.match(accountConfirmationSender, /Who Plays My Game — confirmation of your account agreement/);
+assert.match(accountConfirmationSender, /Who Plays My Game - confirmation of your account agreement/);
 assert.match(accountConfirmationSender, /durable-medium confirmation/i);
 assert.match(accountConfirmationSender, /The Free public-beta plan costs 0 USD/);
 assert.match(accountConfirmationSender, /generally 14 days/);

@@ -4,7 +4,7 @@ import { COMPANY } from "@/lib/company";
 import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "Withdrawal — Who Plays My Game",
+  title: "Withdrawal - Who Plays My Game",
   description: "Consumer withdrawal information and model statement for Who Plays My Game.",
 };
 

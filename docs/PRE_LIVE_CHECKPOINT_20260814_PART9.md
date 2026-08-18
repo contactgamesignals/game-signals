@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 9
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 9
 
 This is the current tax/billing checkpoint. Where earlier August checkpoints assumed that Lumino Games was VAT-exempt, **this document supersedes that assumption**. Official register checks on 14 August 2026 showed the working seller is an active Polish VAT taxpayer and a valid VAT-UE taxpayer.
 
@@ -9,7 +9,7 @@ This is the current tax/billing checkpoint. Where earlier August checkpoints ass
 - KSeF PRODUCTION remains hard-locked. No real seller invoice was submitted to KSeF PROD.
 - No historical migration or retained financial record was deleted.
 
-## Official seller verification — PASSED for current working seller
+## Official seller verification - PASSED for current working seller
 
 Working seller: `Lumino Games sp. z o.o.`
 
@@ -24,13 +24,13 @@ The old `Ujastek 1` address and the old draft `VAT exempt` model are no longer v
 
 The final seller decision (Lumino Games vs Lumino Tax) is still intentionally deferred until immediately before LIVE. If the seller changes, all register checks and tax configuration must be repeated for the new entity.
 
-## Stripe Tax sandbox — ACTIVE and verified
+## Stripe Tax sandbox - ACTIVE and verified
 
 Stripe Tax sandbox is now explicitly configured for the current active-VAT seller:
 
 - head office: Poland / current KRS Kraków address,
 - default tax behavior: `inclusive`,
-- default tax code: `txcd_10103001` (SaaS — business use),
+- default tax code: `txcd_10103001` (SaaS - business use),
 - Polish standard VAT registration recorded in Stripe Tax,
 - Checkout uses `automatic_tax[enabled]=true`,
 - checkout/subscription metadata says `seller_vat_status=active`.
@@ -70,7 +70,7 @@ Webhook v9 stores invoice retry state and handles payment-action/payment-attempt
 
 `stripe-billing` v13 uses the pinned Stripe API version `2026-06-24.dahlia`, remains test-key-only, uses Automatic Tax, and uses Customer Portal configuration v3 with public Terms and Privacy links.
 
-## Failed payment recovery — PASSED
+## Failed payment recovery - PASSED
 
 An isolated insufficient-funds sandbox subscription proved:
 
@@ -92,7 +92,7 @@ Customer recovery UI on the branch provides:
 
 Backend premium features were audited and fail closed unless the effective subscription status is `active` or `trialing`.
 
-## Tax-access entitlement gate — DEPLOYED and tested
+## Tax-access entitlement gate - DEPLOYED and tested
 
 New forward-only database logic separates Stripe's raw state from GameSignal's effective entitlement state.
 
@@ -123,7 +123,7 @@ Real-schema transaction tests used `BEGIN ... ROLLBACK` and left no test data:
 
 This gate is the second safety layer even if a user tampers with the frontend or changes billing data in Stripe.
 
-## Active-VAT FA(3) / KSeF — PASSED technically
+## Active-VAT FA(3) / KSeF - PASSED technically
 
 A new additive generator `lib/ksef/fa3-active-vat.ts` was added; the old VAT-exempt generator is retained for historical/testing purposes and is no longer the active launch path.
 
@@ -145,7 +145,7 @@ The active-VAT sample passes the pinned official Ministry of Finance FA(3) XSD i
 
 The KSeF preview endpoint now uses the active-VAT generator and refuses output if the generated FA(3) VAT does not equal the Stripe invoice ledger VAT amount.
 
-### Full active-VAT KSeF TEST E2E — PASSED
+### Full active-VAT KSeF TEST E2E - PASSED
 
 One-time CI run #277 completed successfully using the pinned official Ministry of Finance C# client and .NET 10.
 
@@ -164,7 +164,7 @@ Real Lumino seller NIP/name/address were hard-blocked from leaving the runner; t
 
 The one-time external KSeF TEST step was removed again from normal CI immediately after success. The reusable manual regression script remains in the repo.
 
-## Customer Portal — verified
+## Customer Portal - verified
 
 Portal configuration v3 is active in Stripe sandbox with:
 

@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 6
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 6
 
 This checkpoint records verified external TEST results. It does not authorize production billing, KSeF production submission, or a merge to `main`.
 
@@ -11,7 +11,7 @@ This checkpoint records verified external TEST results. It does not authorize pr
 - No Lumino Games or Lumino Tax invoice was submitted to KSeF TEST or PRODUCTION.
 - No KSeF PRODUCTION call was made.
 
-## FA(3) official schema validation — PASSED
+## FA(3) official schema validation - PASSED
 
 The permanent GitHub CI step now:
 
@@ -21,7 +21,7 @@ The permanent GitHub CI step now:
 
 The real official-XSD validation passed and remains part of normal PR CI.
 
-## KSeF TEST public connectivity — PASSED
+## KSeF TEST public connectivity - PASSED
 
 Manual reusable script: `scripts/probe-ksef-test-public.sh`
 
@@ -34,7 +34,7 @@ Verified against the real KSeF TEST API:
 
 The external probe is intentionally not a permanent CI dependency.
 
-## KSeF TEST XAdES authentication — PASSED
+## KSeF TEST XAdES authentication - PASSED
 
 Manual reusable script: `scripts/probe-ksef-test-xades-auth.sh`
 
@@ -52,7 +52,7 @@ The upstream demo normally prints JWTs. The GameSignal probe patches only the ep
 
 No real GameSignal seller identity was used.
 
-## GameSignal FA(3) full KSeF TEST OnlineSession + UPO — PASSED
+## GameSignal FA(3) full KSeF TEST OnlineSession + UPO - PASSED
 
 Manual reusable script: `scripts/probe-ksef-test-gamesignal-fa3-e2e.sh`
 
@@ -76,7 +76,7 @@ Real seller markers (`Lumino Games`, NIP `6762600090`, `Ujastek`) are hard-faile
 
 This is a technical KSeF TEST success. It does **not** approve the real legal/tax contents of future production invoices, legal numbering, final seller identity, or KSeF PRODUCTION credentials.
 
-## VIES REST integration — PASSED
+## VIES REST integration - PASSED
 
 Manual reusable script: `scripts/probe-vies-rest-test-service.sh`
 

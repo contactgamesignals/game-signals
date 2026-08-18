@@ -1,4 +1,4 @@
-# GameSignal — KSeF and VIES integration plan
+# GameSignal - KSeF and VIES integration plan
 
 Status: pre-launch implementation plan. No KSeF production submission is enabled.
 
@@ -41,11 +41,11 @@ The current official KSeF API is asynchronous. A successful HTTP request is not 
 
 ## KSeF scope routing for GameSignal
 
-### Poland — Individual
+### Poland - Individual
 
 B2C invoices remain outside mandatory KSeF. Do not submit automatically just because Stripe produced a billing record.
 
-### Poland — Company
+### Poland - Company
 
 Domestic B2B is the main KSeF candidate. Lumino Games' VAT exemption does not generally remove KSeF obligations. During the 2026 transitional period, the monthly PLN 10,000 gross invoiced-sales relief must be evaluated before deciding whether mandatory KSeF applies.
 

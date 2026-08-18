@@ -241,7 +241,7 @@ export default function LandingPage() {
               source: "youtube" as const,
               cls: "y",
               short: "YT",
-              title: `“I found ${game} by accident — and it is wild”`,
+              title: `“I found ${game} by accident - and it is wild”`,
               sub: "YouTube · 1.9K views",
               badge: "VIDEO",
               badgeClass: "video",

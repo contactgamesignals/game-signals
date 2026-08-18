@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 7
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 7
 
 This checkpoint records the state immediately before any controlled Supabase/Stripe sandbox billing-bundle deployment. It does not authorize Stripe LIVE, KSeF PRODUCTION, final seller selection, or merge to `main`.
 

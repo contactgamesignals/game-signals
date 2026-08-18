@@ -1,4 +1,4 @@
-# Paddle Merchant-of-Record readiness — 2026-08-15
+# Paddle Merchant-of-Record readiness - 2026-08-15
 
 ## Why this path
 

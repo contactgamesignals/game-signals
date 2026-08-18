@@ -89,7 +89,7 @@ async function deliverOne(
       body: JSON.stringify({
         from: fromEmail,
         to: [row.recipient_email.trim()],
-        subject: "Who Plays My Game — confirmation of your subscription contract",
+        subject: "Who Plays My Game - confirmation of your subscription contract",
         text: row.confirmation_text,
         html: `<pre style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.55">${escapeHtml(row.confirmation_text)}</pre>`,
       }),

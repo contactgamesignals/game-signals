@@ -103,7 +103,7 @@ export function buildContractConfirmationText(input: ContractConfirmationInput) 
   const renewalLabel = input.subscription.billingPeriod === "monthly" ? "each month" : "each year";
 
   return [
-    `${productName} — confirmation of concluded subscription contract`,
+    `${productName} - confirmation of concluded subscription contract`,
     `Confirmation version: ${CONTRACT_LEGAL_VERSIONS.confirmation}`,
     `Contract concluded at: ${concludedAt}`,
     `Stripe Checkout Session: ${checkoutSessionId}`,

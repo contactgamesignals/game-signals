@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — subscription state and KSeF routing
+# GameSignal pre-LIVE checkpoint - subscription state and KSeF routing
 
 Status: SAFE DRAFT / no production cutover.
 

@@ -4,7 +4,7 @@ import { COMPANY } from "@/lib/company";
 import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: `Terms — ${COMPANY.productName}`,
+  title: `Terms - ${COMPANY.productName}`,
   description: `Subscription terms for ${COMPANY.productName}, operated by ${COMPANY.legalName}`,
 };
 

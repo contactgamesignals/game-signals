@@ -1,6 +1,6 @@
 # GameSignal sandbox billing deployment bundle
 
-Status: **DRAFT ONLY — do not apply to production or merge to `main` yet.**
+Status: **DRAFT ONLY - do not apply to production or merge to `main` yet.**
 
 This document is the source of truth for the next controlled Supabase/Stripe sandbox deployment. The database migrations and Edge Function upgrades are treated as one compatibility bundle. Do not deploy only a later migration or only one new billing function.
 
@@ -18,7 +18,7 @@ Live billing functions remain:
 
 Stripe remains sandbox/test mode. No Stripe LIVE cutover is authorized by this document.
 
-## Forward migrations — exact order
+## Forward migrations - exact order
 
 Apply all of the following in chronological order. Do not skip intermediate hardening migrations because later definitions intentionally replace or tighten earlier forward definitions.
 

@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 2026-08-15 / Part 11
+# GameSignal pre-LIVE checkpoint - 2026-08-15 / Part 11
 
 This checkpoint records the current safe-branch state after completing the durable PL Company seller-document pipeline, KSeF ambiguity handling and sandbox Stripe Tax ID reconciliation. It supersedes older VAT-exempt / old-address notes in historical checkpoint sections.
 
@@ -23,7 +23,7 @@ Official checks on 2026-08-14 superseded older VAT-exempt assumptions:
 
 Final seller selection remains deferred until immediately before LIVE. If the seller changes, seller identity, VAT/VIES/KRS evidence, production numbering and KSeF credentials must be re-verified before cutover.
 
-## PL Company seller-document pipeline — completed on safe branch
+## PL Company seller-document pipeline - completed on safe branch
 
 Implemented and regression-tested:
 
@@ -38,7 +38,7 @@ Implemented and regression-tested:
 - active-VAT domestic FA(3) passes the pinned official MF XSD;
 - anonymized active-VAT FA(3) previously passed a full official KSeF TEST OnlineSession + UPO regression.
 
-## KSeF state machine and issuance safety — completed on safe branch
+## KSeF state machine and issuance safety - completed on safe branch
 
 The issuance path is persist-before-send and fail-closed:
 
@@ -61,7 +61,7 @@ Additional guarantees:
 - importing the KSeF transport does not make a KSeF network call;
 - KSeF PROD remains inert without the explicit production unlock and credentials.
 
-## KSeF 440 duplicate reconciliation — completed and applied
+## KSeF 440 duplicate reconciliation - completed and applied
 
 A KSeF `440` response is no longer treated as a reason to re-submit.
 
@@ -79,7 +79,7 @@ The reconciliation path:
 
 Supabase runtime verification confirmed the duplicate-accept RPC is unavailable to `anon` / `authenticated`, available to `service_role`, requires `440 -> 200`, requires durable current-attempt references and independently verifies the UPO hash.
 
-## Stripe Tax ID reconciliation for PL Company — deployed sandbox-only
+## Stripe Tax ID reconciliation for PL Company - deployed sandbox-only
 
 Edge Function `reconcile-stripe-tax-ids` is ACTIVE and intentionally hard-locked to `sk_test_` credentials and `livemode=false` invoice records.
 
@@ -129,8 +129,8 @@ Applied/verified runtime includes the seller queue, FA(3) freeze/hash guards, KS
 
 Security Advisor after the latest DDL did not add a new warning from this work. Known items remain:
 
-- `pg_net` in `public` — intentionally retained for the working scheduler path;
-- Leaked Password Protection disabled — still a pre-LIVE Auth setting to enable;
+- `pg_net` in `public` - intentionally retained for the working scheduler path;
+- Leaked Password Protection disabled - still a pre-LIVE Auth setting to enable;
 - RLS-with-no-policy INFO on intentionally client-inaccessible billing tables.
 
 Performance Advisor currently reports informational unused-index hints expected for the tiny beta dataset; no indexes are being removed at this stage.

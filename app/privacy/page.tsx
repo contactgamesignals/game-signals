@@ -4,7 +4,7 @@ import { COMPANY } from "@/lib/company";
 import { LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: `Privacy Policy — ${COMPANY.productName}`,
+  title: `Privacy Policy - ${COMPANY.productName}`,
   description: `Privacy information for ${COMPANY.productName}, operated by ${COMPANY.legalName}`,
 };
 

@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — resilient billing and KSeF client
+# GameSignal pre-LIVE checkpoint - resilient billing and KSeF client
 
 Status: SAFE DRAFT / no production cutover.
 

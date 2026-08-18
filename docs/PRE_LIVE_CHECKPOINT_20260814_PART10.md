@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 10
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 10
 
 This checkpoint follows Part 9 and records the deployed seller-document queue / numbering layer for the Poland-first paid launch. It does not authorize Stripe LIVE or KSeF PROD.
 
@@ -9,7 +9,7 @@ This checkpoint follows Part 9 and records the deployed seller-document queue / 
 - KSeF PROD remains hard-locked.
 - No historical migration, invoice ledger, retained evidence or existing product data was deleted.
 
-## Seller-document queue — DEPLOYED
+## Seller-document queue - DEPLOYED
 
 The Supabase database now contains a durable seller-side document layer separate from Stripe's own invoice objects.
 
@@ -50,7 +50,7 @@ Product workspace deletion cannot cascade-delete the seller document: `workspace
 - RLS is enabled.
 - Browser roles cannot write seller documents, seller profiles or document sequences.
 - `billing_document_sequences` and `billing_seller_profiles` are internal/service-role-only.
-- authenticated workspace managers may read seller documents for their live workspace using the established `private.can_manage_workspace(workspace_id)` helper — the same helper already used by the existing billing ledgers.
+- authenticated workspace managers may read seller documents for their live workspace using the established `private.can_manage_workspace(workspace_id)` helper - the same helper already used by the existing billing ledgers.
 - legal-number reservation RPC is service-role-only.
 
 A preflight caught an initially referenced nonexistent helper before migration deployment; it was replaced with the established billing RLS helper before the queue was applied.
@@ -77,7 +77,7 @@ Sandbox documents are always `sandbox_preview_ready` and can never become legal 
 
 Issue date prefers Stripe `finalized_at`, then `invoice_created_at`; service period and billing reason are snapshotted.
 
-## Legal numbering — DEPLOYED, but sandbox-hard-locked
+## Legal numbering - DEPLOYED, but sandbox-hard-locked
 
 `billing_document_sequences` maintains an atomic sequence per:
 - seller NIP,
@@ -107,7 +107,7 @@ The entire test transaction rolled back; follow-up checks proved:
 
 A forward-only migration replaced the conflict target with the named UNIQUE constraint `billing_document_sequences_seller_nip_sequence_year_series_key`. Historical applied migration files were not edited as a rollback mechanism.
 
-## Numbering regression — PASSED after forward fix
+## Numbering regression - PASSED after forward fix
 
 A second real-schema test ran entirely inside `BEGIN ... ROLLBACK`:
 

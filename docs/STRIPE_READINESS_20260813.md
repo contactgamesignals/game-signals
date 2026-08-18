@@ -1,4 +1,4 @@
-# Stripe launch readiness — 2026-08-13
+# Stripe launch readiness - 2026-08-13
 
 This file records the current verified billing state before any Stripe LIVE cutover.
 

@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 2026-08-15 / Part 12
+# GameSignal pre-LIVE checkpoint - 2026-08-15 / Part 12
 
 This checkpoint continues Part 11 and records the launch-gating work completed after the KSeF seller-document / Stripe Tax-ID runtime checkpoint.
 
@@ -11,13 +11,13 @@ This checkpoint continues Part 11 and records the launch-gating work completed a
 - KSeF PROD remains hard-locked; no production KSeF request was performed.
 - No merge to `main` was performed.
 
-## KSeF production readiness gate — implemented, no network effect
+## KSeF production readiness gate - implemented, no network effect
 
 A read-only KSeF production preflight now exists:
 
-- `lib/ksef/production-readiness-core.ts` — pure/testable readiness logic;
-- `lib/ksef/production-readiness.ts` — server-only wrapper that reads current seller/configuration without exposing secrets;
-- `scripts/check-ksef-production-readiness.ts` — static + behavioral fail-closed regression.
+- `lib/ksef/production-readiness-core.ts` - pure/testable readiness logic;
+- `lib/ksef/production-readiness.ts` - server-only wrapper that reads current seller/configuration without exposing secrets;
+- `scripts/check-ksef-production-readiness.ts` - static + behavioral fail-closed regression.
 
 The preflight requires, before KSeF can be considered production-ready:
 
@@ -60,9 +60,9 @@ The internal route `app/api/accounting/launch-readiness/route.ts` no longer gran
 
 New fail-closed operator authorization:
 
-- `lib/operator-access-core.ts` — pure explicit Supabase Auth UUID allowlist logic;
-- `lib/operator-access.ts` — server-only wrapper using `GAMESIGNAL_OPERATOR_USER_IDS`;
-- `scripts/check-operator-launch-readiness-access.ts` — behavioral + static regression.
+- `lib/operator-access-core.ts` - pure explicit Supabase Auth UUID allowlist logic;
+- `lib/operator-access.ts` - server-only wrapper using `GAMESIGNAL_OPERATOR_USER_IDS`;
+- `scripts/check-operator-launch-readiness-access.ts` - behavioral + static regression.
 
 Empty/malformed operator configuration rejects access. Customer workspace roles are intentionally insufficient for global seller/accounting launch state.
 
@@ -104,7 +104,7 @@ Important runtime distinction: the currently deployed Supabase Tax-ID worker rem
 
 CI run #387 passed after this shared-runtime Tax-ID integration.
 
-## Stripe billing/webhook drafts — next coding block
+## Stripe billing/webhook drafts - next coding block
 
 Current candidate future deployment files are:
 

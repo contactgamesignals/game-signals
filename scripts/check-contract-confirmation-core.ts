@@ -62,7 +62,7 @@ assert.equal(first, second, "same contract evidence must produce byte-identical 
 assert.ok(first.length > 1000, "confirmation should contain the complete transactional legal snapshot");
 
 for (const requiredText of [
-  "GameSignal — confirmation of concluded subscription contract",
+  "GameSignal - confirmation of concluded subscription contract",
   "Confirmation version: 2026-08-15-v1",
   "Contract concluded at: 2026-08-15T08:30:00.000Z",
   "Stripe Checkout Session: cs_test_contract_confirmation_123",

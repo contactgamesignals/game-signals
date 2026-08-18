@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 8
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 8
 
 This checkpoint records the successfully executed sandbox billing-runtime cutover and failed-payment recovery verification. It does **not** authorize Stripe LIVE, KSeF PRODUCTION, or merge to `main`.
 

@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 2026-08-15 / Part 14
+# GameSignal pre-LIVE checkpoint - 2026-08-15 / Part 14
 
 This checkpoint continues Part 13 and records real Supabase/Stripe sandbox runtime verification of the shared fail-closed Stripe mode boundary. No production billing function was replaced and no LIVE mode was enabled.
 
@@ -32,7 +32,7 @@ CI #406 passed with the complete runtime safeguard set including:
 
 CI #409 passed after adding the signed webhook-runtime smoke endpoint and its mutation-free invariant.
 
-## Real shared Stripe runtime smoke — deployed separately and verified
+## Real shared Stripe runtime smoke - deployed separately and verified
 
 A new test-only Edge Function was deployed under the separate slug:
 
@@ -61,7 +61,7 @@ Real invocation through the existing Vault-backed cron secret returned HTTP 200:
 
 The connected Stripe app independently identifies the current account as `GameSignals sandbox`, confirming this environment is not the LIVE account.
 
-## Existing deployed Stripe billing sandbox healthcheck — real runtime result
+## Existing deployed Stripe billing sandbox healthcheck - real runtime result
 
 The currently deployed `stripe-billing` v14 integration healthcheck was run through the Vault-backed cron secret.
 
@@ -76,7 +76,7 @@ Result: HTTP 200 with:
 
 This verifies the existing sandbox business flow independently from the new shared runtime smoke.
 
-## Signed webhook runtime boundary — deployed separately and verified
+## Signed webhook runtime boundary - deployed separately and verified
 
 A second test-only Edge Function was deployed under:
 
@@ -134,7 +134,7 @@ All hit counts were zero.
 
 Therefore the runtime/signature tests produced no financial-ledger mutation.
 
-## Future Stripe Tax-ID reconciler — side-by-side deploy, cron untouched
+## Future Stripe Tax-ID reconciler - side-by-side deploy, cron untouched
 
 The current deployed `reconcile-stripe-tax-ids` v3 still has its earlier local test/live mode logic.
 
@@ -162,9 +162,9 @@ The connected Supabase toolset in this session does not expose a safe Auth-confi
 
 The following new test-only slugs exist for continued readiness verification:
 
-- `stripe-runtime-smoke` — cron-secret protected, read-only;
-- `stripe-webhook-runtime-smoke` — signed-webhook protected, mutation-free;
-- `reconcile-stripe-tax-ids-next` — internal-auth protected, no cron attached.
+- `stripe-runtime-smoke` - cron-secret protected, read-only;
+- `stripe-webhook-runtime-smoke` - signed-webhook protected, mutation-free;
+- `reconcile-stripe-tax-ids-next` - internal-auth protected, no cron attached.
 
 Before final public LIVE launch, test-only endpoints should be reviewed and either removed/disabled or intentionally retained with documented purpose.
 

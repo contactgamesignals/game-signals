@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 2026-08-15 / Part 13
+# GameSignal pre-LIVE checkpoint - 2026-08-15 / Part 13
 
 This checkpoint continues Part 12 and records completion of the shared fail-closed Stripe TEST/LIVE runtime integration across the future Stripe billing/webhook drafts. Nothing in this checkpoint authorizes or performs a LIVE deployment.
 
@@ -11,12 +11,12 @@ This checkpoint continues Part 12 and records completion of the shared fail-clos
 - No KSeF PROD request, credential or legal-effect unlock was enabled.
 - The currently deployed Supabase Stripe billing/webhook runtime was not replaced by the future drafts in this block.
 
-## Shared Stripe runtime — one source of truth
+## Shared Stripe runtime - one source of truth
 
 The shared runtime is split into:
 
-- `supabase/functions/_shared/stripe-runtime-mode-core.ts` — pure/testable TEST/LIVE classification and payload-mode checks;
-- `supabase/functions/_shared/stripe-runtime-mode.ts` — Deno environment wrapper and Vault webhook-secret selection.
+- `supabase/functions/_shared/stripe-runtime-mode-core.ts` - pure/testable TEST/LIVE classification and payload-mode checks;
+- `supabase/functions/_shared/stripe-runtime-mode.ts` - Deno environment wrapper and Vault webhook-secret selection.
 
 Runtime semantics:
 
@@ -30,7 +30,7 @@ Runtime semantics:
 
 Behavioral regression: `scripts/check-stripe-runtime-mode.ts`.
 
-## Future Stripe webhook v8 draft — integrated, NOT deployed
+## Future Stripe webhook v8 draft - integrated, NOT deployed
 
 `supabase/functions/stripe-webhook-v8-draft/index.ts` now uses the shared runtime.
 
@@ -57,7 +57,7 @@ The regression verifies handler ordering:
 
 The draft still identifies itself as `stripe-webhook-v8-draft` and has not been deployed.
 
-## Future Stripe billing v11 draft — integrated, NOT deployed
+## Future Stripe billing v11 draft - integrated, NOT deployed
 
 `supabase/functions/stripe-billing-v11-draft/index.ts` now uses the same shared runtime.
 

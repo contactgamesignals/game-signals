@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 August 2026
+# GameSignal pre-LIVE checkpoint - 14 August 2026
 
 Status: SAFE DRAFT / Stripe sandbox / no production cutover.
 

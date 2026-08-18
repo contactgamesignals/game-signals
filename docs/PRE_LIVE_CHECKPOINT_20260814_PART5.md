@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — 14 Aug 2026, part 5
+# GameSignal pre-LIVE checkpoint - 14 Aug 2026, part 5
 
 This checkpoint is intentionally explicit about the difference between code prepared on the draft branch and changes actually deployed to production.
 

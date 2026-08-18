@@ -1,8 +1,8 @@
-# GameSignal — accounting and VAT workflow
+# GameSignal - accounting and VAT workflow
 
 GameSignal's current working seller is Lumino Games sp. z o.o. This document describes the billing/accounting state after the 14 August 2026 official-register verification. It intentionally keeps transaction-level evidence separate from UI declarations and remains subject to the final seller decision immediately before LIVE.
 
-## Verified seller status — 14 August 2026
+## Verified seller status - 14 August 2026
 
 Official checks performed before the tax-enabled sandbox rollout established that Lumino Games sp. z o.o. is currently:
 
@@ -35,7 +35,7 @@ The app may automate an approved route only when the required evidence exists. U
 
 ## Current launch routing
 
-### Poland (`pl`) — approved sandbox route
+### Poland (`pl`) - approved sandbox route
 
 - Individual: domestic B2C with Polish VAT.
 - Company: domestic B2B with Polish VAT and the current KSeF/document rules.
@@ -67,7 +67,7 @@ Current sandbox configuration is intentionally explicit:
 - Tax Settings status is active.
 - Head office: Poland, current KRS address in Kraków.
 - Default tax behavior: `inclusive`.
-- Default product tax code: `txcd_10103001` (SaaS — business use).
+- Default product tax code: `txcd_10103001` (SaaS - business use).
 - Polish standard VAT registration is recorded in Stripe Tax.
 - normal Checkout and integration-healthcheck Checkout use `automatic_tax[enabled]=true`.
 - Company Checkout collects company name and supported tax IDs.
@@ -159,8 +159,8 @@ Before removing the test-key lock:
 
 ## Official sources to re-check before launch
 
-- Polish Ministry of Finance — VAT register / VAT rules: https://www.podatki.gov.pl/
-- Polish Ministry of Finance — KSeF: https://ksef.podatki.gov.pl/
-- European Commission — VIES: https://ec.europa.eu/taxation_customs/vies/
-- European Commission — One Stop Shop: https://vat-one-stop-shop.ec.europa.eu/one-stop-shop_en
+- Polish Ministry of Finance - VAT register / VAT rules: https://www.podatki.gov.pl/
+- Polish Ministry of Finance - KSeF: https://ksef.podatki.gov.pl/
+- European Commission - VIES: https://ec.europa.eu/taxation_customs/vies/
+- European Commission - One Stop Shop: https://vat-one-stop-shop.ec.europa.eu/one-stop-shop_en
 - Stripe Tax documentation: https://docs.stripe.com/tax

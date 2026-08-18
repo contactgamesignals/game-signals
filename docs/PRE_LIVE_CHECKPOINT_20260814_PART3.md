@@ -1,4 +1,4 @@
-# GameSignal pre-LIVE checkpoint — location evidence and KSeF public probe
+# GameSignal pre-LIVE checkpoint - location evidence and KSeF public probe
 
 Status: SAFE DRAFT / no production cutover.
 
