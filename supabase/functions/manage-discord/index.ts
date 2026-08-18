@@ -6,6 +6,8 @@ const headers = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const DASHBOARD_URL = "https://www.whoplaysmygame.com/dashboard";
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
 }
@@ -18,6 +20,32 @@ function validDiscordWebhook(value: string) {
   } catch {
     return false;
   }
+}
+
+function buildTestEmbed() {
+  const now = new Date();
+  const unix = Math.floor(now.getTime() / 1000);
+
+  return {
+    author: {
+      name: "Who Plays My Game · Twitch alert",
+      url: DASHBOARD_URL,
+    },
+    title: "🟣 ExampleCreator is LIVE on Twitch",
+    description: "**AFTERBLAST — first run, first chaos**\n\n**ExampleCreator** just went live with **AFTERBLAST**.\n\n✅ *Your Discord webhook is connected. This is a preview of real creator alerts.*",
+    url: DASHBOARD_URL,
+    color: 0x9146ff,
+    fields: [
+      { name: "🎮 Game", value: "**AFTERBLAST**", inline: true },
+      { name: "👤 Creator", value: "**ExampleCreator**", inline: true },
+      { name: "👥 Live viewers", value: "**184**", inline: true },
+      { name: "⚡ Signal score", value: "**78/100** · ⚡ Strong signal", inline: true },
+      { name: "🕒 Detected", value: `<t:${unix}:R>`, inline: true },
+      { name: "🔗 Quick links", value: `[Open dashboard](${DASHBOARD_URL})`, inline: false },
+    ],
+    footer: { text: "Who Plays My Game • Twitch creator monitoring • Test alert" },
+    timestamp: now.toISOString(),
+  };
 }
 
 Deno.serve(async (request) => {
@@ -101,21 +129,8 @@ Deno.serve(async (request) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: "Who Plays My Game",
-          embeds: [{
-            title: "Discord alerts are ready",
-            description: "**Example creator signal**\n\nYour webhook is connected correctly. Real alerts use this richer layout and include the detected content thumbnail when available.",
-            url: "https://www.whoplaysmygame.com/dashboard",
-            color: 0x35e7ff,
-            fields: [
-              { name: "Creator", value: "**ExampleCreator**", inline: true },
-              { name: "Live viewers", value: "**184**", inline: true },
-              { name: "Game", value: "**AFTERBLAST**", inline: true },
-              { name: "Signal score", value: "**78/100**", inline: true },
-              { name: "Open dashboard", value: "[View in Who Plays My Game](https://www.whoplaysmygame.com/dashboard)", inline: false },
-            ],
-            footer: { text: "Who Plays My Game • Test notification" },
-            timestamp: new Date().toISOString(),
-          }],
+          allowed_mentions: { parse: [] },
+          embeds: [buildTestEmbed()],
         }),
       });
       if (!response.ok) return json({ error: `Discord rejected the webhook (${response.status}).` }, 400);
