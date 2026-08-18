@@ -33,10 +33,10 @@ export default function MarketingRealityPatch() {
 
     const apply = () => {
       const heroCopy = document.querySelector<HTMLElement>(".hero-copy");
-      if (heroCopy) heroCopy.textContent = `${BRAND.name} detects new YouTube videos and live streams on Twitch. Kick monitoring is planned, pending KICK developer approval.`;
+      if (heroCopy) heroCopy.textContent = `${BRAND.name} monitors new YouTube videos and Twitch streams about your game, puts every match into one dashboard, sends Discord alerts, and gives you one daily email digest when new signals appear.`;
 
       const heroMicro = document.querySelector<HTMLElement>(".hero .micro");
-      if (heroMicro) heroMicro.textContent = "Public beta is open. Create a free account and start monitoring YouTube and Twitch; paid checkout will open after Paddle LIVE activation.";
+      if (heroMicro) heroMicro.textContent = "Start with a free public beta account, no card required. Upgrade when you want Discord alerts, the daily email digest, CSV export and faster paid monitoring.";
 
       const systemState = document.querySelector<HTMLElement>(".system-state");
       if (systemState) systemState.innerHTML = "<i></i> 2 sources online";
@@ -111,15 +111,18 @@ export default function MarketingRealityPatch() {
       if (onboardingNotice) onboardingNotice.textContent = "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
 
       const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
-      if (planNotice) planNotice.textContent = "New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.";
+      if (planNotice) planNotice.textContent = "Paid checkout uses Paddle. Free public beta accounts remain available with no card.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
-      if (pricingLead) pricingLead.textContent = "Public beta pricing. Every paid plan includes the same features and monitoring cadence; the only difference is the number of active games. Paid checkout will open after Paddle LIVE activation.";
+      if (pricingLead) pricingLead.textContent = "Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.";
 
       const sharedPaidFeatures = [
         "YouTube + Twitch monitoring",
-        "Discord + daily email digest",
+        "Live creator signal dashboard",
+        "Discord alerts",
+        "Opt-in daily email digest",
         "CSV signal export",
+        "Aliases and exclusion terms",
         "Fastest paid monitoring cadence",
       ];
       const planFeatures: Record<string, string[]> = {
