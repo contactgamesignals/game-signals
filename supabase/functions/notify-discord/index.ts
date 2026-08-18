@@ -6,6 +6,7 @@ type Mention = {
   creator_name: string;
   title: string;
   url: string;
+  thumbnail_url: string | null;
   viewer_count: number | null;
   view_count: number | null;
   signal_score: number;
@@ -28,6 +29,77 @@ type Delivery = {
   attempts: number;
 };
 
+function trimText(value: string, max: number) {
+  const normalized = value.trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("en-US").format(Math.max(0, Math.round(value)));
+}
+
+function safeHttpUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id: string }) {
+  const isYouTube = mention.platform === "youtube";
+  const isTwitch = mention.platform === "twitch";
+  const platformName = isYouTube ? "YouTube" : isTwitch ? "Twitch" : "Kick";
+  const color = isYouTube ? 0xff0033 : isTwitch ? 0x9146ff : 0x35e7ff;
+  const reach = mention.view_count ?? mention.viewer_count ?? 0;
+  const mediaUrl = safeHttpUrl(mention.url);
+  const thumbnailUrl = safeHttpUrl(mention.thumbnail_url);
+  const contentTitle = trimText(mention.title || `${mention.creator_name} on ${platformName}`, 300);
+  const creatorName = trimText(mention.creator_name || "Unknown creator", 120);
+  const gameTitle = trimText(game.title, 120);
+
+  const title = isYouTube
+    ? `New YouTube video for ${gameTitle}`
+    : isTwitch
+      ? `${creatorName} is live with ${gameTitle}`
+      : `New ${platformName} signal for ${gameTitle}`;
+
+  const description = isYouTube
+    ? `**${contentTitle}**\n\nA new YouTube video matched your tracked game.`
+    : isTwitch
+      ? `**${contentTitle}**\n\nA creator is live on Twitch with your tracked game.`
+      : `**${contentTitle}**\n\nA new creator signal matched your tracked game.`;
+
+  const fields = [
+    { name: "Creator", value: `**${creatorName}**`, inline: true },
+    { name: isYouTube ? "Views" : "Live viewers", value: `**${formatCount(reach)}**`, inline: true },
+    { name: "Game", value: `**${gameTitle}**`, inline: true },
+    { name: "Signal score", value: `**${Math.max(0, Math.min(100, Math.round(mention.signal_score)))}/100**`, inline: true },
+  ];
+
+  if (mediaUrl) {
+    fields.push({
+      name: isYouTube ? "Open video" : isTwitch ? "Open stream" : "Open signal",
+      value: `[View on ${platformName}](${mediaUrl})`,
+      inline: false,
+    });
+  }
+
+  return {
+    title: trimText(title, 256),
+    description,
+    url: mediaUrl ?? undefined,
+    color,
+    fields,
+    image: thumbnailUrl ? { url: thumbnailUrl } : undefined,
+    footer: { text: `Who Plays My Game • ${platformName}` },
+    timestamp: mention.detected_at,
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -41,7 +113,7 @@ Deno.serve(async (request) => {
     const [{ data: mentionsData }, { data: channelsData }] = await Promise.all([
       supabase
         .from("mentions")
-        .select("id, platform, creator_name, title, url, viewer_count, view_count, signal_score, detected_at, games(title, workspace_id)")
+        .select("id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, signal_score, detected_at, games(title, workspace_id)")
         .gte("detected_at", since)
         .order("detected_at", { ascending: false })
         .limit(500),
@@ -106,7 +178,6 @@ Deno.serve(async (request) => {
         if (mention.platform !== "youtube" && liveViewers < channel.minimum_live_viewers) continue;
 
         if (previous) retried += 1;
-        const reach = mention.view_count ?? mention.viewer_count ?? 0;
         const response = await fetch(channel.destination, {
           method: "POST",
           headers: {
@@ -115,17 +186,7 @@ Deno.serve(async (request) => {
           },
           body: JSON.stringify({
             username: "Who Plays My Game",
-            embeds: [{
-              title: mention.platform === "youtube" ? "New YouTube video detected" : `New ${mention.platform} stream detected`,
-              description: `**${mention.creator_name}** mentioned or started playing **${game.title}**.`,
-              url: mention.url,
-              fields: [
-                { name: mention.platform === "youtube" ? "Views" : "Live viewers", value: String(reach), inline: true },
-                { name: "Signal score", value: `${mention.signal_score}/100`, inline: true },
-              ],
-              footer: { text: mention.title.slice(0, 200) },
-              timestamp: mention.detected_at,
-            }],
+            embeds: [buildDiscordEmbed(mention, game)],
           }),
         });
 
