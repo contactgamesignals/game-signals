@@ -29,10 +29,16 @@ type Delivery = {
   attempts: number;
 };
 
+const DASHBOARD_URL = "https://www.whoplaysmygame.com/dashboard";
+
 function trimText(value: string, max: number) {
   const normalized = value.trim();
   if (normalized.length <= max) return normalized;
   return `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
+}
+
+function escapeDiscordMarkdown(value: string) {
+  return value.replace(/([\\`*_{}\[\]()#+\-.!|>~])/g, "\\$1");
 }
 
 function formatCount(value: number) {
@@ -49,53 +55,84 @@ function safeHttpUrl(value: string | null | undefined) {
   }
 }
 
+function discordRelativeTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "Just now";
+  return `<t:${Math.floor(timestamp / 1000)}:R>`;
+}
+
+function signalTier(score: number) {
+  if (score >= 85) return "🔥 High priority";
+  if (score >= 65) return "⚡ Strong signal";
+  if (score >= 40) return "✨ Worth a look";
+  return "📡 New signal";
+}
+
 function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id: string }) {
   const isYouTube = mention.platform === "youtube";
   const isTwitch = mention.platform === "twitch";
+  const isKick = mention.platform === "kick";
   const platformName = isYouTube ? "YouTube" : isTwitch ? "Twitch" : "Kick";
-  const color = isYouTube ? 0xff0033 : isTwitch ? 0x9146ff : 0x35e7ff;
+  const platformEmoji = isYouTube ? "🔴" : isTwitch ? "🟣" : "🟢";
+  const color = isYouTube ? 0xff0033 : isTwitch ? 0x9146ff : 0x53fc18;
   const reach = mention.view_count ?? mention.viewer_count ?? 0;
   const mediaUrl = safeHttpUrl(mention.url);
   const thumbnailUrl = safeHttpUrl(mention.thumbnail_url);
-  const contentTitle = trimText(mention.title || `${mention.creator_name} on ${platformName}`, 300);
-  const creatorName = trimText(mention.creator_name || "Unknown creator", 120);
-  const gameTitle = trimText(game.title, 120);
+  const rawCreatorName = trimText(mention.creator_name || "Unknown creator", 120);
+  const rawGameTitle = trimText(game.title, 120);
+  const rawContentTitle = trimText(mention.title || `${rawCreatorName} on ${platformName}`, 300);
+  const creatorName = escapeDiscordMarkdown(rawCreatorName);
+  const gameTitle = escapeDiscordMarkdown(rawGameTitle);
+  const contentTitle = escapeDiscordMarkdown(rawContentTitle);
+  const score = Math.max(0, Math.min(100, Math.round(mention.signal_score)));
 
   const title = isYouTube
-    ? `New YouTube video for ${gameTitle}`
-    : isTwitch
-      ? `${creatorName} is live with ${gameTitle}`
-      : `New ${platformName} signal for ${gameTitle}`;
+    ? `${platformEmoji} New YouTube video detected`
+    : `${platformEmoji} ${rawCreatorName} is LIVE on ${platformName}`;
 
   const description = isYouTube
-    ? `**${contentTitle}**\n\nA new YouTube video matched your tracked game.`
-    : isTwitch
-      ? `**${contentTitle}**\n\nA creator is live on Twitch with your tracked game.`
-      : `**${contentTitle}**\n\nA new creator signal matched your tracked game.`;
+    ? `**${contentTitle}**\n\n**${creatorName}** published a new video matching **${gameTitle}**.`
+    : `**${contentTitle}**\n\n**${creatorName}** just went live with **${gameTitle}**${isKick ? " on Kick" : ""}.`;
 
   const fields = [
-    { name: "Creator", value: `**${creatorName}**`, inline: true },
-    { name: isYouTube ? "Views" : "Live viewers", value: `**${formatCount(reach)}**`, inline: true },
-    { name: "Game", value: `**${gameTitle}**`, inline: true },
-    { name: "Signal score", value: `**${Math.max(0, Math.min(100, Math.round(mention.signal_score)))}/100**`, inline: true },
+    { name: "🎮 Game", value: `**${gameTitle}**`, inline: true },
+    { name: "👤 Creator", value: `**${creatorName}**`, inline: true },
+    {
+      name: isYouTube ? "👁️ Views" : "👥 Live viewers",
+      value: `**${formatCount(reach)}**`,
+      inline: true,
+    },
+    {
+      name: "⚡ Signal score",
+      value: `**${score}/100** · ${signalTier(score)}`,
+      inline: true,
+    },
+    {
+      name: "🕒 Detected",
+      value: discordRelativeTime(mention.detected_at),
+      inline: true,
+    },
   ];
 
+  const links = [`[Open dashboard](${DASHBOARD_URL})`];
   if (mediaUrl) {
-    fields.push({
-      name: isYouTube ? "Open video" : isTwitch ? "Open stream" : "Open signal",
-      value: `[View on ${platformName}](${mediaUrl})`,
-      inline: false,
-    });
+    const action = isYouTube ? "▶ Watch on YouTube" : `▶ Watch on ${platformName}`;
+    links.unshift(`[${action}](${mediaUrl})`);
   }
+  fields.push({ name: "🔗 Quick links", value: links.join("  •  "), inline: false });
 
   return {
+    author: {
+      name: `Who Plays My Game · ${platformName} alert`,
+      url: DASHBOARD_URL,
+    },
     title: trimText(title, 256),
     description,
-    url: mediaUrl ?? undefined,
+    url: mediaUrl ?? DASHBOARD_URL,
     color,
     fields,
     image: thumbnailUrl ? { url: thumbnailUrl } : undefined,
-    footer: { text: `Who Plays My Game • ${platformName}` },
+    footer: { text: `Who Plays My Game • ${platformName} creator monitoring` },
     timestamp: mention.detected_at,
   };
 }
@@ -186,6 +223,7 @@ Deno.serve(async (request) => {
           },
           body: JSON.stringify({
             username: "Who Plays My Game",
+            allowed_mentions: { parse: [] },
             embeds: [buildDiscordEmbed(mention, game)],
           }),
         });
