@@ -102,10 +102,18 @@ Deno.serve(async (request) => {
         body: JSON.stringify({
           username: "Who Plays My Game",
           embeds: [{
-            title: "Who Plays My Game test notification",
-            description: "Your Discord webhook is connected correctly.",
-            color: 3532799,
-            footer: { text: "Who Plays My Game" },
+            title: "Discord alerts are ready",
+            description: "**Example creator signal**\n\nYour webhook is connected correctly. Real alerts use this richer layout and include the detected content thumbnail when available.",
+            url: "https://www.whoplaysmygame.com/dashboard",
+            color: 0x35e7ff,
+            fields: [
+              { name: "Creator", value: "**ExampleCreator**", inline: true },
+              { name: "Live viewers", value: "**184**", inline: true },
+              { name: "Game", value: "**AFTERBLAST**", inline: true },
+              { name: "Signal score", value: "**78/100**", inline: true },
+              { name: "Open dashboard", value: "[View in Who Plays My Game](https://www.whoplaysmygame.com/dashboard)", inline: false },
+            ],
+            footer: { text: "Who Plays My Game • Test notification" },
             timestamp: new Date().toISOString(),
           }],
         }),
