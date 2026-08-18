@@ -32,7 +32,7 @@ function buildTestEmbed() {
       url: DASHBOARD_URL,
     },
     title: "🟣 ExampleCreator is LIVE on Twitch",
-    description: "**AFTERBLAST — first run, first chaos**\n\n**ExampleCreator** just went live with **AFTERBLAST**.\n\n✅ *Your Discord webhook is connected. This is a preview of real creator alerts.*",
+    description: "**AFTERBLAST - first run, first chaos**\n\n**ExampleCreator** just went live with **AFTERBLAST**.\n\n✅ *Your Discord webhook is connected. This is a preview of real creator alerts.*",
     url: DASHBOARD_URL,
     color: 0x9146ff,
     fields: [
