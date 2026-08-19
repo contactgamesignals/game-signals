@@ -130,6 +130,34 @@ export default function DashboardClient({
   }, [games, workspaceId]);
 
   useEffect(() => {
+    setGames(initialGames);
+  }, [initialGames]);
+
+  useEffect(() => {
+    setMentions(initialMentions);
+  }, [initialMentions]);
+
+  useEffect(() => {
+    if (plan === "free" || !games.some((game) => game.enabled)) return;
+
+    const refresh = () => {
+      if (!document.hidden) router.refresh();
+    };
+    const onVisibilityChange = () => {
+      if (!document.hidden) refresh();
+    };
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [games, plan, router]);
+
+  useEffect(() => {
     const pendingRaw = localStorage.getItem(PENDING_GAME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PENDING_GAME_STORAGE_KEY);
     if (!pendingRaw) return;
 
@@ -295,18 +323,26 @@ export default function DashboardClient({
               <p>YouTube and Twitch monitoring is active. Kick is coming soon.</p>
             </div>
             <div className="dashboard-actions">
-              <span className="plan-pill">{planLabel} · {activeGames}/{gameLimit} active games</span>
+              <span className="plan-pill">
+                {plan === "free" ? `${activeGames}/${gameLimit} active games` : `${planLabel} · ${activeGames}/${gameLimit} active games`}
+              </span>
               {plan !== "free" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
-              <button className="btn btn-primary" disabled={atGameLimit || busy} onClick={openNewMonitor}>
-                {atGameLimit ? "Active game limit reached" : "Add game"}
-              </button>
+              {atGameLimit ? (
+                <Link className="btn btn-primary" href="/dashboard/settings">
+                  {plan === "free" ? "Choose a plan" : "Change plan"}
+                </Link>
+              ) : (
+                <button className="btn btn-primary" disabled={busy} onClick={openNewMonitor}>Add game</button>
+              )}
             </div>
           </div>
 
           {message ? <div className="status-message">{message}</div> : null}
           {atGameLimit ? (
             <div className="status-message">
-              You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or manage your plan in Settings to monitor another title.
+              {plan === "free"
+                ? "You are using the available active monitoring slot. Choose a plan in Settings to monitor more games."
+                : <>You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or change your plan in Settings to monitor another title.</>}
             </div>
           ) : null}
 
@@ -363,7 +399,7 @@ export default function DashboardClient({
                   <div className="dashboard-actions">
                     <button className="icon-btn" disabled={busy} onClick={() => openEditMonitor(game)}>Edit</button>
                     <button className="icon-btn" disabled={busy || (!game.enabled && atGameLimit)} onClick={() => toggleGame(game)}>
-                      {game.enabled ? "Pause" : atGameLimit ? "No free slot" : "Resume"}
+                      {game.enabled ? "Pause" : atGameLimit ? "No available slot" : "Resume"}
                     </button>
                     <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
                   </div>
