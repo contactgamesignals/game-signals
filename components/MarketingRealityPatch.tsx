@@ -33,10 +33,10 @@ export default function MarketingRealityPatch() {
 
     const apply = () => {
       const heroCopy = document.querySelector<HTMLElement>(".hero-copy");
-      if (heroCopy) heroCopy.textContent = `${BRAND.name} monitors new YouTube videos and Twitch streams about your game, puts every match into one dashboard, sends Discord alerts, and gives you one daily email digest when new signals appear.`;
+      if (heroCopy) heroCopy.textContent = `${BRAND.name} monitors new YouTube videos and Twitch streams about your game, puts every match into one dashboard, sends Discord alerts, and gives you a daily email summary.`;
 
       const heroMicro = document.querySelector<HTMLElement>(".hero .micro");
-      if (heroMicro) heroMicro.textContent = "Start with a free public beta account, no card required. Upgrade when you want Discord alerts, the daily email digest, CSV export and faster paid monitoring.";
+      if (heroMicro) heroMicro.textContent = "No YouTube, Twitch or Steam account connection required.";
 
       const systemState = document.querySelector<HTMLElement>(".system-state");
       if (systemState) systemState.innerHTML = "<i></i> 2 sources online";
@@ -111,7 +111,7 @@ export default function MarketingRealityPatch() {
       if (onboardingNotice) onboardingNotice.textContent = "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
 
       const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
-      if (planNotice) planNotice.textContent = "Paid checkout uses Paddle. Free public beta accounts remain available with no card.";
+      if (planNotice) planNotice.textContent = "Paid checkout is available after registration.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
       if (pricingLead) pricingLead.textContent = "Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.";
