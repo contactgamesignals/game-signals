@@ -1,9 +1,14 @@
 import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, twitchCadenceMinutes, type Plan } from "../_shared/core.ts";
 
 type Game = { id: string; workspace_id: string; title: string; twitch_game_id: string | null; twitch_last_scanned_at: string | null };
+type TwitchCategory = { id: string; name: string };
 type TwitchStream = { id: string; user_id: string; user_login: string; user_name: string; game_id: string; game_name: string; title: string; viewer_count: number; started_at: string; language: string; thumbnail_url: string };
 
 const MANUAL_SCAN_COOLDOWN_MS = 5 * 60_000;
+
+function categoryMatchesTitle(categoryName: string, title: string) {
+  return categoryName.localeCompare(title, undefined, { sensitivity: "accent" }) === 0;
+}
 
 async function twitchToken(clientId: string, clientSecret: string) {
   const url = new URL("https://id.twitch.tv/oauth2/token");
@@ -22,9 +27,21 @@ async function resolveCategory(title: string, clientId: string, token: string) {
   url.searchParams.set("first", "20");
   const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error(`Twitch category search failed: ${response.status} ${await response.text()}`);
-  const payload = await response.json() as { data: Array<{ id: string; name: string }> };
-  const exact = payload.data.find((item) => item.name.localeCompare(title, undefined, { sensitivity: "accent" }) === 0);
-  return exact ?? payload.data[0] ?? null;
+  const payload = await response.json() as { data: TwitchCategory[] };
+  return payload.data.find((item) => categoryMatchesTitle(item.name, title)) ?? null;
+}
+
+async function categoryNamesById(ids: string[], clientId: string, token: string) {
+  const names = new Map<string, string>();
+  for (const batch of chunks(Array.from(new Set(ids)), 100)) {
+    const url = new URL("https://api.twitch.tv/helix/games");
+    batch.forEach((id) => url.searchParams.append("id", id));
+    const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Twitch category validation failed: ${response.status} ${await response.text()}`);
+    const payload = await response.json() as { data: TwitchCategory[] };
+    payload.data.forEach((item) => names.set(item.id, item.name));
+  }
+  return names;
 }
 
 Deno.serve(async (request) => {
@@ -68,16 +85,40 @@ Deno.serve(async (request) => {
     }
 
     const token = await twitchToken(clientId, clientSecret);
+    const cachedIds = games.map((game) => game.twitch_game_id).filter((value): value is string => Boolean(value));
+    const cachedCategoryNames = await categoryNamesById(cachedIds, clientId, token);
     const prepared: Game[] = [];
+    const categoryNameByGame = new Map<string, string>();
+
     for (const game of games) {
-      if (game.twitch_game_id) { prepared.push(game); continue; }
-      const category = await resolveCategory(game.title, clientId, token);
-      if (!category) {
-        await supabase.from("scan_runs").insert({ game_id: game.id, platform: "twitch", status: "failed", finished_at: new Date().toISOString(), error: "No matching Twitch category." });
+      const cachedCategoryName = game.twitch_game_id ? cachedCategoryNames.get(game.twitch_game_id) : null;
+      if (game.twitch_game_id && cachedCategoryName && categoryMatchesTitle(cachedCategoryName, game.title)) {
+        prepared.push(game);
+        categoryNameByGame.set(game.id, cachedCategoryName);
         continue;
       }
-      await supabase.from("games").update({ twitch_game_id: category.id }).eq("id", game.id);
+
+      const category = await resolveCategory(game.title, clientId, token);
+      if (!category) {
+        await Promise.all([
+          supabase.from("games").update({ twitch_game_id: null }).eq("id", game.id),
+          supabase.from("scan_runs").insert({
+            game_id: game.id,
+            platform: "twitch",
+            status: "failed",
+            finished_at: new Date().toISOString(),
+            error: "No exact matching Twitch category.",
+            metadata: { previous_twitch_game_id: game.twitch_game_id },
+          }),
+        ]);
+        continue;
+      }
+
+      if (game.twitch_game_id !== category.id) {
+        await supabase.from("games").update({ twitch_game_id: category.id }).eq("id", game.id);
+      }
       prepared.push({ ...game, twitch_game_id: category.id });
+      categoryNameByGame.set(game.id, category.name);
     }
 
     const workspaceIds = Array.from(new Set(prepared.map((game) => game.workspace_id)));
@@ -86,29 +127,51 @@ Deno.serve(async (request) => {
       item.workspace_id as string,
       (item.status === "active" || item.status === "trialing" ? item.plan : "free") as Plan,
     ]));
-    const gameByTwitchId = new Map(prepared.map((game) => [game.twitch_game_id as string, game]));
+
+    const gamesByTwitchId = new Map<string, Game[]>();
+    for (const game of prepared) {
+      const twitchGameId = game.twitch_game_id as string;
+      const trackedGames = gamesByTwitchId.get(twitchGameId) ?? [];
+      trackedGames.push(game);
+      gamesByTwitchId.set(twitchGameId, trackedGames);
+    }
+
     let inserted = 0;
     const resultsByGame = new Map<string, number>();
+    const uniqueTwitchIds = Array.from(gamesByTwitchId.keys());
 
-    for (const batch of chunks(prepared, 100)) {
+    for (const batch of chunks(uniqueTwitchIds, 100)) {
       const url = new URL("https://api.twitch.tv/helix/streams");
       url.searchParams.set("first", "100");
-      batch.forEach((game) => url.searchParams.append("game_id", game.twitch_game_id as string));
+      batch.forEach((twitchGameId) => url.searchParams.append("game_id", twitchGameId));
       const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error(`Twitch streams failed: ${response.status} ${await response.text()}`);
       const payload = await response.json() as { data: TwitchStream[] };
+
       for (const stream of payload.data) {
-        const game = gameByTwitchId.get(stream.game_id);
-        if (!game) continue;
-        const { error: upsertError } = await supabase.from("mentions").upsert({
-          game_id: game.id, platform: "twitch", external_id: stream.id, creator_external_id: stream.user_id,
-          creator_name: stream.user_name, title: stream.title || `${stream.user_name} is live`,
-          url: `https://www.twitch.tv/${stream.user_login}`,
-          thumbnail_url: stream.thumbnail_url.replace("{width}", "640").replace("{height}", "360"),
-          viewer_count: stream.viewer_count, language: stream.language, published_at: stream.started_at,
-          last_seen_at: new Date().toISOString(), signal_score: signalScore(stream.viewer_count, true), raw_payload: stream,
-        }, { onConflict: "platform,external_id" });
-        if (!upsertError) { inserted += 1; resultsByGame.set(game.id, (resultsByGame.get(game.id) ?? 0) + 1); }
+        const trackedGames = gamesByTwitchId.get(stream.game_id) ?? [];
+        for (const game of trackedGames) {
+          const { error: upsertError } = await supabase.from("mentions").upsert({
+            game_id: game.id,
+            platform: "twitch",
+            external_id: stream.id,
+            creator_external_id: stream.user_id,
+            creator_name: stream.user_name,
+            title: stream.title || `${stream.user_name} is live`,
+            url: `https://www.twitch.tv/${stream.user_login}`,
+            thumbnail_url: stream.thumbnail_url.replace("{width}", "640").replace("{height}", "360"),
+            viewer_count: stream.viewer_count,
+            language: stream.language,
+            published_at: stream.started_at,
+            last_seen_at: new Date().toISOString(),
+            signal_score: signalScore(stream.viewer_count, true),
+            raw_payload: stream,
+          }, { onConflict: "game_id,platform,external_id" });
+          if (!upsertError) {
+            inserted += 1;
+            resultsByGame.set(game.id, (resultsByGame.get(game.id) ?? 0) + 1);
+          }
+        }
       }
     }
 
@@ -118,9 +181,20 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + twitchCadenceMinutes(plan) * 60_000).toISOString();
       await Promise.all([
         supabase.from("games").update({ twitch_last_scanned_at: now.toISOString(), twitch_next_scan_at: next }).eq("id", game.id),
-        supabase.from("scan_runs").insert({ game_id: game.id, platform: "twitch", status: "success", finished_at: now.toISOString(), results_count: resultsByGame.get(game.id) ?? 0 }),
+        supabase.from("scan_runs").insert({
+          game_id: game.id,
+          platform: "twitch",
+          status: "success",
+          finished_at: now.toISOString(),
+          results_count: resultsByGame.get(game.id) ?? 0,
+          metadata: {
+            twitch_game_id: game.twitch_game_id,
+            twitch_category_name: categoryNameByGame.get(game.id) ?? null,
+          },
+        }),
       ]);
     }
+
     return json({ ok: true, games: prepared.length, mentions: inserted });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
