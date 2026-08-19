@@ -326,7 +326,7 @@ export default function SettingsClient({
             </p>
           </div>
           <span className="plan-pill">
-            {billingChecking ? "Checking…" : `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`}
+            {billingChecking ? "Checking…" : hasPaidPlan ? `${PLAN_LABELS[effectivePlan]} · ${billingStatus}` : "No active plan"}
           </span>
         </div>
 
@@ -480,7 +480,7 @@ export default function SettingsClient({
 
         {discordLocked ? (
           <div className="status-message" style={{ marginBottom: 14 }}>
-            Discord alerts are included in every paid plan. A saved webhook is not used while the workspace is on Free or an inactive subscription.
+            Discord alerts are included in every paid plan. A saved webhook is not used without an active paid subscription.
           </div>
         ) : null}
         {message ? <div className="auth-success" style={{ marginBottom: 14 }}>{message}</div> : null}
