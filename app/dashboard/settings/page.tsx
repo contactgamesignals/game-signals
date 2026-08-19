@@ -5,6 +5,7 @@ import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
 import SettingsClient from "@/components/SettingsClient";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { BRAND } from "@/lib/brand";
+import { COMPANY } from "@/lib/company";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
@@ -66,6 +67,7 @@ export default async function SettingsPage() {
     billingProvider === "stripe" && (subscriptionStatus === "past_due" || subscriptionStatus === "incomplete");
   const stripeTaxReviewRequired =
     billingProvider === "stripe" && (subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review");
+  const showProductSettings = !stripePaymentNeedsAttention && !stripeTaxReviewRequired;
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -124,26 +126,36 @@ export default async function SettingsPage() {
             />
           </div>
         ) : null}
-        <div className="settings-grid" style={{ marginBottom: 16 }}>
-          <WorkspaceSettings
-            userId={data.user.id}
-            email={email}
-            initialDisplayName={displayName}
-            workspaceId={membership.workspace_id as string}
-            initialWorkspaceName={workspaceName}
-            canManageBilling={canManageBilling}
-          />
+
+        <div className={showProductSettings ? "settings-columns" : "settings-columns settings-columns-single"}>
+          <div className="settings-grid settings-stack">
+            <WorkspaceSettings
+              userId={data.user.id}
+              email={email}
+              initialDisplayName={displayName}
+              workspaceId={membership.workspace_id as string}
+              initialWorkspaceName={workspaceName}
+              canManageBilling={canManageBilling}
+            />
+          </div>
+
+          {showProductSettings ? (
+            <div className="settings-stack">
+              <SettingsClient
+                workspaceId={membership.workspace_id as string}
+                currentPlan={normalizePlan(subscription?.plan)}
+                subscriptionStatus={subscriptionStatus}
+                billingProvider={billingProvider}
+                billingHasCustomer={billingHasCustomer}
+                billingHasSubscription={billingHasSubscription}
+              />
+            </div>
+          ) : null}
         </div>
-        {!stripePaymentNeedsAttention && !stripeTaxReviewRequired ? (
-          <SettingsClient
-            workspaceId={membership.workspace_id as string}
-            currentPlan={normalizePlan(subscription?.plan)}
-            subscriptionStatus={subscriptionStatus}
-            billingProvider={billingProvider}
-            billingHasCustomer={billingHasCustomer}
-            billingHasSubscription={billingHasSubscription}
-          />
-        ) : null}
+
+        <div className="settings-legal-footer">
+          Operated by {COMPANY.legalName} · <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a> · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> · <Link href="/withdrawal">Withdrawal</Link>
+        </div>
       </main>
     </div>
   );
