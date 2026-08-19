@@ -134,4 +134,34 @@ markup = replace(
   `${developerStory}<section class="section after-payment-section" id="after-payment">`,
 );
 
+markup = replace(
+  markup,
+  'SIGNAL COMMAND /',
+  'MONITORING /',
+);
+
+markup = replace(
+  markup,
+  '<button class="btn btn-primary" data-open="onboarding">Add your first game</button>',
+  '<a class="btn btn-primary" href="/signup">Register</a>',
+);
+
+markup = replace(
+  markup,
+  '<div class="free-beta-note"><strong>Want to try it first?</strong><span>Create a free public beta account with no card. Free is a way to try the product, not another pricing tier.</span><a href="/signup">Create free account</a></div>',
+  '',
+);
+
+markup = replace(
+  markup,
+  'That depends on the platform. Free accounts use a slower monitoring cadence, while every paid plan uses the same faster paid cadence. Detection still depends on platform APIs and scheduled refreshes.',
+  'That depends on the platform. Every paid plan uses the same monitoring cadence. Detection depends on platform APIs and scheduled refreshes.',
+);
+
+markup = replace(
+  markup,
+  '<div class="notice">New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.</div>',
+  '<div class="notice">Paid checkout is available after registration.</div>',
+);
+
 export const landingMarkup = markup;
