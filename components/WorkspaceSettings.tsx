@@ -128,37 +128,6 @@ export default function WorkspaceSettings({
         </form>
       </section>
 
-      <section className="settings-card">
-        <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
-          <div>
-            <h2>Operator & legal</h2>
-            <p>{COMPANY.productName} is operated by {COMPANY.legalName}.</p>
-          </div>
-          <span className="plan-pill">Operator</span>
-        </div>
-        <div className="settings-row">
-          <span>Company</span>
-          <span>{COMPANY.legalName}</span>
-        </div>
-        <div className="settings-row">
-          <span>Registered office</span>
-          <span>{COMPANY.registeredAddress}</span>
-        </div>
-        <div className="settings-row">
-          <span>Company IDs</span>
-          <span>KRS {COMPANY.krs} · NIP {COMPANY.nip}</span>
-        </div>
-        <div className="settings-row">
-          <span>Support</span>
-          <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a>
-        </div>
-        <div className="dashboard-actions" style={{ marginTop: 14 }}>
-          <Link className="btn btn-ghost" href="/privacy">Privacy Policy</Link>
-          <Link className="btn btn-ghost" href="/terms">Terms</Link>
-          <Link className="btn btn-ghost" href="/withdrawal">Withdrawal</Link>
-        </div>
-      </section>
-
       {canManageBilling ? (
         <section className="settings-card">
           <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
@@ -213,6 +182,10 @@ export default function WorkspaceSettings({
           </button>
         </div>
       </section>
+
+      <div style={{ gridColumn: "1 / -1", color: "#687188", fontSize: 11, lineHeight: 1.7, padding: "2px 4px 8px" }}>
+        Operated by {COMPANY.legalName} · <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>{COMPANY.supportEmail}</a> · <Link href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Privacy</Link> · <Link href="/terms" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Terms</Link> · <Link href="/withdrawal" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Withdrawal</Link>
+      </div>
     </>
   );
 }
