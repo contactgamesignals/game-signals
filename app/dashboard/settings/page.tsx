@@ -128,17 +128,6 @@ export default async function SettingsPage() {
         ) : null}
 
         <div className={showProductSettings ? "settings-columns" : "settings-columns settings-columns-single"}>
-          <div className="settings-grid settings-stack">
-            <WorkspaceSettings
-              userId={data.user.id}
-              email={email}
-              initialDisplayName={displayName}
-              workspaceId={membership.workspace_id as string}
-              initialWorkspaceName={workspaceName}
-              canManageBilling={canManageBilling}
-            />
-          </div>
-
           {showProductSettings ? (
             <div className="settings-stack">
               <SettingsClient
@@ -151,6 +140,17 @@ export default async function SettingsPage() {
               />
             </div>
           ) : null}
+
+          <div className="settings-grid settings-stack">
+            <WorkspaceSettings
+              userId={data.user.id}
+              email={email}
+              initialDisplayName={displayName}
+              workspaceId={membership.workspace_id as string}
+              initialWorkspaceName={workspaceName}
+              canManageBilling={canManageBilling}
+            />
+          </div>
         </div>
 
         <div className="settings-legal-footer">
