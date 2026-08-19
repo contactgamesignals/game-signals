@@ -182,10 +182,6 @@ export default function WorkspaceSettings({
           </button>
         </div>
       </section>
-
-      <div style={{ gridColumn: "1 / -1", color: "#687188", fontSize: 11, lineHeight: 1.7, padding: "2px 4px 8px" }}>
-        Operated by {COMPANY.legalName} · <a href={`mailto:${COMPANY.supportEmail}`} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>{COMPANY.supportEmail}</a> · <Link href="/privacy" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Privacy</Link> · <Link href="/terms" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Terms</Link> · <Link href="/withdrawal" style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>Withdrawal</Link>
-      </div>
     </>
   );
 }
