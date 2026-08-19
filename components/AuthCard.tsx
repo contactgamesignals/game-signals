@@ -148,11 +148,11 @@ export default function AuthCard({ mode, configured }: Props) {
           </label>
 
           {!isLogin ? (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, lineHeight: 1.5 }}>
-              <input id="signup-legal-acceptance" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required disabled={!PUBLIC_SIGNUP_ENABLED} style={{ width: 16, height: 16, marginTop: 2, flex: "0 0 auto" }} />
-              <label htmlFor="signup-legal-acceptance" style={{ margin: 0, fontWeight: 400 }}>
-                I agree to the <Link href="/terms" target="_blank" rel="noreferrer">Terms</Link> and acknowledge the{" "}
-                <Link href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</Link>.
+            <div className="signup-legal-row">
+              <input id="signup-legal-acceptance" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required disabled={!PUBLIC_SIGNUP_ENABLED} />
+              <label htmlFor="signup-legal-acceptance" className="signup-legal-copy">
+                I agree to the <Link href="/terms" target="_blank" rel="noreferrer" className="signup-legal-link">Terms</Link> and acknowledge the{" "}
+                <Link href="/privacy" target="_blank" rel="noreferrer" className="signup-legal-link">Privacy Policy</Link>.
               </label>
             </div>
           ) : null}
