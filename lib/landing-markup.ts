@@ -27,7 +27,13 @@ markup = replace(
 markup = replace(
   markup,
   '<p class="hero-copy">Who Plays My Game monitors new YouTube videos and Twitch streams about your game, puts every match into one dashboard, sends Discord alerts, and gives you one daily email digest when new signals appear.</p>',
-  '<p class="hero-copy">Get notified when someone uploads a YouTube video about your game or goes live with it on Twitch. Who Plays My Game finds the content automatically and puts it all in one place.</p>',
+  '<p class="hero-copy">Who Plays My Game monitors new YouTube videos and Twitch streams about your game, puts every match into one dashboard, sends Discord alerts, and gives you a daily email summary.</p>',
+);
+
+markup = replace(
+  markup,
+  '<div class="micro">Start with a free public beta account, no card required. Upgrade when you want Discord alerts, the daily email digest, CSV export and faster paid monitoring.</div>',
+  '<div class="micro"><strong>No YouTube, Twitch or Steam account connection required.</strong> Start with a free public beta account, no card required. Upgrade when you want Discord alerts, the daily email digest, CSV export and faster paid monitoring.</div>',
 );
 
 markup = replace(
@@ -46,6 +52,36 @@ markup = replace(
   markup,
   '<div class="workflow">\n          <div class="step"><div class="step-num">01 / LISTEN</div><div class="step-icon">⌁</div><h3>Listen</h3><p>We watch for new videos and active live streams across the selected platforms.</p></div>\n          <div class="step"><div class="step-num">02 / MATCH</div><div class="step-icon" style="color:var(--violet2)">◎</div><h3>Match</h3><p>Your game title, aliases, and extra keywords help filter out irrelevant results.</p></div>\n          <div class="step"><div class="step-num">03 / SCORE</div><div class="step-icon" style="color:#ff91e7">↗</div><h3>Score</h3><p>See the creator, current views or live viewers, and a signal score that helps prioritize mentions.</p></div>\n          <div class="step"><div class="step-num">04 / ALERT</div><div class="step-icon" style="color:var(--mint)">✦</div><h3>Alert</h3><p>Every paid plan includes Discord alerts and one opt-in daily email digest, alongside the live dashboard.</p></div>\n        </div>',
   '<div class="clarity-steps-grid">\n          <div class="clarity-step"><div class="clarity-step-top"><span class="clarity-step-number">01</span><span class="clarity-step-icon">+</span></div><h3>Add your game</h3><p>Enter the game title and optional aliases or keywords. No YouTube or Twitch account connection is required.</p></div>\n          <div class="clarity-step"><div class="clarity-step-top"><span class="clarity-step-number">02</span><span class="clarity-step-icon monitor">◉</span></div><h3>We monitor creators</h3><p>Who Plays My Game checks for new YouTube videos and active Twitch streams connected to your title.</p></div>\n          <div class="clarity-step"><div class="clarity-step-top"><span class="clarity-step-number">03</span><span class="clarity-step-icon alert">✦</span></div><h3>You get notified</h3><p>See every match in your dashboard and use Discord alerts or the optional daily email digest on paid plans.</p></div>\n        </div>',
+);
+
+markup = replace(
+  markup,
+  '<div><div class="kicker">Interactive product</div><h2>Signal Lab. Configure monitoring the way it would work for your game.</h2></div>',
+  '<div><div class="kicker">Interactive product</div><h2>Configure monitoring the way it would work for your game.</h2></div>',
+);
+
+markup = replace(
+  markup,
+  '<span class="panel-title">Live signal map</span>',
+  '<span class="panel-title">Live creators activity</span>',
+);
+
+markup = replace(
+  markup,
+  '<div><div class="kicker">After you subscribe</div><h2>What happens when you pay.</h2></div>',
+  '<div><div class="kicker">Get started</div><h2>Choose a plan. Add your games. Get notified.</h2></div>',
+);
+
+markup = replace(
+  markup,
+  '<p class="section-lead">The plan changes how many games you can monitor. The paid product features are the same on Indie, Studio and Publisher.</p>',
+  '<p class="section-lead">Pick the game limit that fits your team. Every paid plan includes the same monitoring features and alerts.</p>',
+);
+
+markup = replace(
+  markup,
+  '<div class="after-payment-grid">\n          <div class="after-payment-step"><span class="after-payment-number">01</span><h3>Complete Paddle checkout</h3><p>Choose monthly or yearly billing and pay securely through Paddle.</p></div>\n          <div class="after-payment-step"><span class="after-payment-number">02</span><h3>Your paid plan activates</h3><p>After Paddle confirms the subscription, your workspace receives the selected active-game limit and the paid monitoring cadence.</p></div>\n          <div class="after-payment-step"><span class="after-payment-number">03</span><h3>Turn on your notifications</h3><p>Connect Discord for signal alerts and opt in to the daily email digest if you want the summary in your inbox.</p></div>\n          <div class="after-payment-step"><span class="after-payment-number">04</span><h3>Manage billing in Paddle</h3><p>Payment methods, billing documents and cancellation are available through Paddle Customer Portal.</p></div>\n        </div>',
+  '<div class="after-payment-grid">\n          <div class="after-payment-step"><span class="after-payment-number">01</span><h3>Choose your plan</h3><p>Pick the number of active games you want to monitor. Every paid plan includes the same product features.</p></div>\n          <div class="after-payment-step"><span class="after-payment-number">02</span><h3>Add your games</h3><p>Add the titles, aliases and keywords you want Who Plays My Game to watch across YouTube and Twitch.</p></div>\n          <div class="after-payment-step"><span class="after-payment-number">03</span><h3>Get your alerts</h3><p>See matches in your dashboard, connect Discord alerts and enable the optional daily email summary.</p></div>\n        </div>',
 );
 
 const developerStory = `<section class="section developer-proof-section" id="built-by-game-developers">
