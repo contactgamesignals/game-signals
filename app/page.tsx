@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import LandingPage from "@/components/LandingPage";
 import MarketingRealityPatch from "@/components/MarketingRealityPatch";
 import PricingCyclePatch from "@/components/PricingCyclePatch";
+import QuickStartSignupPatch from "@/components/QuickStartSignupPatch";
 import { BRAND } from "@/lib/brand";
 import { COMPANY } from "@/lib/company";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -59,6 +60,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replaceAll("<", "\\u003c") }}
       />
       <LandingPage />
+      <QuickStartSignupPatch />
       <MarketingRealityPatch />
       <PricingCyclePatch />
     </>
