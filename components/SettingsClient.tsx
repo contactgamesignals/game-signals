@@ -509,14 +509,6 @@ export default function SettingsClient({
       </section>
 
       <EmailDigestSettings workspaceId={workspaceId} />
-
-      <section className="settings-card">
-        <h2>Platform monitoring</h2>
-        <p>YouTube and Twitch monitoring is live. Kick remains disabled until the required API/commercial approval is in place.</p>
-        <div className="settings-row"><span>YouTube</span><span className="plan-pill">Active</span></div>
-        <div className="settings-row"><span>Twitch</span><span className="plan-pill">Active</span></div>
-        <div className="settings-row"><span>Kick</span><span className="plan-pill">Coming soon</span></div>
-      </section>
     </div>
   );
 }
