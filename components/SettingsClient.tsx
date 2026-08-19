@@ -55,7 +55,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "245 PLN / yr",
     paddleMonthly: "$2.99 / mo",
     paddleYearly: "$29.90 / yr",
-    summary: "1 active game · all paid features",
+    summary: "1 active game",
   },
   {
     plan: "studio",
@@ -63,7 +63,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "645 PLN / yr",
     paddleMonthly: "$7.99 / mo",
     paddleYearly: "$79.90 / yr",
-    summary: "Up to 3 active games · all paid features",
+    summary: "Up to 3 active games",
   },
   {
     plan: "publisher",
@@ -71,7 +71,7 @@ const PAID_PLANS: Array<{
     stripeYearly: "1495 PLN / yr",
     paddleMonthly: "$14.99 / mo",
     paddleYearly: "$149.90 / yr",
-    summary: "Up to 10 active games · all paid features",
+    summary: "Up to 10 active games",
   },
 ];
 
@@ -321,8 +321,8 @@ export default function SettingsClient({
             <h2>Billing</h2>
             <p>
               {billingProvider === "paddle"
-                ? "Choose a plan with Paddle. Paddle acts as Merchant of Record for the customer transaction and handles checkout, applicable indirect taxes, and customer billing documents."
-                : "Choose a plan with Stripe Checkout. Existing subscriptions are changed or cancelled securely in Stripe Customer Portal."}
+                ? "Choose a plan. Paddle handles secure checkout and billing."
+                : "Choose a plan. Stripe handles secure checkout and billing."}
             </p>
           </div>
           <span className="plan-pill">
@@ -356,13 +356,13 @@ export default function SettingsClient({
           <div className="form-grid" style={{ marginBottom: 18 }}>
             <div className="status-message">
               {billingProvider === "paddle"
-                ? "Paddle is the Merchant of Record for this checkout. Paddle calculates the applicable transaction taxes and provides the customer billing document. The final amount is confirmed in Paddle Checkout."
+                ? "Secure checkout by Paddle. Final tax is shown at checkout."
                 : "Paid beta checkout is currently available only for customers with a Polish billing address. Prices shown in PLN are customer-facing totals and Polish VAT is calculated inside the displayed price where applicable. Do not continue if your billing address is outside Poland yet."}
             </div>
 
             <div>
               <strong>Who is buying?</strong>
-              <p className="form-help" style={{ marginTop: 5 }}>Choose how the subscription should be purchased and documented.</p>
+              <p className="form-help" style={{ marginTop: 5 }}>Choose the billing profile for this subscription.</p>
             </div>
             <div className="dashboard-actions">
               <button
@@ -386,8 +386,8 @@ export default function SettingsClient({
             <div className="status-message">
               {billingProvider === "paddle"
                 ? buyerType === "company"
-                  ? "Paddle Checkout will collect the billing details and supported company tax ID information required for the purchase."
-                  : "Paddle Checkout will collect the billing details required for the individual purchase."
+                  ? "Billing details and supported company tax IDs will be collected during checkout."
+                  : "Billing details will be collected during checkout."
                 : buyerType === "company"
                   ? "Stripe Checkout will collect the Polish billing address and require the company legal name and supported VAT/tax ID fields."
                   : "Stripe Checkout will collect your Polish billing address as an individual. Company VAT/tax fields will not be required."}
@@ -403,7 +403,7 @@ export default function SettingsClient({
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <input type="checkbox" checked={recurringBillingAccepted} onChange={(event) => setRecurringBillingAccepted(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
               <span>
-                I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation takes effect at the end of the current paid period. Payments are generally non-refundable and no credits are provided for partially used billing periods, except where required by applicable law.
+                I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation applies at the end of the current paid period.
               </span>
             </label>
 
@@ -411,12 +411,12 @@ export default function SettingsClient({
               <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <input type="checkbox" checked={immediateServiceRequested} onChange={(event) => setImmediateServiceRequested(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
                 <span>
-                  I expressly request that Who Plays My Game starts providing the digital service immediately, before the 14-day withdrawal period ends. I understand that if I validly withdraw during that period, I may have to pay a proportionate amount for the service already provided, and mandatory consumer rights remain unaffected.
+                  I request immediate access to the service before the 14-day withdrawal period ends. If I withdraw after service starts, I may owe a proportionate amount for the service already provided. Mandatory consumer rights remain unaffected.
                 </span>
               </label>
             ) : (
               <div className="form-help">
-                Company purchase. Mandatory rights that apply by law to a particular business customer, including any statutory protections for qualifying sole traders, are not excluded.
+                Company purchase. Any mandatory rights that apply by law remain unaffected.
               </div>
             )}
 
@@ -429,7 +429,7 @@ export default function SettingsClient({
         ) : null}
 
         <div className="status-message" style={{ marginBottom: 14 }}>
-          All paid plans include the same product features, alerts, export and monitoring cadence. The only plan difference is the number of active games you can monitor.
+          All paid plans include the same features. Only the number of active games changes.
         </div>
 
         <div className="form-grid">
