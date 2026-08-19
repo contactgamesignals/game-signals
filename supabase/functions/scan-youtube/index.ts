@@ -4,19 +4,125 @@ type Game = { id: string; workspace_id: string; title: string; youtube_last_scan
 type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; description?: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
 type VideoDetail = { views: number; categoryId: string | null; description: string; tags: string[] };
 
-const GAME_CONTEXT_HINTS = [
-  "game", "gameplay", "gaming", "video game", "videogame", "steam", "roguelike", "roguelite",
-  "fps", "shooter", "playthrough", "walkthrough", "let's play", "lets play", "review", "demo",
-  "early access", "indie game", "boss fight", "speedrun",
+const STRONG_GAME_CONTEXT_HINTS = [
+  "gameplay", "playthrough", "walkthrough", "let's play", "lets play", "review", "trailer", "first look",
+  "impressions", "roguelike", "roguelite", "fps", "first person shooter", "shooter", "boss fight", "speedrun",
+  "steam", "early access", "demo", "hardcore", "episode", "part", "chapter", "run", "guide", "tips", "patch",
+  "update", "stream", "vod",
 ];
 
-function looksGameRelated(item: SearchItem, detail: VideoDetail | undefined) {
-  if (!detail) return false;
-  if (detail.categoryId === "20") return true;
-  const context = [item.snippet.title, item.snippet.description ?? "", detail.description, ...detail.tags]
-    .join(" ")
-    .toLocaleLowerCase();
-  return GAME_CONTEXT_HINTS.some((hint) => context.includes(hint));
+const OTHER_GAME_ANCHORS = [
+  "minecraft", "roblox", "fortnite", "valorant", "counter strike", "cs2", "league of legends", "dota 2",
+  "grand theft auto", "gta 5", "gta v", "call of duty", "warzone", "apex legends", "overwatch", "terraria",
+  "palworld", "elden ring", "helldivers 2", "marvel rivals", "deadlock", "destiny 2", "rainbow six siege",
+  "rocket league", "pubg", "escape from tarkov", "world of warcraft", "final fantasy xiv", "genshin impact",
+];
+
+function normalizeWords(value: string) {
+  return value
+    .normalize("NFKD")
+    .toLocaleLowerCase()
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsPhrase(value: string, phrase: string) {
+  const haystack = normalizeWords(value);
+  const needle = normalizeWords(phrase);
+  if (!haystack || !needle) return false;
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
+function wordCount(value: string) {
+  const normalized = normalizeWords(value);
+  return normalized ? normalized.split(" ").length : 0;
+}
+
+function phraseOccurrences(value: string, phrase: string) {
+  const haystack = ` ${normalizeWords(value)} `;
+  const needle = normalizeWords(phrase);
+  if (!needle) return 0;
+  return Math.max(0, haystack.split(` ${needle} `).length - 1);
+}
+
+function exactHashtagMatch(value: string, phrase: string) {
+  const needle = normalizeWords(phrase);
+  if (!needle || needle.includes(" ")) return false;
+  for (const match of value.matchAll(/#([\p{L}\p{N}_-]+)/gu)) {
+    if (normalizeWords(match[1] ?? "") === needle) return true;
+  }
+  return false;
+}
+
+function exactTagMatch(tags: string[], phrase: string) {
+  const needle = normalizeWords(phrase);
+  return tags.some((tag) => normalizeWords(tag) === needle);
+}
+
+function hasStrongGameContext(value: string) {
+  return STRONG_GAME_CONTEXT_HINTS.some((hint) => containsPhrase(value, hint));
+}
+
+function hasForeignGameAnchor(value: string, includes: string[]) {
+  return OTHER_GAME_ANCHORS.some((anchor) => {
+    if (!containsPhrase(value, anchor)) return false;
+    return !includes.some((include) => containsPhrase(include, anchor) || containsPhrase(anchor, include));
+  });
+}
+
+function explicitMixedCoverage(title: string) {
+  const normalized = ` ${normalizeWords(title)} `;
+  return title.includes("+") || title.includes("&") || /\bvs\.?\b/i.test(title) || normalized.includes(" versus ") || normalized.includes(" and ");
+}
+
+function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, phrase: string, allContext: string, includes: string[]) {
+  const title = item.snippet.title;
+  const titleMatch = containsPhrase(title, phrase);
+  const hashtagMatch = exactHashtagMatch(`${title} ${item.snippet.description ?? ""}`, phrase) || exactTagMatch(detail.tags, phrase);
+  const strongContext = hasStrongGameContext(allContext);
+  const episodeMarker = /\b(part|episode|ep|chapter|run)\s*\d+\b/i.test(normalizeWords(title));
+  const repeatedTarget = phraseOccurrences(`${title} ${item.snippet.description ?? ""}`, phrase) >= 2;
+  const foreignAnchor = hasForeignGameAnchor(allContext, includes);
+  const mixedCoverage = explicitMixedCoverage(title);
+
+  if (!titleMatch && !hashtagMatch) return false;
+  if (foreignAnchor && !mixedCoverage) return false;
+
+  let score = 0;
+  if (titleMatch) score += 3;
+  if (hashtagMatch) score += 2;
+  if (strongContext) score += 2;
+  if (episodeMarker) score += 1;
+  if (repeatedTarget) score += 1;
+  if (foreignAnchor) score -= 2;
+
+  return score >= 5;
+}
+
+function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, includes: string[], excludes: string[]) {
+  if (!detail || detail.categoryId !== "20") return false;
+
+  const allContext = [
+    item.snippet.title,
+    item.snippet.description ?? "",
+    detail.description,
+    ...detail.tags,
+  ].join(" ");
+
+  if (excludes.some((phrase) => containsPhrase(allContext, phrase))) return false;
+
+  const matchedIncludes = includes.filter((phrase) => containsPhrase(allContext, phrase));
+  if (!matchedIncludes.length) return false;
+
+  const multiWordMatch = matchedIncludes.some((phrase) => wordCount(phrase) > 1);
+  if (multiWordMatch) {
+    const foreignAnchor = hasForeignGameAnchor(allContext, includes);
+    return !foreignAnchor || explicitMixedCoverage(item.snippet.title);
+  }
+
+  return matchedIncludes.some((phrase) => singleWordGameLooksIntentional(item, detail, phrase, allContext, includes));
 }
 
 Deno.serve(async (request) => {
@@ -83,6 +189,7 @@ Deno.serve(async (request) => {
       const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
       searchUrl.searchParams.set("part", "snippet");
       searchUrl.searchParams.set("type", "video");
+      searchUrl.searchParams.set("videoCategoryId", "20");
       searchUrl.searchParams.set("order", "date");
       searchUrl.searchParams.set("maxResults", "25");
       searchUrl.searchParams.set("publishedAfter", publishedAfter);
@@ -124,7 +231,7 @@ Deno.serve(async (request) => {
       for (const item of items) {
         const videoId = item.id.videoId;
         const detail = details.get(videoId);
-        if (!looksGameRelated(item, detail)) {
+        if (!matchesTrackedGame(item, detail, includes, excludes)) {
           filteredOut += 1;
           await supabase.from("mentions").delete().eq("game_id", game.id).eq("platform", "youtube").eq("external_id", videoId);
           continue;
@@ -156,7 +263,21 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + youtubeCadenceMinutes(plan) * 60_000).toISOString();
       await Promise.all([
         supabase.from("games").update({ youtube_last_scanned_at: now.toISOString(), youtube_next_scan_at: next }).eq("id", game.id),
-        supabase.from("scan_runs").insert({ game_id: game.id, platform: "youtube", status: "success", started_at: runStarted.toISOString(), finished_at: now.toISOString(), results_count: gameMentions, metadata: { query: searchTerm, published_after: publishedAfter, filtered_out: filteredOut } }),
+        supabase.from("scan_runs").insert({
+          game_id: game.id,
+          platform: "youtube",
+          status: "success",
+          started_at: runStarted.toISOString(),
+          finished_at: now.toISOString(),
+          results_count: gameMentions,
+          metadata: {
+            query: searchTerm,
+            published_after: publishedAfter,
+            youtube_category_id: "20",
+            filtered_out: filteredOut,
+            strict_single_word_filter: includes.some((phrase) => wordCount(phrase) === 1),
+          },
+        }),
       ]);
     }
 
