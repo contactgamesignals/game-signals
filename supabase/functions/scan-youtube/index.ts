@@ -146,7 +146,7 @@ Deno.serve(async (request) => {
           last_seen_at: new Date().toISOString(),
           signal_score: signalScore(views, false),
           raw_payload: item,
-        }, { onConflict: "platform,external_id" });
+        }, { onConflict: "game_id,platform,external_id" });
         if (!upsertError) gameMentions += 1;
       }
 
