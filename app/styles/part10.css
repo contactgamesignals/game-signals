@@ -1,0 +1,12 @@
+@keyframes wpmg-button-spin{to{transform:rotate(360deg)}}
+.btn.is-loading,.icon-btn.is-loading{cursor:wait;pointer-events:none;opacity:.86}
+.btn.is-loading:before,.icon-btn.is-loading:before{content:"";display:inline-block;width:13px;height:13px;margin-right:8px;vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:wpmg-button-spin .7s linear infinite}
+.btn-primary.is-loading:before{border-color:rgba(5,7,17,.42);border-top-color:#050711}
+.route-loading{min-height:60vh;display:grid;place-items:center;padding:48px 24px}
+.route-loading-card{width:min(420px,100%);padding:28px;border:1px solid var(--line);border-radius:18px;background:rgba(12,15,30,.9);box-shadow:var(--shadow);text-align:center}
+.route-loading-spinner{width:28px;height:28px;margin:0 auto 16px;border:3px solid rgba(255,255,255,.14);border-top-color:var(--cyan);border-radius:50%;animation:wpmg-button-spin .8s linear infinite}
+.route-loading-card strong{display:block;font-family:var(--font-space-grotesk),sans-serif;font-size:17px}
+.route-loading-card span{display:block;margin-top:6px;color:var(--muted);font-size:12px}
+.landing-host .section{content-visibility:auto;contain-intrinsic-size:auto 760px}
+.landing-host .hero{content-visibility:visible;contain-intrinsic-size:none}
+@media(prefers-reduced-motion:reduce){.btn.is-loading:before,.icon-btn.is-loading:before,.route-loading-spinner{animation-duration:1.5s}}
