@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
+import InteractionFeedback from "@/components/InteractionFeedback";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
@@ -47,7 +48,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
-      <body>{children}</body>
+      <body>
+        <InteractionFeedback />
+        {children}
+      </body>
     </html>
   );
 }
