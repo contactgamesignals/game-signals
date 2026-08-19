@@ -1,0 +1,50 @@
+name: One-time settings copy cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/styles/part9.css
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch settings copy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('components/SettingsClient.tsx')
+          text = path.read_text()
+
+          old = '{billingChecking ? "Checking…" : `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`}'
+          new = '{billingChecking ? "Checking…" : hasPaidPlan ? `${PLAN_LABELS[effectivePlan]} · ${billingStatus}` : "No active plan"}'
+          if old not in text:
+              raise SystemExit('billing label anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = 'A saved webhook is not used while the workspace is on Free or an inactive subscription.'
+          new = 'A saved webhook is not used without an active paid subscription.'
+          if old not in text:
+              raise SystemExit('discord copy anchor not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Verify
+        run: npm ci && npm run lint && npm run typecheck
+      - name: Commit patch
+        run: |
+          git config user.name "contactgamesignals"
+          git config user.email "contact.gamesignals@gmail.com"
+          git add components/SettingsClient.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove internal free-plan wording from settings"
+          git push
