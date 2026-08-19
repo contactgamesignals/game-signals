@@ -68,6 +68,30 @@ markup = replace(
 
 markup = replace(
   markup,
+  '<div class="micro"><strong>No YouTube, Twitch or Steam account connection required.</strong> Start with a free public beta account, no card required. Upgrade when you want Discord alerts, the daily email digest, CSV export and faster paid monitoring.</div>',
+  '<div class="micro"><strong>No YouTube, Twitch or Steam account connection required.</strong></div>',
+);
+
+markup = replace(
+  markup,
+  '<button class="btn btn-primary scan-btn" id="scanBtn">Scan now</button>',
+  '<button class="btn btn-primary scan-btn" id="scanBtn">Show example signal</button>',
+);
+
+markup = replace(
+  markup,
+  '<div class="notification-card-head"><span class="notification-channel-icon email-channel-icon">@</span><div><strong>Daily email digest</strong><span>Optional and intentionally quiet</span></div></div>',
+  '<div class="notification-card-head"><span class="notification-channel-icon email-channel-icon">@</span><div><strong>Daily email summary</strong><span>Catch up without checking the dashboard</span></div></div>',
+);
+
+markup = replace(
+  markup,
+  '<p class="notification-explainer"><strong>At most one digest per recipient per day.</strong> If there are no new matching signals, no product digest is sent. You can enable or disable the daily email in account settings.</p>',
+  '<p class="notification-explainer">Catch up on new YouTube videos and Twitch streams without checking the dashboard.</p>',
+);
+
+markup = replace(
+  markup,
   '<div><div class="kicker">After you subscribe</div><h2>What happens when you pay.</h2></div>',
   '<div><div class="kicker">Get started</div><h2>Choose a plan. Add your games. Get notified.</h2></div>',
 );
