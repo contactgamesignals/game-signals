@@ -1,0 +1,48 @@
+name: One-time settings cleanup
+
+on:
+  push:
+    paths:
+      - ".github/workflows/remove-platform-monitoring.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Remove redundant platform monitoring card
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'components/SettingsClient.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+          const block = `
+
+      <section className="settings-card">
+        <h2>Platform monitoring</h2>
+        <p>YouTube and Twitch monitoring is live. Kick remains disabled until the required API/commercial approval is in place.</p>
+        <div className="settings-row"><span>YouTube</span><span className="plan-pill">Active</span></div>
+        <div className="settings-row"><span>Twitch</span><span className="plan-pill">Active</span></div>
+        <div className="settings-row"><span>Kick</span><span className="plan-pill">Coming soon</span></div>
+      </section>`;
+          const matches = source.split(block).length - 1;
+          if (matches !== 1) {
+            throw new Error(`Expected exactly one Platform monitoring block, found ${matches}`);
+          }
+          source = source.replace(block, '');
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Verify punctuation guard
+        run: node scripts/check-no-long-dash.mjs
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/SettingsClient.tsx
+          git commit -m "Remove redundant platform monitoring settings card"
+          git push origin HEAD:main
