@@ -17,7 +17,7 @@ const OTHER_GAME_ANCHORS = [
   "grand theft auto", "gta 5", "gta v", "call of duty", "warzone", "apex legends", "overwatch", "terraria",
   "rust", "palworld", "elden ring", "hades ii", "helldivers 2", "marvel rivals", "deadlock", "destiny 2",
   "rainbow six siege", "rocket league", "pubg", "escape from tarkov", "world of warcraft", "final fantasy xiv",
-  "genshin impact", "spongebob", "last island of survival", "rock band",
+  "genshin impact", "spongebob", "last island of survival", "rock band", "starrupture", "uhc", "smp",
 ];
 
 function normalizeWords(value: string) {
@@ -84,15 +84,15 @@ function gameTitleSyntax(title: string, phrase: string) {
   const needle = normalizeWords(phrase);
   if (!normalizedTitle || !needle) return false;
   if (normalizedTitle.endsWith(` in ${needle}`) || normalizedTitle === `in ${needle}`) return true;
-  if (normalizedTitle.endsWith(needle) && normalizedTitle !== needle) return true;
 
   const prefixPatterns = ["playing", "play", "beat", "beating", "trying", "try"];
   if (prefixPatterns.some((prefix) => normalizedTitle.includes(`${prefix} ${needle}`))) return true;
 
   const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const numberedTitle = new RegExp(`(^|[|:\\-])\\s*${escaped}\\s*(?:#?\\d|[|:\\-])`, "iu");
+  const titleWithMarker = new RegExp(`(^|[|:\\-])\\s*${escaped}\\s*(?:#?\\d|[|:\\-])`, "iu");
+  const titleAfterSeparator = new RegExp(`[|:\\-]\\s*${escaped}\\s*$`, "iu");
   const numberedAfterTitle = new RegExp(`(^|\\s)${escaped}\\s*#?\\d`, "iu");
-  return numberedTitle.test(title) || numberedAfterTitle.test(title);
+  return titleWithMarker.test(title) || titleAfterSeparator.test(title) || numberedAfterTitle.test(title);
 }
 
 function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, phrase: string, allContext: string, includes: string[]) {
@@ -112,7 +112,7 @@ function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, p
 
   let score = 0;
   if (titleMatch) score += 3;
-  if (hashtagMatch) score += 2;
+  if (hashtagMatch) score += 1;
   if (strongContext) score += 2;
   if (syntaxMatch) score += 2;
   if (episodeMarker) score += 1;
