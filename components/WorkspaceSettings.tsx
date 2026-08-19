@@ -99,7 +99,7 @@ export default function WorkspaceSettings({
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Workspace & account</h2>
-            <p>Update how your workspace and account are displayed inside {COMPANY.productName}.</p>
+            <p>Update your display name, workspace name, password and account data.</p>
           </div>
           <span className="plan-pill">Account</span>
         </div>
@@ -132,13 +132,13 @@ export default function WorkspaceSettings({
         <section className="settings-card">
           <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
             <div>
-              <h2>Legacy direct-billing export</h2>
-              <p>Download retained Stripe direct-billing records used by the legacy/rollback billing route.</p>
+              <h2>Previous billing exports</h2>
+              <p>Historical records from the previous Stripe billing system.</p>
             </div>
             <span className="plan-pill">Owner / admin</span>
           </div>
           <div className="status-message" style={{ marginBottom: 14 }}>
-            New subscriptions currently use Paddle Sandbox. These exports are kept for historical direct-billing/accounting records and do not replace Paddle customer documents.
+            Only needed for historical accounting. Current subscriptions use Paddle, and current customer billing documents are available through Paddle.
           </div>
           <div className="dashboard-actions">
             <a className="btn btn-ghost" href="/api/accounting/billing-export">Download invoices CSV</a>
