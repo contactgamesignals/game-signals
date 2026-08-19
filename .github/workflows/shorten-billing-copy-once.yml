@@ -1,0 +1,66 @@
+name: Shorten billing copy once
+
+on:
+  push:
+    paths:
+      - .github/workflows/shorten-billing-copy-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Shorten unpaid billing copy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('components/SettingsClient.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = {
+              'summary: "1 active game · all paid features",': 'summary: "1 active game",',
+              'summary: "Up to 3 active games · all paid features",': 'summary: "Up to 3 active games",',
+              'summary: "Up to 10 active games · all paid features",': 'summary: "Up to 10 active games",',
+              '"Choose a plan with Paddle. Paddle acts as Merchant of Record for the customer transaction and handles checkout, applicable indirect taxes, and customer billing documents."': '"Choose a plan. Paddle handles secure checkout and billing."',
+              '"Choose a plan with Stripe Checkout. Existing subscriptions are changed or cancelled securely in Stripe Customer Portal."': '"Choose a plan. Stripe handles secure checkout and billing."',
+              '"Paddle is the Merchant of Record for this checkout. Paddle calculates the applicable transaction taxes and provides the customer billing document. The final amount is confirmed in Paddle Checkout."': '"Secure checkout by Paddle. Final tax is shown at checkout."',
+              'Choose how the subscription should be purchased and documented.': 'Choose the billing profile for this subscription.',
+              '"Paddle Checkout will collect the billing details and supported company tax ID information required for the purchase."': '"Billing details and supported company tax IDs will be collected during checkout."',
+              '"Paddle Checkout will collect the billing details required for the individual purchase."': '"Billing details will be collected during checkout."',
+              'I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation takes effect at the end of the current paid period. Payments are generally non-refundable and no credits are provided for partially used billing periods, except where required by applicable law.': 'I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation applies at the end of the current paid period.',
+              'I expressly request that Who Plays My Game starts providing the digital service immediately, before the 14-day withdrawal period ends. I understand that if I validly withdraw during that period, I may have to pay a proportionate amount for the service already provided, and mandatory consumer rights remain unaffected.': 'I request immediate access to the service before the 14-day withdrawal period ends. If I withdraw after service starts, I may owe a proportionate amount for the service already provided. Mandatory consumer rights remain unaffected.',
+              'Company purchase. Mandatory rights that apply by law to a particular business customer, including any statutory protections for qualifying sole traders, are not excluded.': 'Company purchase. Any mandatory rights that apply by law remain unaffected.',
+              'All paid plans include the same product features, alerts, export and monitoring cadence. The only plan difference is the number of active games you can monitor.': 'All paid plans include the same features. Only the number of active games changes.',
+          }
+
+          missing = []
+          for before, after in replacements.items():
+              if before not in text:
+                  missing.append(before)
+              else:
+                  text = text.replace(before, after)
+
+          if missing:
+              raise SystemExit('Missing expected billing copy: ' + repr(missing))
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Check punctuation guard
+        run: node scripts/check-no-long-dash.mjs
+
+      - name: Commit changes
+        run: |
+          git config user.name "contactgamesignals"
+          git config user.email "contact.gamesignals@gmail.com"
+          git add components/SettingsClient.tsx
+          git diff --cached --check
+          git commit -m "Shorten new-customer billing copy"
+          git push
