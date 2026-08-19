@@ -1,21 +1,23 @@
-import { authorizeRequest, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
+import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
 
 type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null; youtube_next_scan_at: string | null };
 type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; description?: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
 type VideoDetail = { views: number; categoryId: string | null; description: string; tags: string[] };
+type ExistingMention = { id: string; external_id: string; raw_payload: SearchItem | null };
 
 const STRONG_GAME_CONTEXT_HINTS = [
   "gameplay", "playthrough", "walkthrough", "let's play", "lets play", "review", "trailer", "first look",
   "impressions", "roguelike", "roguelite", "fps", "first person shooter", "shooter", "boss fight", "speedrun",
-  "steam", "early access", "demo", "hardcore", "episode", "part", "chapter", "run", "guide", "tips", "patch",
-  "update", "stream", "vod",
+  "steam", "early access", "demo", "hardcore", "episode", "part", "chapter", "run", "guide", "tips",
+  "stream", "vod",
 ];
 
 const OTHER_GAME_ANCHORS = [
   "minecraft", "roblox", "fortnite", "valorant", "counter strike", "cs2", "league of legends", "dota 2",
   "grand theft auto", "gta 5", "gta v", "call of duty", "warzone", "apex legends", "overwatch", "terraria",
-  "palworld", "elden ring", "helldivers 2", "marvel rivals", "deadlock", "destiny 2", "rainbow six siege",
-  "rocket league", "pubg", "escape from tarkov", "world of warcraft", "final fantasy xiv", "genshin impact",
+  "rust", "palworld", "elden ring", "hades ii", "helldivers 2", "marvel rivals", "deadlock", "destiny 2",
+  "rainbow six siege", "rocket league", "pubg", "escape from tarkov", "world of warcraft", "final fantasy xiv",
+  "genshin impact", "spongebob", "last island of survival", "rock band",
 ];
 
 function normalizeWords(value: string) {
@@ -77,26 +79,44 @@ function explicitMixedCoverage(title: string) {
   return title.includes("+") || title.includes("&") || /\bvs\.?\b/i.test(title) || normalized.includes(" versus ") || normalized.includes(" and ");
 }
 
+function gameTitleSyntax(title: string, phrase: string) {
+  const normalizedTitle = normalizeWords(title);
+  const needle = normalizeWords(phrase);
+  if (!normalizedTitle || !needle) return false;
+  if (normalizedTitle.endsWith(` in ${needle}`) || normalizedTitle === `in ${needle}`) return true;
+  if (normalizedTitle.endsWith(needle) && normalizedTitle !== needle) return true;
+
+  const prefixPatterns = ["playing", "play", "beat", "beating", "trying", "try"];
+  if (prefixPatterns.some((prefix) => normalizedTitle.includes(`${prefix} ${needle}`))) return true;
+
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const numberedTitle = new RegExp(`(^|[|:\\-])\\s*${escaped}\\s*(?:#?\\d|[|:\\-])`, "iu");
+  const numberedAfterTitle = new RegExp(`(^|\\s)${escaped}\\s*#?\\d`, "iu");
+  return numberedTitle.test(title) || numberedAfterTitle.test(title);
+}
+
 function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, phrase: string, allContext: string, includes: string[]) {
   const title = item.snippet.title;
   const titleMatch = containsPhrase(title, phrase);
   const hashtagMatch = exactHashtagMatch(`${title} ${item.snippet.description ?? ""}`, phrase) || exactTagMatch(detail.tags, phrase);
   const strongContext = hasStrongGameContext(allContext);
-  const episodeMarker = /\b(part|episode|ep|chapter|run)\s*\d+\b/i.test(normalizeWords(title));
+  const syntaxMatch = gameTitleSyntax(title, phrase);
+  const episodeMarker = /\b(part|episode|ep|chapter|run)\s*#?\d+/i.test(normalizeWords(title));
   const repeatedTarget = phraseOccurrences(`${title} ${item.snippet.description ?? ""}`, phrase) >= 2;
   const foreignAnchor = hasForeignGameAnchor(allContext, includes);
   const mixedCoverage = explicitMixedCoverage(title);
 
   if (!titleMatch && !hashtagMatch) return false;
   if (foreignAnchor && !mixedCoverage) return false;
+  if (foreignAnchor && mixedCoverage && !hashtagMatch && !episodeMarker && !syntaxMatch) return false;
 
   let score = 0;
   if (titleMatch) score += 3;
   if (hashtagMatch) score += 2;
   if (strongContext) score += 2;
+  if (syntaxMatch) score += 2;
   if (episodeMarker) score += 1;
   if (repeatedTarget) score += 1;
-  if (foreignAnchor) score -= 2;
 
   return score >= 5;
 }
@@ -123,6 +143,61 @@ function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, i
   }
 
   return matchedIncludes.some((phrase) => singleWordGameLooksIntentional(item, detail, phrase, allContext, includes));
+}
+
+async function fetchVideoDetails(ids: string[], apiKey: string) {
+  const details = new Map<string, VideoDetail>();
+  for (const batch of chunks(Array.from(new Set(ids.filter(Boolean))), 50)) {
+    if (!batch.length) continue;
+    const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+    detailsUrl.searchParams.set("part", "statistics,snippet");
+    detailsUrl.searchParams.set("id", batch.join(","));
+    detailsUrl.searchParams.set("key", apiKey);
+    const detailsResponse = await fetch(detailsUrl);
+    if (!detailsResponse.ok) continue;
+    const detailsPayload = await detailsResponse.json() as { items?: Array<{ id: string; statistics?: { viewCount?: string }; snippet?: { categoryId?: string; description?: string; tags?: string[] } }> };
+    for (const item of detailsPayload.items ?? []) {
+      details.set(item.id, {
+        views: Number(item.statistics?.viewCount ?? 0),
+        categoryId: item.snippet?.categoryId ?? null,
+        description: item.snippet?.description ?? "",
+        tags: item.snippet?.tags ?? [],
+      });
+    }
+  }
+  return details;
+}
+
+async function revalidateRecentMentions(
+  supabase: ReturnType<typeof serviceClient>,
+  gameId: string,
+  includes: string[],
+  excludes: string[],
+  apiKey: string,
+) {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
+  const { data } = await supabase
+    .from("mentions")
+    .select("id, external_id, raw_payload")
+    .eq("game_id", gameId)
+    .eq("platform", "youtube")
+    .gte("detected_at", since)
+    .order("detected_at", { ascending: false })
+    .limit(100);
+
+  const mentions = (data ?? []) as ExistingMention[];
+  if (!mentions.length) return 0;
+
+  const details = await fetchVideoDetails(mentions.map((mention) => mention.external_id), apiKey);
+  const rejectedIds: string[] = [];
+  for (const mention of mentions) {
+    const item = mention.raw_payload;
+    if (!item?.id?.videoId || !item.snippet?.title) continue;
+    if (!matchesTrackedGame(item, details.get(mention.external_id), includes, excludes)) rejectedIds.push(mention.id);
+  }
+
+  if (rejectedIds.length) await supabase.from("mentions").delete().in("id", rejectedIds);
+  return rejectedIds.length;
 }
 
 Deno.serve(async (request) => {
@@ -181,6 +256,7 @@ Deno.serve(async (request) => {
       const { data: aliasesData } = await supabase.from("game_aliases").select("phrase, type").eq("game_id", game.id);
       const includes = Array.from(new Set([game.title, ...(aliasesData ?? []).filter((item) => item.type === "include").map((item) => item.phrase as string)]));
       const excludes = (aliasesData ?? []).filter((item) => item.type === "exclude").map((item) => item.phrase as string);
+      const revalidatedRemoved = await revalidateRecentMentions(supabase, game.id, includes, excludes, apiKey);
       const searchTerm = `${includes.map((phrase) => `"${phrase.replaceAll('"', '')}"`).join("|")} ${excludes.map((phrase) => `-${phrase}`).join(" ")}`.trim();
       const publishedAfter = game.youtube_last_scanned_at
         ? new Date(new Date(game.youtube_last_scanned_at).getTime() - 5 * 60_000).toISOString()
@@ -206,25 +282,7 @@ Deno.serve(async (request) => {
       const searchPayload = await searchResponse.json() as { items?: SearchItem[] };
       const items = searchPayload.items ?? [];
       const ids = items.map((item) => item.id.videoId).filter(Boolean);
-      const details = new Map<string, VideoDetail>();
-      if (ids.length) {
-        const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-        detailsUrl.searchParams.set("part", "statistics,snippet");
-        detailsUrl.searchParams.set("id", ids.join(","));
-        detailsUrl.searchParams.set("key", apiKey);
-        const detailsResponse = await fetch(detailsUrl);
-        if (detailsResponse.ok) {
-          const detailsPayload = await detailsResponse.json() as { items?: Array<{ id: string; statistics?: { viewCount?: string }; snippet?: { categoryId?: string; description?: string; tags?: string[] } }> };
-          for (const item of detailsPayload.items ?? []) {
-            details.set(item.id, {
-              views: Number(item.statistics?.viewCount ?? 0),
-              categoryId: item.snippet?.categoryId ?? null,
-              description: item.snippet?.description ?? "",
-              tags: item.snippet?.tags ?? [],
-            });
-          }
-        }
-      }
+      const details = await fetchVideoDetails(ids, apiKey);
 
       let gameMentions = 0;
       let filteredOut = 0;
@@ -275,6 +333,7 @@ Deno.serve(async (request) => {
             published_after: publishedAfter,
             youtube_category_id: "20",
             filtered_out: filteredOut,
+            revalidated_removed: revalidatedRemoved,
             strict_single_word_filter: includes.some((phrase) => wordCount(phrase) === 1),
           },
         }),
