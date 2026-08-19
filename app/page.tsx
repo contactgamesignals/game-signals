@@ -1,14 +1,9 @@
-import { redirect } from "next/navigation";
 import LandingPage from "@/components/LandingPage";
 import MarketingRealityPatch from "@/components/MarketingRealityPatch";
 import PricingCyclePatch from "@/components/PricingCyclePatch";
 import QuickStartSignupPatch from "@/components/QuickStartSignupPatch";
 import { BRAND } from "@/lib/brand";
 import { COMPANY } from "@/lib/company";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -46,13 +41,7 @@ const structuredData = {
   ],
 };
 
-export default async function HomePage() {
-  if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) redirect("/dashboard");
-  }
-
+export default function HomePage() {
   return (
     <>
       <script
