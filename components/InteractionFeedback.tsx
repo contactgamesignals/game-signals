@@ -17,7 +17,11 @@ function clearLoading(button: HTMLButtonElement) {
 function syncLoading(button: HTMLButtonElement) {
   if (!button.hasAttribute(CANDIDATE_ATTRIBUTE)) return;
 
-  if (button.disabled || button.getAttribute("aria-busy") === "true") {
+  const externallyBusy =
+    button.getAttribute("aria-busy") === "true" &&
+    !button.hasAttribute(OWNED_BUSY_ATTRIBUTE);
+
+  if (button.disabled || externallyBusy) {
     button.classList.add("is-loading");
     if (!button.hasAttribute("aria-busy")) {
       button.setAttribute("aria-busy", "true");
