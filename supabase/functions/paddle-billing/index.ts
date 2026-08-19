@@ -22,6 +22,7 @@ const TERMS_VERSION = "2026-08-17-v1";
 const PRIVACY_VERSION = "2026-08-17-v1";
 
 type BuyerType = "individual" | "company";
+type PaddleEnvironment = "sandbox" | "live";
 type PaddleObject = Record<string, unknown>;
 
 function json(data: unknown, status = 200) {
@@ -56,16 +57,25 @@ function serviceClient() {
   return createClient(url, serviceKey, { auth: { persistSession: false } });
 }
 
-function paddleRuntime() {
-  const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
+function paddleApiRuntime(environment: PaddleEnvironment) {
   const apiKeyName = environment === "live" ? "PADDLE_LIVE_API_KEY" : "PADDLE_API_KEY";
   const apiKey = validatePaddleApiKey(environment, Deno.env.get(apiKeyName) ?? undefined);
-  const catalog = buildPaddleRuntimePriceCatalog(environment, (key) => Deno.env.get(key) ?? undefined);
-  return { environment, apiKey, catalog, baseUrl: paddleApiBase(environment) };
+  return { environment, apiKey, baseUrl: paddleApiBase(environment) };
 }
 
-async function paddleRequest(path: string, options: { method?: "GET" | "POST"; body?: unknown } = {}) {
-  const runtime = paddleRuntime();
+function paddleRuntime() {
+  const environment = resolvePaddleEnvironment(Deno.env.get("PADDLE_ENV") ?? undefined);
+  const apiRuntime = paddleApiRuntime(environment);
+  const catalog = buildPaddleRuntimePriceCatalog(environment, (key) => Deno.env.get(key) ?? undefined);
+  return { ...apiRuntime, catalog };
+}
+
+async function paddleRequest(
+  path: string,
+  options: { method?: "GET" | "POST"; body?: unknown } = {},
+  environmentOverride?: PaddleEnvironment,
+) {
+  const runtime = environmentOverride ? paddleApiRuntime(environmentOverride) : paddleRuntime();
   const response = await fetch(`${runtime.baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers: {
@@ -130,7 +140,7 @@ Deno.serve(async (request) => {
     if (subscriptionError || !subscription) return json({ error: "Subscription record not found." }, 404);
 
     let runtimeConfigured = false;
-    let environment: "sandbox" | "live" = "sandbox";
+    let environment: PaddleEnvironment = "sandbox";
     try {
       const runtime = paddleRuntime();
       environment = runtime.environment;
@@ -144,8 +154,12 @@ Deno.serve(async (request) => {
     const sandboxCheckoutEnabled = Deno.env.get("PADDLE_SANDBOX_CHECKOUT_ENABLED") === "true";
     const checkoutEnabled = runtimeConfigured && billingEnabled &&
       (environment === "live" ? liveBillingEnabled : sandboxCheckoutEnabled);
-    const currentPaddleIdentity = subscription.billing_provider === "paddle" &&
-      subscription.billing_environment === environment;
+    const storedPaddleEnvironment: PaddleEnvironment | null = subscription.billing_provider === "paddle" &&
+      (subscription.billing_environment === "sandbox" || subscription.billing_environment === "live")
+      ? subscription.billing_environment
+      : null;
+    const storedPaddleIdentity = storedPaddleEnvironment !== null;
+    const currentPaddleIdentity = storedPaddleEnvironment === environment;
 
     if (body.action === "status") {
       return json({
@@ -155,8 +169,9 @@ Deno.serve(async (request) => {
         paddle_mode: environment,
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
-        has_customer: currentPaddleIdentity && Boolean(subscription.billing_customer_id),
-        has_subscription: currentPaddleIdentity && Boolean(subscription.billing_subscription_id),
+        has_customer: storedPaddleIdentity && Boolean(subscription.billing_customer_id),
+        has_subscription: storedPaddleIdentity && Boolean(subscription.billing_subscription_id),
+        customer_environment: storedPaddleEnvironment,
       });
     }
 
@@ -170,19 +185,19 @@ Deno.serve(async (request) => {
     }
 
     if (body.action === "portal") {
-      if (!currentPaddleIdentity || !subscription.billing_customer_id) {
-        return json({ error: "No Paddle customer exists for this workspace in the current billing environment yet." }, 409);
+      if (!storedPaddleEnvironment || !subscription.billing_customer_id) {
+        return json({ error: "No Paddle customer exists for this workspace yet." }, 409);
       }
       const subscriptionIds = subscription.billing_subscription_id ? [String(subscription.billing_subscription_id)] : [];
       const portal = await paddleRequest(`/customers/${encodeURIComponent(String(subscription.billing_customer_id))}/portal-sessions`, {
         method: "POST",
         body: subscriptionIds.length ? { subscription_ids: subscriptionIds } : {},
-      });
+      }, storedPaddleEnvironment);
       const data = objectValue(portal.data);
       const urls = objectValue(data?.urls);
       const general = objectValue(urls?.general);
       if (typeof general?.overview !== "string") throw new Error("Paddle did not return a customer portal URL.");
-      return json({ url: general.overview, provider: "paddle" });
+      return json({ url: general.overview, provider: "paddle", paddle_mode: storedPaddleEnvironment });
     }
 
     if (runtime.environment === "sandbox" && Deno.env.get("PADDLE_SANDBOX_CHECKOUT_ENABLED") !== "true") {
