@@ -53,7 +53,10 @@ export default async function DashboardPage() {
   const workspaceId = membershipData.workspace_id as string;
   const workspaceName = (workspaceValue?.name as string | undefined) ?? "My studio";
 
-  const [{ data: gamesData }, { data: subscriptionData }] = await Promise.all([
+  // These reads no longer wait on each other. Mentions are scoped through the
+  // games relationship, so games, subscription and mentions can load in one
+  // parallel round instead of waiting for the game IDs first.
+  const [{ data: gamesData }, { data: subscriptionData }, { data: mentionsData }] = await Promise.all([
     supabase
       .from("games")
       .select("id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at")
@@ -64,21 +67,16 @@ export default async function DashboardPage() {
       .select("plan, status")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
+    supabase
+      .from("mentions")
+      .select("id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title, workspace_id)")
+      .eq("games.workspace_id", workspaceId)
+      .order("detected_at", { ascending: false })
+      .limit(100),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
-  const gameIds = games.map((game) => game.id);
-  let mentions: DashboardMention[] = [];
-
-  if (gameIds.length) {
-    const { data: mentionsData } = await supabase
-      .from("mentions")
-      .select("id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games(title)")
-      .in("game_id", gameIds)
-      .order("detected_at", { ascending: false })
-      .limit(100);
-    mentions = (mentionsData ?? []) as DashboardMention[];
-  }
+  const mentions = (mentionsData ?? []) as DashboardMention[];
 
   return (
     <DashboardClient
