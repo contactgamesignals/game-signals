@@ -9,7 +9,6 @@ type Mention = {
   thumbnail_url: string | null;
   viewer_count: number | null;
   view_count: number | null;
-  signal_score: number;
   detected_at: string;
   games: { title: string; workspace_id: string } | { title: string; workspace_id: string }[];
 };
@@ -18,7 +17,6 @@ type Channel = {
   id: string;
   workspace_id: string;
   destination: string;
-  minimum_signal_score: number;
   minimum_live_viewers: number;
 };
 
@@ -61,13 +59,6 @@ function discordRelativeTime(value: string) {
   return `<t:${Math.floor(timestamp / 1000)}:R>`;
 }
 
-function signalTier(score: number) {
-  if (score >= 85) return "🔥 High priority";
-  if (score >= 65) return "⚡ Strong signal";
-  if (score >= 40) return "✨ Worth a look";
-  return "📡 New signal";
-}
-
 function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id: string }) {
   const isYouTube = mention.platform === "youtube";
   const isTwitch = mention.platform === "twitch";
@@ -84,7 +75,6 @@ function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id
   const creatorName = escapeDiscordMarkdown(rawCreatorName);
   const gameTitle = escapeDiscordMarkdown(rawGameTitle);
   const contentTitle = escapeDiscordMarkdown(rawContentTitle);
-  const score = Math.max(0, Math.min(100, Math.round(mention.signal_score)));
 
   const title = isYouTube
     ? `${platformEmoji} New YouTube video detected`
@@ -100,11 +90,6 @@ function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id
     {
       name: isYouTube ? "👁️ Views" : "👥 Live viewers",
       value: `**${formatCount(reach)}**`,
-      inline: true,
-    },
-    {
-      name: "⚡ Signal score",
-      value: `**${score}/100** · ${signalTier(score)}`,
       inline: true,
     },
     {
@@ -150,13 +135,13 @@ Deno.serve(async (request) => {
     const [{ data: mentionsData }, { data: channelsData }] = await Promise.all([
       supabase
         .from("mentions")
-        .select("id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, signal_score, detected_at, games(title, workspace_id)")
+        .select("id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, detected_at, games(title, workspace_id)")
         .gte("detected_at", since)
         .order("detected_at", { ascending: false })
         .limit(500),
       supabase
         .from("notification_channels")
-        .select("id, workspace_id, destination, minimum_signal_score, minimum_live_viewers")
+        .select("id, workspace_id, destination, minimum_live_viewers")
         .eq("type", "discord")
         .eq("enabled", true),
     ]);
@@ -211,7 +196,6 @@ Deno.serve(async (request) => {
         if ((previous?.attempts ?? 0) >= 5) continue;
 
         const liveViewers = mention.viewer_count ?? 0;
-        if (mention.signal_score < channel.minimum_signal_score) continue;
         if (mention.platform !== "youtube" && liveViewers < channel.minimum_live_viewers) continue;
 
         if (previous) retried += 1;
