@@ -39,7 +39,6 @@ function buildTestEmbed() {
       { name: "🎮 Game", value: "**AFTERBLAST**", inline: true },
       { name: "👤 Creator", value: "**ExampleCreator**", inline: true },
       { name: "👥 Live viewers", value: "**184**", inline: true },
-      { name: "⚡ Signal score", value: "**78/100** · ⚡ Strong signal", inline: true },
       { name: "🕒 Detected", value: `<t:${unix}:R>`, inline: true },
       { name: "🔗 Quick links", value: `[Open dashboard](${DASHBOARD_URL})`, inline: false },
     ],
@@ -99,7 +98,7 @@ Deno.serve(async (request) => {
       return json({
         configured: Boolean(existing),
         enabled: existing?.enabled ?? false,
-        minimum_signal_score: existing?.minimum_signal_score ?? 0,
+        minimum_signal_score: 0,
         minimum_live_viewers: existing?.minimum_live_viewers ?? 0,
         allowed,
         plan,
@@ -139,7 +138,6 @@ Deno.serve(async (request) => {
 
     const webhook = body.webhook_url?.trim() ?? "";
     if (!validDiscordWebhook(webhook)) return json({ error: "Enter a valid Discord webhook URL." }, 400);
-    const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));
     const minimumLiveViewers = Math.max(0, Math.round(Number(body.minimum_live_viewers ?? 0)));
 
     const { error: upsertError } = await service.from("notification_channels").upsert({
@@ -147,12 +145,12 @@ Deno.serve(async (request) => {
       type: "discord",
       destination: webhook,
       enabled: true,
-      minimum_signal_score: minimumSignalScore,
+      minimum_signal_score: 0,
       minimum_live_viewers: minimumLiveViewers,
     }, { onConflict: "workspace_id,type" });
     if (upsertError) throw upsertError;
 
-    return json({ ok: true, configured: true, allowed, plan, minimum_signal_score: minimumSignalScore, minimum_live_viewers: minimumLiveViewers });
+    return json({ ok: true, configured: true, allowed, plan, minimum_signal_score: 0, minimum_live_viewers: minimumLiveViewers });
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error." }, 500);
