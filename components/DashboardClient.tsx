@@ -393,7 +393,7 @@ export default function DashboardClient({
                 <div className="game-row" key={game.id}>
                   <div>
                     <div className="game-title">{game.title}</div>
-                    <div className="game-meta">YouTube: {scanTime(game.youtube_last_scanned_at)} · Twitch: {scanTime(game.twitch_last_scanned_at)}</div>
+                    <div className="game-meta"><span className="inline-platform youtube" aria-hidden="true" />YouTube: {scanTime(game.youtube_last_scanned_at)} · <span className="inline-platform twitch" aria-hidden="true" />Twitch: {scanTime(game.twitch_last_scanned_at)}</div>
                   </div>
                   <div className="game-status"><i />{game.enabled ? "Monitoring" : "Paused"}</div>
                   <div className="dashboard-actions">
@@ -418,7 +418,7 @@ export default function DashboardClient({
               <div><div className="panel-title">Detected content</div><h2>Latest mentions</h2></div>
               <div className="tabs">
                 {(["all", "youtube", "twitch"] as const).map((item) => (
-                  <button key={item} className={`tab${filter === item ? " active" : ""}`} onClick={() => setFilter(item)}>
+                  <button key={item} className={`tab${filter === item ? " active" : ""}${item === "all" ? "" : ` platform-filter ${item}`}`} onClick={() => setFilter(item)}>
                     {item === "all" ? "All" : item[0].toUpperCase() + item.slice(1)}
                   </button>
                 ))}
@@ -429,6 +429,9 @@ export default function DashboardClient({
                 const icon = platformClass(mention.platform);
                 const gameValue = Array.isArray(mention.games) ? mention.games[0] : mention.games;
                 const reach = mention.view_count ?? mention.viewer_count;
+                const reachLabel = reach !== null
+                  ? `${reach.toLocaleString("en-US")} ${mention.platform === "youtube" ? "views" : "viewers"}`
+                  : null;
                 const twitchLive = isTwitchLive(mention);
                 return (
                   <a className="mention-row" href={mention.url} target="_blank" rel="noreferrer" key={mention.id}>
@@ -437,7 +440,7 @@ export default function DashboardClient({
                       <div className="mention-title">{mention.title}</div>
                       <div className="mention-sub">
                         {mention.creator_name} · {gameValue?.title ?? "Tracked game"}
-                        {reach !== null ? ` · ${reach.toLocaleString("en-US")}` : ""} · score {mention.signal_score}/100
+                        {reachLabel ? ` · ${reachLabel}` : ""}
                       </div>
                     </div>
                     <span className={`badge ${mention.platform === "youtube" ? "video" : "live"}`}>
