@@ -1,0 +1,190 @@
+name: One-time platform UI polish
+
+on:
+  push:
+    branches:
+      - fix/platform-icons-remove-signal-score
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[platform-ui-polish]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/platform-icons-remove-signal-score
+          fetch-depth: 0
+
+      - name: Apply platform icons and remove signal score UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path, text):
+              Path(path).write_text(text, encoding="utf-8")
+
+          # Dashboard: keep useful reach data, remove the synthetic score from creator signal rows.
+          path = "components/DashboardClient.tsx"
+          text = read(path)
+          old = ' · score {mention.signal_score}/100'
+          if old not in text:
+              raise SystemExit(f"Missing Dashboard score marker in {path}")
+          text = text.replace(old, "", 1)
+          write(path, text)
+
+          # Discord settings: add visual service marks and remove the score slider.
+          path = "components/SettingsClient.tsx"
+          text = read(path)
+          text = text.replace(
+              '<h2>Discord alerts</h2>',
+              '<h2><span className="service-mark discord" aria-hidden="true" />Discord alerts</h2>',
+              1,
+          )
+          score_label = '''          <label>\n            Minimum signal score: {minimumSignalScore}\n            <input className="range" type="range" min="0" max="100" value={minimumSignalScore} onChange={(event) => setMinimumSignalScore(Number(event.target.value))} disabled={busy || discordLocked} />\n          </label>\n'''
+          if score_label not in text:
+              raise SystemExit(f"Missing Discord score control in {path}")
+          text = text.replace(score_label, "", 1)
+          text = text.replace(
+              '<button className="btn btn-primary" disabled={busy || discordLocked || !webhookUrl.trim()}>{status?.configured ? "Replace webhook" : "Connect Discord"}</button>',
+              '<button className="btn btn-primary" disabled={busy || discordLocked || !webhookUrl.trim()}><span className="service-mark discord" aria-hidden="true" />{status?.configured ? "Replace webhook" : "Connect Discord"}</button>',
+              1,
+          )
+          text = text.replace(
+              '<button className="btn btn-ghost" type="button" disabled={busy || discordLocked || !status?.configured} onClick={testDiscord}>Send test</button>',
+              '<button className="btn btn-ghost" type="button" disabled={busy || discordLocked || !status?.configured} onClick={testDiscord}><span className="service-mark discord" aria-hidden="true" />Send test</button>',
+              1,
+          )
+          write(path, text)
+
+          # Email settings: add mail marks and remove the same synthetic score control.
+          path = "components/EmailDigestSettings.tsx"
+          text = read(path)
+          text = text.replace(
+              '<h2>Daily email digest</h2>',
+              '<h2><span className="service-mark mail" aria-hidden="true" />Daily email digest</h2>',
+              1,
+          )
+          text, count = re.subn(
+              r'\n        <label>\n          Minimum signal score: \{minimumSignalScore\}\n          <input\n            className="range"\n            type="range"\n            min="0"\n            max="100"\n            value=\{minimumSignalScore\}\n            onChange=\{\(event\) => setMinimumSignalScore\(Number\(event.target.value\)\)\}\n            disabled=\{busy \|\| locked\}\n          />\n        </label>',
+              '',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"Missing email score control in {path}")
+          text = text.replace(
+              '            {connected ? "Update daily digest" : "Enable daily digest"}',
+              '            <span className="service-mark mail" aria-hidden="true" />\n            {connected ? "Update daily digest" : "Enable daily digest"}',
+              1,
+          )
+          text = text.replace(
+              '            Send test\n          </button>',
+              '            <span className="service-mark mail" aria-hidden="true" />Send test\n          </button>',
+              1,
+          )
+          write(path, text)
+
+          # Landing hero: replace Signal score with a concrete metric people understand.
+          path = "lib/landing-markup.ts"
+          text = read(path)
+          marker = "export const landingMarkup = markup;"
+          if marker not in text:
+              raise SystemExit(f"Missing landing export marker in {path}")
+          addition = '''markup = markup.replace(\n  '<span class="panel-title">Signal score</span><span class="tiny">+18%</span>',\n  '<span class="panel-title">Live viewers</span><span class="tiny">Twitch</span>',\n);\nmarkup = markup.replace(\n  '<div class="score-number">84<small>/100</small></div>',\n  '<div class="score-number">184<small>live</small></div>',\n);\n\n'''
+          text = text.replace(marker, addition + marker, 1)
+          write(path, text)
+
+          # Discord management: score filtering is retired. Keep the DB field at zero for compatibility.
+          path = "supabase/functions/manage-discord/index.ts"
+          text = read(path)
+          text = re.sub(r'\n\s*\{ name: "⚡ Signal score", value: "\*\*78/100\*\* · ⚡ Strong signal", inline: true \},', '', text, count=1)
+          old = '    const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));'
+          if old not in text:
+              raise SystemExit(f"Missing Discord score normalization in {path}")
+          text = text.replace(old, '    const minimumSignalScore = 0;', 1)
+          write(path, text)
+
+          # Discord delivery: no score threshold and no score field in the alert.
+          path = "supabase/functions/notify-discord/index.ts"
+          text = read(path)
+          text, count = re.subn(
+              r'function signalTier\(score: number\) \{.*?\n\}\n\nfunction buildDiscordEmbed',
+              'function buildDiscordEmbed',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f"Missing signalTier in {path}")
+          text = text.replace('  const score = Math.max(0, Math.min(100, Math.round(mention.signal_score)));\n', '', 1)
+          text, count = re.subn(
+              r'\n    \{\n      name: "⚡ Signal score",\n      value: `\*\*\$\{score\}/100\*\* · \$\{signalTier\(score\)\}`,\n      inline: true,\n    \},',
+              '',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"Missing Discord embed score field in {path}")
+          text = text.replace('        if (mention.signal_score < channel.minimum_signal_score) continue;\n', '', 1)
+          write(path, text)
+
+          # Email management: the retired score threshold is always persisted as zero.
+          path = "supabase/functions/manage-email/index.ts"
+          text = read(path)
+          old = '    const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));'
+          if old not in text:
+              raise SystemExit(f"Missing email score normalization in {path}")
+          text = text.replace(old, '    const minimumSignalScore = 0;', 1)
+          write(path, text)
+
+          # Daily digest: prioritize by actual reach and recency, not an opaque score.
+          path = "supabase/functions/notify-email/index.ts"
+          text = read(path)
+          old_sort = '.sort((a, b) => b.mention.signal_score - a.mention.signal_score || reach(b.mention) - reach(a.mention))'
+          new_sort = '.sort((a, b) => reach(b.mention) - reach(a.mention) || Date.parse(b.mention.detected_at) - Date.parse(a.mention.detected_at))'
+          if old_sort not in text:
+              raise SystemExit(f"Missing digest score sort in {path}")
+          text = text.replace(old_sort, new_sort, 1)
+          text = text.replace(' (${item.mention.signal_score}/100)', '', 1)
+          text = text.replace(' · score ${item.mention.signal_score}/100', '', 1)
+          text = text.replace('      if (mention.signal_score < channel.minimum_signal_score) continue;\n', '', 1)
+          write(path, text)
+
+          # Lightweight SVG masks. Existing YT/TW badges are upgraded without extra client JS.
+          path = "app/styles/part10.css"
+          text = read(path)
+          marker = "/* platform-icons-and-score-cleanup */"
+          if marker not in text:
+              text += r'''
+
+/* platform-icons-and-score-cleanup */
+:root{--wpmg-youtube:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M6 5h12a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Zm4 4v6l6-3-6-3Z'/%3E%3C/svg%3E");--wpmg-twitch:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 3h17v12l-5 5h-4l-3 3v-3H4V3Zm3 3v10h4v2l2-2h4l2-2V6H7Zm4 2h2v5h-2V8Zm4 0h2v5h-2V8Z'/%3E%3C/svg%3E");--wpmg-discord:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 6a16 16 0 0 1 10 0l1 2c2 2 3 6 3 9-2 2-4 3-6 3l-1.5-2h-3L9 20c-2 0-4-1-6-3 0-3 1-7 3-9l1-2Zm3 5.5A1.5 1.5 0 1 0 10 15a1.5 1.5 0 0 0 0-3.5Zm4 0A1.5 1.5 0 1 0 14 15a1.5 1.5 0 0 0 0-3.5Z'/%3E%3C/svg%3E");--wpmg-mail:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M3 5h18v14H3V5Zm2.5 2 6.5 5 6.5-5h-13ZM19 9l-7 5.4L5 9v8h14V9Z'/%3E%3C/svg%3E");--wpmg-kick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 4h4v6l5-6h5l-7 8 7 8h-5l-5-6v6H5V4Z'/%3E%3C/svg%3E")}
+.ico.y,.ico.t{font-size:0}.ico.y:before,.ico.t:before{content:"";display:block;width:19px;height:19px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.ico.y:before{-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.ico.t:before{-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}
+.landing-host .platforms .platform{display:flex;align-items:center;gap:8px}.landing-host .platform .dot.yt,.landing-host .platform .dot.tw,.landing-host .platform .dot.ki{width:17px;height:17px;border-radius:0;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.landing-host .platform .dot.yt{color:#ff6f86;-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.landing-host .platform .dot.tw{color:#a88aff;-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}.landing-host .platform .dot.ki{color:#73f3b7;-webkit-mask-image:var(--wpmg-kick);mask-image:var(--wpmg-kick)}
+.landing-host .platforms .platform:nth-child(4):before{content:"";width:18px;height:18px;flex:0 0 18px;background:#9b8cff;-webkit-mask:var(--wpmg-discord) center/contain no-repeat;mask:var(--wpmg-discord) center/contain no-repeat}.landing-host .platforms .platform:nth-child(4):after{content:"";width:17px;height:17px;flex:0 0 17px;margin-left:-4px;background:#71e7ff;-webkit-mask:var(--wpmg-mail) center/contain no-repeat;mask:var(--wpmg-mail) center/contain no-repeat}
+.notification-channel-icon{font-size:0}.notification-channel-icon:before{content:"";display:block;width:21px;height:21px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.discord-channel-icon{color:#9b8cff}.discord-channel-icon:before{-webkit-mask-image:var(--wpmg-discord);mask-image:var(--wpmg-discord)}.email-channel-icon{color:#71e7ff}.email-channel-icon:before{-webkit-mask-image:var(--wpmg-mail);mask-image:var(--wpmg-mail)}
+.landing-host .source-switch:has([data-source-toggle="youtube"]),.landing-host .source-switch:has([data-source-toggle="twitch"]),.landing-host .source-switch:has([data-source-toggle="kick"]){display:flex;align-items:center;gap:7px}.landing-host .source-switch:has([data-source-toggle="youtube"]):before,.landing-host .source-switch:has([data-source-toggle="twitch"]):before,.landing-host .source-switch:has([data-source-toggle="kick"]):before{content:"";width:15px;height:15px;flex:0 0 15px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.landing-host .source-switch:has([data-source-toggle="youtube"]):before{color:#ff6f86;-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.landing-host .source-switch:has([data-source-toggle="twitch"]):before{color:#a88aff;-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}.landing-host .source-switch:has([data-source-toggle="kick"]):before{color:#73f3b7;-webkit-mask-image:var(--wpmg-kick);mask-image:var(--wpmg-kick)}
+.landing-host .tab[data-filter="youtube"],.landing-host .tab[data-filter="twitch"]{display:inline-flex;align-items:center;gap:6px}.landing-host .tab[data-filter="youtube"]:before,.landing-host .tab[data-filter="twitch"]:before{content:"";width:13px;height:13px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.landing-host .tab[data-filter="youtube"]:before{-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.landing-host .tab[data-filter="twitch"]:before{-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}
+.service-mark{display:inline-block;width:18px;height:18px;flex:0 0 18px;background:currentColor;vertical-align:-4px;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.service-mark.discord{color:#a88aff;-webkit-mask-image:var(--wpmg-discord);mask-image:var(--wpmg-discord)}.service-mark.mail{color:#71e7ff;-webkit-mask-image:var(--wpmg-mail);mask-image:var(--wpmg-mail)}
+.settings-columns .settings-card h2:has(.service-mark){display:flex;align-items:center;gap:8px}.settings-columns .settings-card .btn:has(.service-mark){display:inline-flex;align-items:center;justify-content:center;gap:8px}.settings-columns .settings-card .btn-primary .service-mark{color:#09101b}.settings-columns .settings-card label:has(input.range[type="range"]){display:none}
+'''
+          write(path, text)
+          PY
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- components/DashboardClient.tsx components/SettingsClient.tsx components/EmailDigestSettings.tsx lib/landing-markup.ts app/styles/part10.css supabase/functions/manage-discord/index.ts supabase/functions/notify-discord/index.ts supabase/functions/manage-email/index.ts supabase/functions/notify-email/index.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "[platform-ui-polish] Add platform icons and remove signal score UI"
+          git push origin HEAD:fix/platform-icons-remove-signal-score
