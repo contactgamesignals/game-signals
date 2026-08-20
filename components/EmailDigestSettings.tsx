@@ -21,7 +21,6 @@ type EmailStatus = {
 export default function EmailDigestSettings({ workspaceId }: Props) {
   const [status, setStatus] = useState<EmailStatus | null>(null);
   const [destination, setDestination] = useState("");
-  const [minimumSignalScore, setMinimumSignalScore] = useState(0);
   const [minimumLiveViewers, setMinimumLiveViewers] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
         };
         setStatus(nextStatus);
         setDestination(nextStatus.destination);
-        setMinimumSignalScore(nextStatus.minimum_signal_score);
         setMinimumLiveViewers(nextStatus.minimum_live_viewers);
       } catch (statusError) {
         if (active) setError(statusError instanceof Error ? statusError.message : "Could not load email settings.");
@@ -77,14 +75,14 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
     try {
       const data = await invokeEmail("upsert", {
         email: destination,
-        minimum_signal_score: minimumSignalScore,
+        minimum_signal_score: 0,
         minimum_live_viewers: minimumLiveViewers,
       });
       setStatus((current) => ({
         configured: true,
         enabled: true,
         destination: String(data.destination ?? destination),
-        minimum_signal_score: Number(data.minimum_signal_score ?? minimumSignalScore),
+        minimum_signal_score: 0,
         minimum_live_viewers: Number(data.minimum_live_viewers ?? minimumLiveViewers),
         allowed: Boolean(data.allowed ?? current?.allowed),
         plan: String(data.plan ?? current?.plan ?? "free"),
@@ -138,7 +136,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
     <section className="settings-card">
       <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
         <div>
-          <h2>Daily email digest</h2>
+          <h2><span className="service-mark mail" aria-hidden="true" />Daily email digest</h2>
           <p>
             Receive one combined email per day only when new matching YouTube or Twitch signals were found. No new signals means no email.
           </p>
@@ -179,18 +177,6 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
           />
         </label>
         <label>
-          Minimum signal score: {minimumSignalScore}
-          <input
-            className="range"
-            type="range"
-            min="0"
-            max="100"
-            value={minimumSignalScore}
-            onChange={(event) => setMinimumSignalScore(Number(event.target.value))}
-            disabled={busy || locked}
-          />
-        </label>
-        <label>
           Minimum viewers for Twitch live streams
           <input
             className="app-input"
@@ -204,10 +190,11 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
         </label>
         <div className="dashboard-actions">
           <button className="btn btn-primary" disabled={busy || locked || !destination.trim()}>
+            <span className="service-mark mail" aria-hidden="true" />
             {connected ? "Update daily digest" : "Enable daily digest"}
           </button>
           <button className="btn btn-ghost" type="button" disabled={busy || !connected} onClick={testDigest}>
-            Send test
+            <span className="service-mark mail" aria-hidden="true" />Send test
           </button>
           {connected ? (
             <button className="icon-btn danger" type="button" disabled={busy} onClick={disableDigest}>
