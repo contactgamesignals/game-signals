@@ -85,7 +85,6 @@ export default function SettingsClient({
 }: Props) {
   const [status, setStatus] = useState<DiscordStatus | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
-  const [minimumSignalScore, setMinimumSignalScore] = useState(0);
   const [minimumLiveViewers, setMinimumLiveViewers] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -155,7 +154,6 @@ export default function SettingsClient({
           plan: String(data.plan ?? "free"),
         };
         setStatus(nextStatus);
-        setMinimumSignalScore(nextStatus.minimum_signal_score);
         setMinimumLiveViewers(nextStatus.minimum_live_viewers);
       } catch (statusError) {
         if (active) setError(statusError instanceof Error ? statusError.message : "Could not load Discord settings.");
@@ -201,13 +199,13 @@ export default function SettingsClient({
     try {
       const data = await invokeDiscord("upsert", {
         webhook_url: webhookUrl,
-        minimum_signal_score: minimumSignalScore,
+        minimum_signal_score: 0,
         minimum_live_viewers: minimumLiveViewers,
       });
       setStatus((current) => ({
         configured: true,
         enabled: true,
-        minimum_signal_score: Number(data.minimum_signal_score ?? minimumSignalScore),
+        minimum_signal_score: 0,
         minimum_live_viewers: Number(data.minimum_live_viewers ?? minimumLiveViewers),
         allowed: Boolean(data.allowed ?? current?.allowed),
         plan: String(data.plan ?? current?.plan ?? "free"),
@@ -251,7 +249,6 @@ export default function SettingsClient({
         allowed: current?.allowed ?? false,
         plan: current?.plan ?? "free",
       }));
-      setMinimumSignalScore(0);
       setMinimumLiveViewers(0);
       setWebhookUrl("");
       setMessage("Discord webhook removed.");
@@ -470,7 +467,7 @@ export default function SettingsClient({
       <section className="settings-card">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
-            <h2>Discord alerts</h2>
+            <h2><span className="service-mark discord" aria-hidden="true" />Discord alerts</h2>
             <p>Get creator signals in a Discord channel. The webhook URL stays server-side and is never returned after saving.</p>
           </div>
           <span className="plan-pill">
@@ -493,16 +490,12 @@ export default function SettingsClient({
             <span className="form-help">Discord → Server Settings → Integrations → Webhooks.</span>
           </label>
           <label>
-            Minimum signal score: {minimumSignalScore}
-            <input className="range" type="range" min="0" max="100" value={minimumSignalScore} onChange={(event) => setMinimumSignalScore(Number(event.target.value))} disabled={busy || discordLocked} />
-          </label>
-          <label>
             Minimum viewers for Twitch live streams
             <input className="app-input" type="number" min="0" step="1" value={minimumLiveViewers} onChange={(event) => setMinimumLiveViewers(Number(event.target.value))} disabled={busy || discordLocked} />
           </label>
           <div className="dashboard-actions">
-            <button className="btn btn-primary" disabled={busy || discordLocked || !webhookUrl.trim()}>{status?.configured ? "Replace webhook" : "Connect Discord"}</button>
-            <button className="btn btn-ghost" type="button" disabled={busy || discordLocked || !status?.configured} onClick={testDiscord}>Send test</button>
+            <button className="btn btn-primary" disabled={busy || discordLocked || !webhookUrl.trim()}><span className="service-mark discord" aria-hidden="true" />{status?.configured ? "Replace webhook" : "Connect Discord"}</button>
+            <button className="btn btn-ghost" type="button" disabled={busy || discordLocked || !status?.configured} onClick={testDiscord}><span className="service-mark discord" aria-hidden="true" />Send test</button>
             {status?.configured ? <button className="icon-btn danger" type="button" disabled={busy} onClick={removeDiscord}>Remove</button> : null}
           </div>
         </form>
