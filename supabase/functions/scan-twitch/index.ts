@@ -5,6 +5,7 @@ type TwitchCategory = { id: string; name: string };
 type TwitchStream = { id: string; user_id: string; user_login: string; user_name: string; game_id: string; game_name: string; title: string; viewer_count: number; started_at: string; language: string; thumbnail_url: string };
 
 const MANUAL_SCAN_COOLDOWN_MS = 5 * 60_000;
+const MAX_STREAM_PAGES_PER_CATEGORY = 5;
 
 function categoryMatchesTitle(categoryName: string, title: string) {
   return categoryName.localeCompare(title, undefined, { sensitivity: "accent" }) === 0;
@@ -42,6 +43,28 @@ async function categoryNamesById(ids: string[], clientId: string, token: string)
     payload.data.forEach((item) => names.set(item.id, item.name));
   }
   return names;
+}
+
+async function streamsForCategory(gameId: string, clientId: string, token: string) {
+  const streams: TwitchStream[] = [];
+  let after: string | null = null;
+  let pages = 0;
+
+  do {
+    const url = new URL("https://api.twitch.tv/helix/streams");
+    url.searchParams.set("first", "100");
+    url.searchParams.set("game_id", gameId);
+    if (after) url.searchParams.set("after", after);
+
+    const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Twitch streams failed: ${response.status} ${await response.text()}`);
+    const payload = await response.json() as { data: TwitchStream[]; pagination?: { cursor?: string } };
+    streams.push(...payload.data);
+    pages += 1;
+    after = payload.pagination?.cursor ?? null;
+  } while (after && pages < MAX_STREAM_PAGES_PER_CATEGORY);
+
+  return { streams, pages, truncated: Boolean(after) };
 }
 
 Deno.serve(async (request) => {
@@ -138,18 +161,15 @@ Deno.serve(async (request) => {
 
     let inserted = 0;
     const resultsByGame = new Map<string, number>();
-    const uniqueTwitchIds = Array.from(gamesByTwitchId.keys());
+    const pagesByTwitchId = new Map<string, number>();
+    const truncatedTwitchIds = new Set<string>();
 
-    for (const batch of chunks(uniqueTwitchIds, 100)) {
-      const url = new URL("https://api.twitch.tv/helix/streams");
-      url.searchParams.set("first", "100");
-      batch.forEach((twitchGameId) => url.searchParams.append("game_id", twitchGameId));
-      const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
-      if (!response.ok) throw new Error(`Twitch streams failed: ${response.status} ${await response.text()}`);
-      const payload = await response.json() as { data: TwitchStream[] };
+    for (const [twitchGameId, trackedGames] of gamesByTwitchId) {
+      const result = await streamsForCategory(twitchGameId, clientId, token);
+      pagesByTwitchId.set(twitchGameId, result.pages);
+      if (result.truncated) truncatedTwitchIds.add(twitchGameId);
 
-      for (const stream of payload.data) {
-        const trackedGames = gamesByTwitchId.get(stream.game_id) ?? [];
+      for (const stream of result.streams) {
         for (const game of trackedGames) {
           const { error: upsertError } = await supabase.from("mentions").upsert({
             game_id: game.id,
@@ -179,6 +199,7 @@ Deno.serve(async (request) => {
     for (const game of prepared) {
       const plan = planByWorkspace.get(game.workspace_id) ?? "free";
       const next = new Date(now.getTime() + twitchCadenceMinutes(plan) * 60_000).toISOString();
+      const twitchGameId = game.twitch_game_id as string;
       await Promise.all([
         supabase.from("games").update({ twitch_last_scanned_at: now.toISOString(), twitch_next_scan_at: next }).eq("id", game.id),
         supabase.from("scan_runs").insert({
@@ -188,8 +209,10 @@ Deno.serve(async (request) => {
           finished_at: now.toISOString(),
           results_count: resultsByGame.get(game.id) ?? 0,
           metadata: {
-            twitch_game_id: game.twitch_game_id,
+            twitch_game_id: twitchGameId,
             twitch_category_name: categoryNameByGame.get(game.id) ?? null,
+            twitch_stream_pages: pagesByTwitchId.get(twitchGameId) ?? 0,
+            twitch_stream_results_truncated: truncatedTwitchIds.has(twitchGameId),
           },
         }),
       ]);
