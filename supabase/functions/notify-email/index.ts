@@ -8,7 +8,6 @@ type Mention = {
   url: string;
   viewer_count: number | null;
   view_count: number | null;
-  signal_score: number;
   detected_at: string;
   games: { title: string; workspace_id: string } | { title: string; workspace_id: string }[];
 };
@@ -17,7 +16,6 @@ type Channel = {
   id: string;
   workspace_id: string;
   destination: string;
-  minimum_signal_score: number;
   minimum_live_viewers: number;
 };
 
@@ -72,7 +70,7 @@ async function loadMentionsForPeriod(
   for (let offset = 0; offset < MAX_MENTIONS_PER_DIGEST_WINDOW; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("mentions")
-      .select("id, platform, creator_name, title, url, viewer_count, view_count, signal_score, detected_at, games(title, workspace_id)")
+      .select("id, platform, creator_name, title, url, viewer_count, view_count, detected_at, games(title, workspace_id)")
       .gte("detected_at", periodStart)
       .lt("detected_at", periodEnd)
       .order("detected_at", { ascending: false })
@@ -114,7 +112,7 @@ function buildDigest(destination: string, items: DigestItem[], periodStart: Date
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, MAX_CREATORS_IN_EMAIL);
   const topSignals = [...items]
-    .sort((a, b) => b.mention.signal_score - a.mention.signal_score || reach(b.mention) - reach(a.mention))
+    .sort((a, b) => reach(b.mention) - reach(a.mention) || Date.parse(b.mention.detected_at) - Date.parse(a.mention.detected_at))
     .slice(0, MAX_SIGNALS_IN_EMAIL);
 
   const total = items.length;
@@ -131,13 +129,13 @@ function buildDigest(destination: string, items: DigestItem[], periodStart: Date
     .join("\n");
   const creatorText = creatorRows.map(([name, count]) => `- ${name}: ${count}`).join("\n");
   const signalText = topSignals
-    .map((item) => `- [${item.mention.platform.toUpperCase()}] ${item.gameTitle} - ${item.mention.creator_name}: ${item.mention.title} (${item.mention.signal_score}/100)\n  ${item.mention.url}`)
+    .map((item) => `- [${item.mention.platform.toUpperCase()}] ${item.gameTitle} - ${item.mention.creator_name}: ${item.mention.title}\n  ${item.mention.url}`)
     .join("\n");
   const text = `Who Plays My Game - daily creator digest\n\n${periodLabel}\n${total} new signal${total === 1 ? "" : "s"}: ${youtube} YouTube, ${twitch} Twitch.\n\nBy game\n${gameText}\n\nTop creators\n${creatorText}\n\nTop signals\n${signalText}\n\nView all signals: ${PUBLIC_SITE_URL}/dashboard\n\nThis daily digest is sent only when new matching signals exist. Maximum one digest per recipient per day.`;
 
   const gameHtml = gameRows.map(([name, counts]) => `<tr><td style="padding:8px 12px 8px 0;font-weight:700">${escapeHtml(name)}</td><td style="padding:8px 0;color:#667085">${counts.total} total · ${counts.youtube} YouTube · ${counts.twitch} Twitch</td></tr>`).join("");
   const creatorHtml = creatorRows.map(([name, count]) => `<span style="display:inline-block;margin:0 8px 8px 0;padding:7px 10px;border:1px solid #e4e7ec;border-radius:999px">${escapeHtml(name)} · ${count}</span>`).join("");
-  const signalsHtml = topSignals.map((item) => `<div style="padding:14px 0;border-top:1px solid #eaecf0"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085">${escapeHtml(item.mention.platform)} · ${escapeHtml(item.gameTitle)} · score ${item.mention.signal_score}/100</div><div style="font-weight:700;margin:5px 0">${escapeHtml(item.mention.creator_name)} - ${escapeHtml(item.mention.title)}</div><a href="${escapeHtml(item.mention.url)}" style="color:#475467">Open signal</a></div>`).join("");
+  const signalsHtml = topSignals.map((item) => `<div style="padding:14px 0;border-top:1px solid #eaecf0"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085">${escapeHtml(item.mention.platform)} · ${escapeHtml(item.gameTitle)}</div><div style="font-weight:700;margin:5px 0">${escapeHtml(item.mention.creator_name)} - ${escapeHtml(item.mention.title)}</div><a href="${escapeHtml(item.mention.url)}" style="color:#475467">Open signal</a></div>`).join("");
   const html = `<div style="font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:0 auto;color:#101828;line-height:1.55"><div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475467;margin-bottom:10px">Who Plays My Game</div><h1 style="font-size:28px;margin:0 0 6px">Daily creator digest</h1><p style="margin:0 0 20px;color:#667085">${escapeHtml(periodLabel)} · ${total} new signal${total === 1 ? "" : "s"}</p><div style="display:flex;gap:10px;margin-bottom:22px"><div style="padding:12px 16px;border:1px solid #e4e7ec;border-radius:12px"><strong>${youtube}</strong><br><span style="color:#667085">YouTube</span></div><div style="padding:12px 16px;border:1px solid #e4e7ec;border-radius:12px"><strong>${twitch}</strong><br><span style="color:#667085">Twitch</span></div></div><h2 style="font-size:18px;margin:22px 0 8px">By game</h2><table style="width:100%;border-collapse:collapse">${gameHtml}</table><h2 style="font-size:18px;margin:22px 0 10px">Top creators</h2><div>${creatorHtml}</div><h2 style="font-size:18px;margin:22px 0 0">Top signals</h2>${signalsHtml}<a href="${PUBLIC_SITE_URL}/dashboard" style="display:inline-block;margin-top:22px;background:#111827;color:#fff;text-decoration:none;padding:12px 17px;border-radius:9px;font-weight:700">View all signals</a><p style="color:#98a2b3;font-size:12px;margin-top:24px">Sent to ${escapeHtml(destination)}. This digest is sent only when new matching signals exist, with a maximum of one digest per recipient per day.</p></div>`;
 
   return { subject, text, html };
@@ -164,7 +162,7 @@ Deno.serve(async (request) => {
 
     const { data: channelsData, error: channelsError } = await supabase
       .from("notification_channels")
-      .select("id, workspace_id, destination, minimum_signal_score, minimum_live_viewers")
+      .select("id, workspace_id, destination, minimum_live_viewers")
       .eq("type", "email")
       .eq("enabled", true);
     if (channelsError) throw channelsError;
@@ -210,7 +208,6 @@ Deno.serve(async (request) => {
       if (!game) continue;
       const channel = channelByWorkspace.get(game.workspace_id);
       if (!channel) continue;
-      if (mention.signal_score < channel.minimum_signal_score) continue;
       if (mention.platform === "twitch" && (mention.viewer_count ?? 0) < channel.minimum_live_viewers) continue;
 
       const normalizedDestination = channel.destination.trim().toLowerCase();
