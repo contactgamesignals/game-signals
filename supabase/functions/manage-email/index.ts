@@ -98,7 +98,7 @@ Deno.serve(async (request) => {
         configured: Boolean(existing),
         enabled: existing?.enabled ?? false,
         destination: existing?.destination ?? authData.user.email ?? "",
-        minimum_signal_score: existing?.minimum_signal_score ?? 0,
+        minimum_signal_score: 0,
         minimum_live_viewers: existing?.minimum_live_viewers ?? 0,
         allowed,
         plan,
@@ -138,7 +138,6 @@ Deno.serve(async (request) => {
     if (!providerConfigured) return json({ error: "Email provider is not configured yet." }, 503);
     const email = body.email?.trim().toLowerCase() ?? "";
     if (!validEmail(email)) return json({ error: "Enter a valid email address." }, 400);
-    const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));
     const minimumLiveViewers = Math.max(0, Math.round(Number(body.minimum_live_viewers ?? 0)));
 
     const { error: upsertError } = await service.from("notification_channels").upsert({
@@ -146,7 +145,7 @@ Deno.serve(async (request) => {
       type: "email",
       destination: email,
       enabled: true,
-      minimum_signal_score: minimumSignalScore,
+      minimum_signal_score: 0,
       minimum_live_viewers: minimumLiveViewers,
     }, { onConflict: "workspace_id,type" });
     if (upsertError) throw upsertError;
@@ -158,7 +157,7 @@ Deno.serve(async (request) => {
       allowed,
       plan,
       provider_configured: providerConfigured,
-      minimum_signal_score: minimumSignalScore,
+      minimum_signal_score: 0,
       minimum_live_viewers: minimumLiveViewers,
     });
   } catch (error) {
