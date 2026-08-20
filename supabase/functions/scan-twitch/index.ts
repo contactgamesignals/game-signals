@@ -1,14 +1,26 @@
 import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, twitchCadenceMinutes, type Plan } from "../_shared/core.ts";
 
 type Game = { id: string; workspace_id: string; title: string; twitch_game_id: string | null; twitch_last_scanned_at: string | null };
+type GameAlias = { game_id: string; phrase: string };
 type TwitchCategory = { id: string; name: string };
 type TwitchStream = { id: string; user_id: string; user_login: string; user_name: string; game_id: string; game_name: string; title: string; viewer_count: number; started_at: string; language: string; thumbnail_url: string };
 
 const MANUAL_SCAN_COOLDOWN_MS = 5 * 60_000;
 const MAX_STREAM_PAGES_PER_CATEGORY = 5;
+const MIN_ALIAS_CATEGORY_LENGTH = 4;
 
 function categoryMatchesTitle(categoryName: string, title: string) {
   return categoryName.localeCompare(title, undefined, { sensitivity: "accent" }) === 0;
+}
+
+function uniqueAliases(title: string, aliases: string[]) {
+  const titleKey = title.trim().toLocaleLowerCase();
+  return Array.from(new Set(
+    aliases
+      .map((value) => value.trim())
+      .filter((value) => value.length >= MIN_ALIAS_CATEGORY_LENGTH)
+      .filter((value) => value.toLocaleLowerCase() !== titleKey),
+  )).sort((a, b) => b.length - a.length || a.localeCompare(b));
 }
 
 async function twitchToken(clientId: string, clientSecret: string) {
@@ -31,6 +43,22 @@ async function resolveCategories(title: string, clientId: string, token: string)
   const payload = await response.json() as { data: TwitchCategory[] };
   const exact = payload.data.filter((item) => categoryMatchesTitle(item.name, title));
   return Array.from(new Map(exact.map((item) => [item.id, item])).values());
+}
+
+async function resolveGameCategories(title: string, aliases: string[], clientId: string, token: string) {
+  const titleCategories = await resolveCategories(title, clientId, token);
+  if (titleCategories.length) {
+    return { categories: titleCategories, matchedPhrase: title, source: "title" as const };
+  }
+
+  for (const alias of uniqueAliases(title, aliases)) {
+    const aliasCategories = await resolveCategories(alias, clientId, token);
+    if (aliasCategories.length) {
+      return { categories: aliasCategories, matchedPhrase: alias, source: "alias" as const };
+    }
+  }
+
+  return { categories: [] as TwitchCategory[], matchedPhrase: null, source: null };
 }
 
 async function categoryNamesById(ids: string[], clientId: string, token: string) {
@@ -108,19 +136,42 @@ Deno.serve(async (request) => {
       }
     }
 
+    const gameIds = games.map((game) => game.id);
+    const { data: aliasData, error: aliasError } = await supabase
+      .from("game_aliases")
+      .select("game_id, phrase")
+      .in("game_id", gameIds)
+      .eq("type", "include");
+    if (aliasError) throw aliasError;
+
+    const aliasesByGame = new Map<string, string[]>();
+    for (const alias of (aliasData ?? []) as GameAlias[]) {
+      const aliases = aliasesByGame.get(alias.game_id) ?? [];
+      aliases.push(alias.phrase);
+      aliasesByGame.set(alias.game_id, aliases);
+    }
+
     const token = await twitchToken(clientId, clientSecret);
     const cachedIds = games.map((game) => game.twitch_game_id).filter((value): value is string => Boolean(value));
     const cachedCategoryNames = await categoryNamesById(cachedIds, clientId, token);
     const prepared: Game[] = [];
     const categoryIdsByGame = new Map<string, string[]>();
     const categoryNamesByGame = new Map<string, string[]>();
+    const categoryMatchByGame = new Map<string, { source: "title" | "alias"; phrase: string }>();
 
     for (const game of games) {
-      const exactCategories = await resolveCategories(game.title, clientId, token);
-      const categoryById = new Map(exactCategories.map((item) => [item.id, item]));
+      const aliases = aliasesByGame.get(game.id) ?? [];
+      const resolved = await resolveGameCategories(game.title, aliases, clientId, token);
+      const categoryById = new Map(resolved.categories.map((item) => [item.id, item]));
       const cachedCategoryName = game.twitch_game_id ? cachedCategoryNames.get(game.twitch_game_id) : null;
+      const allowedCategoryNames = [game.title, ...uniqueAliases(game.title, aliases)];
 
-      if (game.twitch_game_id && cachedCategoryName && categoryMatchesTitle(cachedCategoryName, game.title) && !categoryById.has(game.twitch_game_id)) {
+      if (
+        game.twitch_game_id &&
+        cachedCategoryName &&
+        allowedCategoryNames.some((candidate) => categoryMatchesTitle(cachedCategoryName, candidate)) &&
+        !categoryById.has(game.twitch_game_id)
+      ) {
         categoryById.set(game.twitch_game_id, { id: game.twitch_game_id, name: cachedCategoryName });
       }
 
@@ -133,8 +184,11 @@ Deno.serve(async (request) => {
             platform: "twitch",
             status: "failed",
             finished_at: new Date().toISOString(),
-            error: "No exact matching Twitch category.",
-            metadata: { previous_twitch_game_id: game.twitch_game_id },
+            error: "No matching Twitch category for title or aliases.",
+            metadata: {
+              previous_twitch_game_id: game.twitch_game_id,
+              category_candidates: allowedCategoryNames,
+            },
           }),
         ]);
         continue;
@@ -150,6 +204,9 @@ Deno.serve(async (request) => {
       prepared.push({ ...game, twitch_game_id: primaryCategory.id });
       categoryIdsByGame.set(game.id, categories.map((item) => item.id));
       categoryNamesByGame.set(game.id, categories.map((item) => item.name));
+      if (resolved.source && resolved.matchedPhrase) {
+        categoryMatchByGame.set(game.id, { source: resolved.source, phrase: resolved.matchedPhrase });
+      }
     }
 
     const workspaceIds = Array.from(new Set(prepared.map((game) => game.workspace_id)));
@@ -210,6 +267,7 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + twitchCadenceMinutes(plan) * 60_000).toISOString();
       const categoryIds = categoryIdsByGame.get(game.id) ?? [];
       const streamPages = Object.fromEntries(categoryIds.map((id) => [id, pagesByTwitchId.get(id) ?? 0]));
+      const categoryMatch = categoryMatchByGame.get(game.id);
       await Promise.all([
         supabase.from("games").update({ twitch_last_scanned_at: now.toISOString(), twitch_next_scan_at: next }).eq("id", game.id),
         supabase.from("scan_runs").insert({
@@ -222,6 +280,8 @@ Deno.serve(async (request) => {
             twitch_game_id: game.twitch_game_id,
             twitch_category_ids: categoryIds,
             twitch_category_names: categoryNamesByGame.get(game.id) ?? [],
+            twitch_category_match_source: categoryMatch?.source ?? "cached",
+            twitch_category_match_phrase: categoryMatch?.phrase ?? null,
             twitch_stream_pages_by_category: streamPages,
             twitch_stream_results_truncated: categoryIds.some((id) => truncatedTwitchIds.has(id)),
           },
