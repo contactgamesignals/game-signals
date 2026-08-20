@@ -3,7 +3,7 @@ name: One-time platform UI polish
 on:
   push:
     branches:
-      - fix/platform-icons-remove-signal-score
+      - main
 
 permissions:
   contents: write
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/platform-icons-remove-signal-score
+          ref: main
           fetch-depth: 0
 
       - name: Apply platform icons and remove signal score UI
@@ -31,7 +31,6 @@ jobs:
           def write(path, text):
               Path(path).write_text(text, encoding="utf-8")
 
-          # Dashboard: keep useful reach data, remove the synthetic score from creator signal rows.
           path = "components/DashboardClient.tsx"
           text = read(path)
           old = ' · score {mention.signal_score}/100'
@@ -40,7 +39,6 @@ jobs:
           text = text.replace(old, "", 1)
           write(path, text)
 
-          # Discord settings: add visual service marks and remove the score slider.
           path = "components/SettingsClient.tsx"
           text = read(path)
           text = text.replace(
@@ -64,7 +62,6 @@ jobs:
           )
           write(path, text)
 
-          # Email settings: add mail marks and remove the same synthetic score control.
           path = "components/EmailDigestSettings.tsx"
           text = read(path)
           text = text.replace(
@@ -92,7 +89,6 @@ jobs:
           )
           write(path, text)
 
-          # Landing hero: replace Signal score with a concrete metric people understand.
           path = "lib/landing-markup.ts"
           text = read(path)
           marker = "export const landingMarkup = markup;"
@@ -102,7 +98,6 @@ jobs:
           text = text.replace(marker, addition + marker, 1)
           write(path, text)
 
-          # Discord management: score filtering is retired. Keep the DB field at zero for compatibility.
           path = "supabase/functions/manage-discord/index.ts"
           text = read(path)
           text = re.sub(r'\n\s*\{ name: "⚡ Signal score", value: "\*\*78/100\*\* · ⚡ Strong signal", inline: true \},', '', text, count=1)
@@ -112,7 +107,6 @@ jobs:
           text = text.replace(old, '    const minimumSignalScore = 0;', 1)
           write(path, text)
 
-          # Discord delivery: no score threshold and no score field in the alert.
           path = "supabase/functions/notify-discord/index.ts"
           text = read(path)
           text, count = re.subn(
@@ -136,7 +130,6 @@ jobs:
           text = text.replace('        if (mention.signal_score < channel.minimum_signal_score) continue;\n', '', 1)
           write(path, text)
 
-          # Email management: the retired score threshold is always persisted as zero.
           path = "supabase/functions/manage-email/index.ts"
           text = read(path)
           old = '    const minimumSignalScore = Math.max(0, Math.min(100, Math.round(Number(body.minimum_signal_score ?? 0))));'
@@ -145,7 +138,6 @@ jobs:
           text = text.replace(old, '    const minimumSignalScore = 0;', 1)
           write(path, text)
 
-          # Daily digest: prioritize by actual reach and recency, not an opaque score.
           path = "supabase/functions/notify-email/index.ts"
           text = read(path)
           old_sort = '.sort((a, b) => b.mention.signal_score - a.mention.signal_score || reach(b.mention) - reach(a.mention))'
@@ -158,7 +150,6 @@ jobs:
           text = text.replace('      if (mention.signal_score < channel.minimum_signal_score) continue;\n', '', 1)
           write(path, text)
 
-          # Lightweight SVG masks. Existing YT/TW badges are upgraded without extra client JS.
           path = "app/styles/part10.css"
           text = read(path)
           marker = "/* platform-icons-and-score-cleanup */"
@@ -174,7 +165,7 @@ jobs:
 .landing-host .source-switch:has([data-source-toggle="youtube"]),.landing-host .source-switch:has([data-source-toggle="twitch"]),.landing-host .source-switch:has([data-source-toggle="kick"]){display:flex;align-items:center;gap:7px}.landing-host .source-switch:has([data-source-toggle="youtube"]):before,.landing-host .source-switch:has([data-source-toggle="twitch"]):before,.landing-host .source-switch:has([data-source-toggle="kick"]):before{content:"";width:15px;height:15px;flex:0 0 15px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.landing-host .source-switch:has([data-source-toggle="youtube"]):before{color:#ff6f86;-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.landing-host .source-switch:has([data-source-toggle="twitch"]):before{color:#a88aff;-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}.landing-host .source-switch:has([data-source-toggle="kick"]):before{color:#73f3b7;-webkit-mask-image:var(--wpmg-kick);mask-image:var(--wpmg-kick)}
 .landing-host .tab[data-filter="youtube"],.landing-host .tab[data-filter="twitch"]{display:inline-flex;align-items:center;gap:6px}.landing-host .tab[data-filter="youtube"]:before,.landing-host .tab[data-filter="twitch"]:before{content:"";width:13px;height:13px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.landing-host .tab[data-filter="youtube"]:before{-webkit-mask-image:var(--wpmg-youtube);mask-image:var(--wpmg-youtube)}.landing-host .tab[data-filter="twitch"]:before{-webkit-mask-image:var(--wpmg-twitch);mask-image:var(--wpmg-twitch)}
 .service-mark{display:inline-block;width:18px;height:18px;flex:0 0 18px;background:currentColor;vertical-align:-4px;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}.service-mark.discord{color:#a88aff;-webkit-mask-image:var(--wpmg-discord);mask-image:var(--wpmg-discord)}.service-mark.mail{color:#71e7ff;-webkit-mask-image:var(--wpmg-mail);mask-image:var(--wpmg-mail)}
-.settings-columns .settings-card h2:has(.service-mark){display:flex;align-items:center;gap:8px}.settings-columns .settings-card .btn:has(.service-mark){display:inline-flex;align-items:center;justify-content:center;gap:8px}.settings-columns .settings-card .btn-primary .service-mark{color:#09101b}.settings-columns .settings-card label:has(input.range[type="range"]){display:none}
+.settings-columns .settings-card h2:has(.service-mark){display:flex;align-items:center;gap:8px}.settings-columns .settings-card .btn:has(.service-mark){display:inline-flex;align-items:center;justify-content:center;gap:8px}.settings-columns .settings-card .btn-primary .service-mark{color:#09101b}
 '''
           write(path, text)
           PY
@@ -187,4 +178,4 @@ jobs:
           git add -- components/DashboardClient.tsx components/SettingsClient.tsx components/EmailDigestSettings.tsx lib/landing-markup.ts app/styles/part10.css supabase/functions/manage-discord/index.ts supabase/functions/notify-discord/index.ts supabase/functions/manage-email/index.ts supabase/functions/notify-email/index.ts
           git diff --cached --quiet && exit 0
           git commit -m "[platform-ui-polish] Add platform icons and remove signal score UI"
-          git push origin HEAD:fix/platform-icons-remove-signal-score
+          git push origin HEAD:main
