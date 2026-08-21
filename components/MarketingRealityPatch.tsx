@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { BRAND } from "@/lib/brand";
 
+const SUPPORT_SUBJECT = "Custom Who Plays My Game plan";
+
 function findTextElement(selector: string, startsWith: string) {
   return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) =>
     (element.textContent ?? "").trim().startsWith(startsWith),
@@ -29,6 +31,14 @@ export default function MarketingRealityPatch() {
       document.querySelectorAll<HTMLElement>("#heroFeed .feed-line").forEach((element) => {
         if ((element.textContent ?? "").includes("Kick")) element.remove();
       });
+    };
+
+    const showSupportToast = () => {
+      const toast = document.querySelector<HTMLElement>("#toast");
+      if (!toast) return;
+      toast.textContent = `Support email copied: ${BRAND.supportEmail}`;
+      toast.classList.add("show");
+      window.setTimeout(() => toast.classList.remove("show"), 3200);
     };
 
     const apply = () => {
@@ -116,6 +126,15 @@ export default function MarketingRealityPatch() {
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
       if (pricingLead) pricingLead.textContent = "Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.";
 
+      const customPlanNote = document.querySelector<HTMLElement>(".custom-plan-note");
+      const customPlanCopy = customPlanNote?.querySelector<HTMLElement>("span");
+      const customPlanLink = customPlanNote?.querySelector<HTMLAnchorElement>("a");
+      if (customPlanCopy) customPlanCopy.textContent = `Email us at ${BRAND.supportEmail} for larger portfolios.`;
+      if (customPlanLink) {
+        customPlanLink.href = `mailto:${BRAND.supportEmail}?subject=${encodeURIComponent(SUPPORT_SUBJECT)}`;
+        customPlanLink.title = `Email ${BRAND.supportEmail}`;
+      }
+
       const sharedPaidFeatures = [
         "YouTube + Twitch monitoring",
         "Live creator signal dashboard",
@@ -156,7 +175,20 @@ export default function MarketingRealityPatch() {
       apply();
     };
 
+    const handleSupportClick = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const supportLink = target?.closest<HTMLAnchorElement>(".custom-plan-note a");
+      if (!supportLink) return;
+
+      supportLink.href = `mailto:${BRAND.supportEmail}?subject=${encodeURIComponent(SUPPORT_SUBJECT)}`;
+      if (navigator.clipboard) {
+        void navigator.clipboard.writeText(BRAND.supportEmail).catch(() => undefined);
+      }
+      showSupportToast();
+    };
+
     document.addEventListener("click", blockUnavailableClick, true);
+    document.addEventListener("click", handleSupportClick);
     apply();
     const frame = requestAnimationFrame(apply);
     const timeout = window.setTimeout(apply, 250);
@@ -166,6 +198,7 @@ export default function MarketingRealityPatch() {
 
     return () => {
       document.removeEventListener("click", blockUnavailableClick, true);
+      document.removeEventListener("click", handleSupportClick);
       observer.disconnect();
       cancelAnimationFrame(frame);
       window.clearTimeout(timeout);
