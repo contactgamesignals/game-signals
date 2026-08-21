@@ -88,9 +88,6 @@ export default async function DashboardPage() {
   const games = (gamesData ?? []) as DashboardGame[];
   const mentions = (mentionsData ?? []) as DashboardMention[];
   const statsRow = ((statsData ?? [])[0] ?? null) as DashboardStatsRow | null;
-  const fallbackLiveNow = mentions.filter((mention) => mention.platform === "twitch" && Boolean(
-    mention.last_seen_at && Date.now() - new Date(mention.last_seen_at).getTime() <= 6 * 60 * 1000,
-  )).length;
   const fallbackCreators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const fallbackReach = mentions.reduce(
     (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
@@ -99,7 +96,7 @@ export default async function DashboardPage() {
 
   const initialStats = {
     signalCount: Number(statsRow?.signal_count ?? mentions.length),
-    liveNowCount: Number(statsRow?.live_now_count ?? fallbackLiveNow),
+    liveNowCount: Number(statsRow?.live_now_count ?? 0),
     creatorCount: Number(statsRow?.creator_count ?? fallbackCreators),
     totalReach: Number(statsRow?.total_reach ?? fallbackReach),
   };
