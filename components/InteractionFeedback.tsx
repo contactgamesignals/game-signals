@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { BRAND } from "@/lib/brand";
 
 const CANDIDATE_ATTRIBUTE = "data-loading-candidate";
 const OWNED_BUSY_ATTRIBUTE = "data-loading-owned-busy";
@@ -33,11 +34,51 @@ function syncLoading(button: HTMLButtonElement) {
   clearLoading(button);
 }
 
+async function copySupportEmail() {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(BRAND.supportEmail);
+      return true;
+    }
+  } catch {
+    // Fall back to a temporary textarea below.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = BRAND.supportEmail;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
 export default function InteractionFeedback() {
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
+
+      const supportLink = target.closest<HTMLAnchorElement>(".custom-plan-note a");
+      if (supportLink) {
+        event.preventDefault();
+        const originalLabel = supportLink.textContent || "Contact support";
+        void copySupportEmail().then((copied) => {
+          if (!supportLink.isConnected) return;
+          supportLink.textContent = copied ? "Email copied" : BRAND.supportEmail;
+          supportLink.title = copied ? `Copied ${BRAND.supportEmail}` : `Copy ${BRAND.supportEmail}`;
+          window.setTimeout(() => {
+            if (!supportLink.isConnected) return;
+            supportLink.textContent = originalLabel;
+            supportLink.title = `Copy ${BRAND.supportEmail}`;
+          }, copied ? 1800 : 4200);
+        });
+        return;
+      }
+
       const button = target.closest("button");
       if (!(button instanceof HTMLButtonElement) || button.disabled) return;
 

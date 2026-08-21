@@ -183,7 +183,7 @@ markup = replace(
             <button class="btn btn-ghost plan-btn" data-plan="crazy">Choose Crazy Dev / Big Publisher</button>
           </div>
         </div>
-        <div class="custom-plan-note"><div><strong>Contact support</strong><span>${BRAND.supportEmail}</span></div></div>`,
+        <div class="custom-plan-note"><div><strong>Need more than 30 active games?</strong><span>We can set up a custom plan for larger portfolios.</span></div><a class="btn btn-ghost" href="mailto:${BRAND.supportEmail}?subject=Custom%20Who%20Plays%20My%20Game%20plan">Contact support</a></div>`,
 );
 
 export const landingMarkup = markup;

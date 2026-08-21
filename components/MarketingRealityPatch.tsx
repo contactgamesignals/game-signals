@@ -116,11 +116,6 @@ export default function MarketingRealityPatch() {
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
       if (pricingLead) pricingLead.textContent = "Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.";
 
-      const customPlanNote = document.querySelector<HTMLElement>(".custom-plan-note");
-      if (customPlanNote) {
-        customPlanNote.innerHTML = `<div><strong>Contact support</strong><span>${BRAND.supportEmail}</span></div>`;
-      }
-
       const sharedPaidFeatures = [
         "YouTube + Twitch monitoring",
         "Live creator signal dashboard",
