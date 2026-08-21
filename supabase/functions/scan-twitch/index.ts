@@ -6,7 +6,8 @@ type TwitchCategory = { id: string; name: string };
 type TwitchStream = { id: string; user_id: string; user_login: string; user_name: string; game_id: string; game_name: string; title: string; viewer_count: number; started_at: string; language: string; thumbnail_url: string };
 
 const MANUAL_SCAN_COOLDOWN_MS = 5 * 60_000;
-const MAX_STREAM_PAGES_PER_CATEGORY = 5;
+const MAX_STREAM_PAGES_PER_CATEGORY = 50;
+const TWITCH_UPSERT_BATCH_SIZE = 200;
 const MIN_ALIAS_CATEGORY_LENGTH = 4;
 
 function categoryMatchesTitle(categoryName: string, title: string) {
@@ -75,9 +76,10 @@ async function categoryNamesById(ids: string[], clientId: string, token: string)
 }
 
 async function streamsForCategory(gameId: string, clientId: string, token: string) {
-  const streams: TwitchStream[] = [];
+  const streamsById = new Map<string, TwitchStream>();
   let after: string | null = null;
   let pages = 0;
+  let rateLimitRemaining: number | null = null;
 
   do {
     const url = new URL("https://api.twitch.tv/helix/streams");
@@ -87,13 +89,25 @@ async function streamsForCategory(gameId: string, clientId: string, token: strin
 
     const response = await fetch(url, { headers: { "Client-Id": clientId, Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`Twitch streams failed: ${response.status} ${await response.text()}`);
+
+    const remainingHeader = response.headers.get("Ratelimit-Remaining");
+    if (remainingHeader) {
+      const parsed = Number.parseInt(remainingHeader, 10);
+      if (Number.isFinite(parsed)) rateLimitRemaining = parsed;
+    }
+
     const payload = await response.json() as { data: TwitchStream[]; pagination?: { cursor?: string } };
-    streams.push(...payload.data);
+    payload.data.forEach((stream) => streamsById.set(stream.id, stream));
     pages += 1;
     after = payload.pagination?.cursor ?? null;
   } while (after && pages < MAX_STREAM_PAGES_PER_CATEGORY);
 
-  return { streams, pages, truncated: Boolean(after) };
+  return {
+    streams: Array.from(streamsById.values()),
+    pages,
+    truncated: Boolean(after),
+    rateLimitRemaining,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -228,35 +242,41 @@ Deno.serve(async (request) => {
     let inserted = 0;
     const resultsByGame = new Map<string, number>();
     const pagesByTwitchId = new Map<string, number>();
+    const rateLimitRemainingByTwitchId = new Map<string, number | null>();
     const truncatedTwitchIds = new Set<string>();
 
     for (const [twitchGameId, trackedGames] of gamesByTwitchId) {
       const result = await streamsForCategory(twitchGameId, clientId, token);
       pagesByTwitchId.set(twitchGameId, result.pages);
+      rateLimitRemainingByTwitchId.set(twitchGameId, result.rateLimitRemaining);
       if (result.truncated) truncatedTwitchIds.add(twitchGameId);
 
-      for (const stream of result.streams) {
-        for (const game of trackedGames) {
-          const { error: upsertError } = await supabase.from("mentions").upsert({
-            game_id: game.id,
-            platform: "twitch",
-            external_id: stream.id,
-            creator_external_id: stream.user_id,
-            creator_name: stream.user_name,
-            title: stream.title || `${stream.user_name} is live`,
-            url: `https://www.twitch.tv/${stream.user_login}`,
-            thumbnail_url: stream.thumbnail_url.replace("{width}", "640").replace("{height}", "360"),
-            viewer_count: stream.viewer_count,
-            language: stream.language,
-            published_at: stream.started_at,
-            last_seen_at: new Date().toISOString(),
-            signal_score: signalScore(stream.viewer_count, true),
-            raw_payload: stream,
-          }, { onConflict: "game_id,platform,external_id" });
-          if (!upsertError) {
-            inserted += 1;
-            resultsByGame.set(game.id, (resultsByGame.get(game.id) ?? 0) + 1);
-          }
+      const lastSeenAt = new Date().toISOString();
+      for (const game of trackedGames) {
+        const rows = result.streams.map((stream) => ({
+          game_id: game.id,
+          platform: "twitch",
+          external_id: stream.id,
+          creator_external_id: stream.user_id,
+          creator_name: stream.user_name,
+          title: stream.title || `${stream.user_name} is live`,
+          url: `https://www.twitch.tv/${stream.user_login}`,
+          thumbnail_url: stream.thumbnail_url.replace("{width}", "640").replace("{height}", "360"),
+          viewer_count: stream.viewer_count,
+          language: stream.language,
+          published_at: stream.started_at,
+          last_seen_at: lastSeenAt,
+          signal_score: signalScore(stream.viewer_count, true),
+          raw_payload: stream,
+        }));
+
+        for (const batch of chunks(rows, TWITCH_UPSERT_BATCH_SIZE)) {
+          const { error: upsertError } = await supabase
+            .from("mentions")
+            .upsert(batch, { onConflict: "game_id,platform,external_id" });
+          if (upsertError) throw upsertError;
+          inserted += batch.length;
+          resultsByGame.set(game.id, (resultsByGame.get(game.id) ?? 0) + batch.length);
         }
       }
     }
@@ -267,6 +287,7 @@ Deno.serve(async (request) => {
       const next = new Date(now.getTime() + twitchCadenceMinutes(plan) * 60_000).toISOString();
       const categoryIds = categoryIdsByGame.get(game.id) ?? [];
       const streamPages = Object.fromEntries(categoryIds.map((id) => [id, pagesByTwitchId.get(id) ?? 0]));
+      const rateLimitRemaining = Object.fromEntries(categoryIds.map((id) => [id, rateLimitRemainingByTwitchId.get(id) ?? null]));
       const categoryMatch = categoryMatchByGame.get(game.id);
       await Promise.all([
         supabase.from("games").update({ twitch_last_scanned_at: now.toISOString(), twitch_next_scan_at: next }).eq("id", game.id),
@@ -283,6 +304,7 @@ Deno.serve(async (request) => {
             twitch_category_match_source: categoryMatch?.source ?? "cached",
             twitch_category_match_phrase: categoryMatch?.phrase ?? null,
             twitch_stream_pages_by_category: streamPages,
+            twitch_rate_limit_remaining_by_category: rateLimitRemaining,
             twitch_stream_results_truncated: categoryIds.some((id) => truncatedTwitchIds.has(id)),
           },
         }),
