@@ -5,7 +5,7 @@ import Link from "next/link";
 import EmailDigestSettings from "@/components/EmailDigestSettings";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
-import { PLAN_LABELS, normalizePlan } from "@/lib/plans";
+import { PLAN_LABELS, PLAN_LIMITS, normalizePlan } from "@/lib/plans";
 import { BILLING_PROVIDER_LABELS, type BillingProvider } from "@/lib/billing-provider";
 
 type Props = {
@@ -39,23 +39,26 @@ type BillingResponse = {
 
 type BuyerType = "individual" | "company";
 
-const LAUNCH_BILLING_COUNTRY = "PL";
-
-const PAID_PLANS: Array<{
+type PlanCard = {
   plan: PaidPlanName;
   stripeMonthly: string;
   stripeYearly: string;
   paddleMonthly: string;
   paddleYearly: string;
-  summary: string;
-}> = [
+  description: string;
+  featured?: boolean;
+};
+
+const LAUNCH_BILLING_COUNTRY = "PL";
+
+const PAID_PLANS: PlanCard[] = [
   {
     plan: "indie",
     stripeMonthly: "24.50 PLN / mo",
     stripeYearly: "245 PLN / yr",
     paddleMonthly: "$2.99 / mo",
     paddleYearly: "$29.90 / yr",
-    summary: "1 active game",
+    description: "For solo developers or a small team with one active title.",
   },
   {
     plan: "studio",
@@ -63,7 +66,8 @@ const PAID_PLANS: Array<{
     stripeYearly: "645 PLN / yr",
     paddleMonthly: "$7.99 / mo",
     paddleYearly: "$79.90 / yr",
-    summary: "Up to 3 active games",
+    description: "For studios monitoring several active games and launches.",
+    featured: true,
   },
   {
     plan: "publisher",
@@ -71,9 +75,24 @@ const PAID_PLANS: Array<{
     stripeYearly: "1495 PLN / yr",
     paddleMonthly: "$14.99 / mo",
     paddleYearly: "$149.90 / yr",
-    summary: "Up to 10 active games",
+    description: "For publishers and teams running a larger game portfolio.",
   },
 ];
+
+const SHARED_FEATURES = [
+  "YouTube + Twitch monitoring",
+  "Live creator signal dashboard",
+  "Discord alerts",
+  "Opt-in daily email digest",
+  "CSV signal export",
+  "Aliases and exclusion terms",
+  "Fastest paid monitoring cadence",
+];
+
+function gameLimitLabel(plan: PaidPlanName) {
+  const limit = PLAN_LIMITS[plan].games;
+  return limit === 1 ? "1 active tracked game" : `Up to ${limit} active games`;
+}
 
 export default function SettingsClient({
   workspaceId,
@@ -100,6 +119,7 @@ export default function SettingsClient({
   const [billingHasSubscription, setBillingHasSubscription] = useState(initialBillingHasSubscription);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PaidPlanName | null>(null);
   const [buyerType, setBuyerType] = useState<BuyerType>("individual");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [recurringBillingAccepted, setRecurringBillingAccepted] = useState(false);
@@ -116,6 +136,23 @@ export default function SettingsClient({
     termsAccepted &&
     recurringBillingAccepted &&
     (buyerType === "company" || immediateServiceRequested);
+
+  function priceLabel(item: PlanCard) {
+    if (billingProvider === "paddle") {
+      return billingPeriod === "monthly" ? item.paddleMonthly : item.paddleYearly;
+    }
+    return billingPeriod === "monthly" ? item.stripeMonthly : item.stripeYearly;
+  }
+
+  function selectPlan(plan: PaidPlanName) {
+    setSelectedPlan(plan);
+    setTermsAccepted(false);
+    setRecurringBillingAccepted(false);
+    setImmediateServiceRequested(false);
+    setCheckoutAttempted(false);
+    setBillingError(null);
+    window.setTimeout(() => document.getElementById("checkout-consents")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   async function invokeDiscord(action: "status" | "upsert" | "delete" | "test", extra: Record<string, unknown> = {}) {
     const supabase = createClient();
@@ -309,18 +346,15 @@ export default function SettingsClient({
 
   const discordLocked = status !== null && !status.allowed;
   const discordConnected = Boolean(status?.configured && status?.enabled);
+  const selectedPlanCard = selectedPlan ? PAID_PLANS.find((item) => item.plan === selectedPlan) ?? null : null;
 
   return (
     <div className="settings-grid">
-      <section className="settings-card">
+      <section className="settings-card billing-card" id="billing">
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Billing</h2>
-            <p>
-              {billingProvider === "paddle"
-                ? "Choose a plan. Paddle handles secure checkout and billing."
-                : "Choose a plan. Stripe handles secure checkout and billing."}
-            </p>
+            <p>{hasPaidPlan ? "Manage your current subscription and billing." : "Choose the game limit that fits your team."}</p>
           </div>
           <span className="plan-pill">
             {billingChecking ? "Checking…" : hasPaidPlan ? `${PLAN_LABELS[effectivePlan]} · ${billingStatus}` : "No active plan"}
@@ -335,133 +369,139 @@ export default function SettingsClient({
         {billingMessage ? <div className="auth-success" style={{ marginBottom: 14 }}>{billingMessage}</div> : null}
         {billingError ? <div className="auth-error" style={{ marginBottom: 14 }}>{billingError}</div> : null}
 
-        <div className="dashboard-actions" style={{ marginBottom: 14 }}>
-          {!hasPaidPlan ? (
-            <>
-              <button type="button" className={billingPeriod === "monthly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("monthly")} disabled={billingBusy || billingChecking}>Monthly</button>
-              <button type="button" className={billingPeriod === "yearly" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setBillingPeriod("yearly")} disabled={billingBusy || billingChecking}>Yearly · 2 months free</button>
-            </>
-          ) : null}
-          {billingHasCustomer ? (
-            <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured} onClick={openBillingPortal}>
+        {hasPaidPlan || hasExistingSubscription ? (
+          <div className="billing-current-plan">
+            <div>
+              <span className="kicker">Current subscription</span>
+              <h3>{hasPaidPlan ? PLAN_LABELS[effectivePlan] : "Subscription"}</h3>
+              <p>{hasPaidPlan ? gameLimitLabel(effectivePlan as PaidPlanName) : "Manage your subscription in the billing portal."}</p>
+            </div>
+            <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
               Manage billing
             </button>
-          ) : null}
-        </div>
+            <p className="billing-portal-note">
+              Plan changes, payment methods, billing documents and cancellation are handled in {providerPortalLabel}.
+            </p>
+          </div>
+        ) : selectedPlanCard ? (
+          <div className="checkout-step" id="checkout-consents">
+            <div className="checkout-step-head">
+              <div>
+                <div className="kicker">Step 2 of 2</div>
+                <h3>Confirm {PLAN_LABELS[selectedPlanCard.plan]}</h3>
+                <p>{gameLimitLabel(selectedPlanCard.plan)} · {priceLabel(selectedPlanCard)}</p>
+              </div>
+              <button type="button" className="btn btn-ghost" disabled={billingBusy} onClick={() => { setSelectedPlan(null); setCheckoutAttempted(false); setBillingError(null); }}>
+                Change plan
+              </button>
+            </div>
 
-        {!hasPaidPlan ? (
-          <div className="form-grid" style={{ marginBottom: 18 }}>
-            <div className="status-message">
+            <div className="checkout-security-note">
               {billingProvider === "paddle"
                 ? "Secure checkout by Paddle. Final tax is shown at checkout."
-                : "Paid beta checkout is currently available only for customers with a Polish billing address. Prices shown in PLN are customer-facing totals and Polish VAT is calculated inside the displayed price where applicable. Do not continue if your billing address is outside Poland yet."}
+                : "Secure checkout by Stripe. Final billing details are collected at checkout."}
             </div>
 
-            <div>
+            <div className="checkout-buyer-block">
               <strong>Who is buying?</strong>
-              <p className="form-help" style={{ marginTop: 5 }}>Choose the billing profile for this subscription.</p>
-            </div>
-            <div className="dashboard-actions">
-              <button
-                type="button"
-                className={buyerType === "individual" ? "btn btn-primary" : "btn btn-ghost"}
-                onClick={() => { setBuyerType("individual"); setImmediateServiceRequested(false); }}
-                disabled={billingBusy}
-              >
-                Individual / solo
-              </button>
-              <button
-                type="button"
-                className={buyerType === "company" ? "btn btn-primary" : "btn btn-ghost"}
-                onClick={() => { setBuyerType("company"); setImmediateServiceRequested(false); }}
-                disabled={billingBusy}
-              >
-                Company / business
-              </button>
-            </div>
-
-            <div className="status-message">
-              {billingProvider === "paddle"
-                ? buyerType === "company"
-                  ? "Billing details and supported company tax IDs will be collected during checkout."
-                  : "Billing details will be collected during checkout."
-                : buyerType === "company"
-                  ? "Stripe Checkout will collect the Polish billing address and require the company legal name and supported VAT/tax ID fields."
-                  : "Stripe Checkout will collect your Polish billing address as an individual. Company VAT/tax fields will not be required."}
+              <p className="form-help">Choose the billing profile for this subscription.</p>
+              <div className="dashboard-actions">
+                <button
+                  type="button"
+                  className={buyerType === "individual" ? "btn btn-primary" : "btn btn-ghost"}
+                  onClick={() => { setBuyerType("individual"); setImmediateServiceRequested(false); }}
+                  disabled={billingBusy}
+                >
+                  Individual / solo
+                </button>
+                <button
+                  type="button"
+                  className={buyerType === "company" ? "btn btn-primary" : "btn btn-ghost"}
+                  onClick={() => { setBuyerType("company"); setImmediateServiceRequested(false); }}
+                  disabled={billingBusy}
+                >
+                  Company / business
+                </button>
+              </div>
             </div>
 
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
-              <span>
-                I accept the <Link href="/terms" target="_blank">Terms</Link> and confirm that I have read the <Link href="/privacy" target="_blank">Privacy Policy</Link>.
-              </span>
-            </label>
-
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <input type="checkbox" checked={recurringBillingAccepted} onChange={(event) => setRecurringBillingAccepted(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
-              <span>
-                I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation applies at the end of the current paid period.
-              </span>
-            </label>
-
-            {buyerType === "individual" ? (
-              <label style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <input type="checkbox" checked={immediateServiceRequested} onChange={(event) => setImmediateServiceRequested(event.target.checked)} disabled={billingBusy} style={{ marginTop: 3 }} />
+            <div className="checkout-consents">
+              <label>
+                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={billingBusy} />
                 <span>
-                  I request immediate access to the service before the 14-day withdrawal period ends. If I withdraw after service starts, I may owe a proportionate amount for the service already provided. Mandatory consumer rights remain unaffected.
+                  I accept the <Link href="/terms" target="_blank">Terms</Link> and confirm that I have read the <Link href="/privacy" target="_blank">Privacy Policy</Link>.
                 </span>
               </label>
-            ) : (
-              <div className="form-help">
-                Company purchase. Any mandatory rights that apply by law remain unaffected.
-              </div>
-            )}
+
+              <label>
+                <input type="checkbox" checked={recurringBillingAccepted} onChange={(event) => setRecurringBillingAccepted(event.target.checked)} disabled={billingBusy} />
+                <span>
+                  I understand this is a recurring subscription charged in advance every {billingPeriod === "monthly" ? "month" : "year"} until cancelled. Cancellation applies at the end of the current paid period.
+                </span>
+              </label>
+
+              {buyerType === "individual" ? (
+                <label>
+                  <input type="checkbox" checked={immediateServiceRequested} onChange={(event) => setImmediateServiceRequested(event.target.checked)} disabled={billingBusy} />
+                  <span>
+                    I request immediate access to the service before the 14-day withdrawal period ends. If I withdraw after service starts, I may owe a proportionate amount for the service already provided. Mandatory consumer rights remain unaffected.
+                  </span>
+                </label>
+              ) : (
+                <div className="form-help">Company purchase. Any mandatory rights that apply by law remain unaffected.</div>
+              )}
+            </div>
 
             {checkoutAttempted && !checkoutConsentsReady ? (
-              <div className="auth-error">
-                Please accept all required statements above before continuing to checkout.
-              </div>
+              <div className="auth-error">Please accept all required statements above before continuing to checkout.</div>
             ) : null}
+
+            <div className="checkout-actions">
+              <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(selectedPlanCard.plan)}>
+                Continue to secure checkout
+              </button>
+              <button type="button" className="btn btn-ghost" disabled={billingBusy} onClick={() => setSelectedPlan(null)}>
+                Back to plans
+              </button>
+            </div>
           </div>
-        ) : null}
-
-        <div className="status-message" style={{ marginBottom: 14 }}>
-          All paid plans include the same features. Only the number of active games changes.
-        </div>
-
-        <div className="form-grid">
-          {PAID_PLANS.map((item) => {
-            const isCurrent = effectivePlan === item.plan;
-            const priceLabel = billingProvider === "paddle"
-              ? billingPeriod === "monthly" ? item.paddleMonthly : item.paddleYearly
-              : billingPeriod === "monthly" ? item.stripeMonthly : item.stripeYearly;
-            return (
-              <div className="settings-row" key={item.plan} style={{ alignItems: "center" }}>
-                <div>
-                  <strong>{PLAN_LABELS[item.plan]}</strong>
-                  <p style={{ margin: "4px 0 0" }}>{item.summary} · {priceLabel}</p>
-                </div>
-                {isCurrent ? (
-                  <span className="plan-pill">Current plan</span>
-                ) : hasPaidPlan || hasExistingSubscription ? (
-                  <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
-                    Change plan
-                  </button>
-                ) : (
-                  <button type="button" className="btn btn-primary" disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => startCheckout(item.plan)}>
-                    Continue with {PLAN_LABELS[item.plan]}
-                  </button>
-                )}
+        ) : (
+          <div className="plan-picker">
+            <div className="plan-picker-intro">
+              <div>
+                <div className="kicker">Step 1 of 2</div>
+                <h3>Choose your plan</h3>
+                <p>Every paid plan includes the same features. Only the number of active games changes.</p>
               </div>
-            );
-          })}
-        </div>
+              <div className="plan-cycle-toggle" aria-label="Billing period">
+                <button type="button" className={billingPeriod === "monthly" ? "active" : ""} onClick={() => setBillingPeriod("monthly")} disabled={billingBusy || billingChecking}>Monthly</button>
+                <button type="button" className={billingPeriod === "yearly" ? "active" : ""} onClick={() => setBillingPeriod("yearly")} disabled={billingBusy || billingChecking}>Yearly · 2 months free</button>
+              </div>
+            </div>
 
-        {hasPaidPlan || hasExistingSubscription ? (
-          <div className="status-message" style={{ marginTop: 14 }}>
-            Plan changes, payment methods, billing documents and cancellation are handled in {providerPortalLabel}. Cancellation applies at the end of the paid period; unused time is not normally refunded or credited except where required by law.
+            <div className="plan-picker-grid">
+              {PAID_PLANS.map((item) => (
+                <article className={`plan-choice-card${item.featured ? " featured" : ""}`} key={item.plan}>
+                  <div className="plan-choice-heading">
+                    <div>
+                      <h3>{PLAN_LABELS[item.plan]}</h3>
+                      <p>{item.description}</p>
+                    </div>
+                    {item.featured ? <span className="popular">MOST POPULAR</span> : null}
+                  </div>
+                  <div className="plan-choice-price">{priceLabel(item)}</div>
+                  <div className="same-feature-badge">Same full feature set</div>
+                  <ul className="plan-choice-features">
+                    {[gameLimitLabel(item.plan), ...SHARED_FEATURES].map((feature) => <li key={feature}>{feature}</li>)}
+                  </ul>
+                  <button type="button" className={item.featured ? "btn btn-primary" : "btn btn-ghost"} disabled={billingBusy || billingChecking || !billingConfigured} onClick={() => selectPlan(item.plan)}>
+                    Choose {PLAN_LABELS[item.plan]}
+                  </button>
+                </article>
+              ))}
+            </div>
           </div>
-        ) : null}
+        )}
       </section>
 
       <section className="settings-card">

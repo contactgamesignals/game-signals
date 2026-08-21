@@ -127,8 +127,8 @@ export default function MarketingRealityPatch() {
       ];
       const planFeatures: Record<string, string[]> = {
         Indie: ["1 active tracked game", ...sharedPaidFeatures],
-        Studio: ["Up to 3 active games", ...sharedPaidFeatures],
-        Publisher: ["Up to 10 active games", ...sharedPaidFeatures],
+        Studio: ["Up to 5 active games", ...sharedPaidFeatures],
+        Publisher: ["Up to 15 active games", ...sharedPaidFeatures],
       };
 
       document.querySelectorAll<HTMLElement>(".plan").forEach((plan) => {

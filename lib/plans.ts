@@ -5,8 +5,8 @@ export type BillingPeriod = "monthly" | "yearly";
 export const PLAN_LIMITS: Record<PlanName, { games: number; members: number }> = {
   free: { games: 0, members: 1 },
   indie: { games: 1, members: 10 },
-  studio: { games: 3, members: 10 },
-  publisher: { games: 10, members: 10 },
+  studio: { games: 5, members: 10 },
+  publisher: { games: 15, members: 10 },
 };
 
 export const PLAN_LABELS: Record<PlanName, string> = {
