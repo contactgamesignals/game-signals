@@ -374,7 +374,7 @@ export default function SettingsClient({
             <div>
               <span className="kicker">Current subscription</span>
               <h3>{hasPaidPlan ? PLAN_LABELS[effectivePlan] : "Subscription"}</h3>
-              <p>{hasPaidPlan && effectivePlan !== "free" ? gameLimitLabel(effectivePlan) : "Manage your subscription in the billing portal."}</p>
+              <p>{hasPaidPlan ? gameLimitLabel(effectivePlan as PaidPlanName) : "Manage your subscription in the billing portal."}</p>
             </div>
             <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
               Manage billing
