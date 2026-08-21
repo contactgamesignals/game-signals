@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import { landingSeoMarkup } from "@/lib/landing-seo";
 
 function replace(source: string, before: string, after: string) {
@@ -167,5 +168,22 @@ markup = replace(
 markup = markup
   .replaceAll("Up to 3 active games", "Up to 5 active games")
   .replaceAll("Up to 10 active games", "Up to 15 active games");
+
+const crazyPlanFeatures = '<li><span class="check">✓</span>Up to 30 active games</li><li><span class="check">✓</span>YouTube + Twitch monitoring</li><li><span class="check">✓</span>Live creator signal dashboard</li><li><span class="check">✓</span>Discord alerts</li><li><span class="check">✓</span>Opt-in daily email digest</li><li><span class="check">✓</span>CSV signal export</li><li><span class="check">✓</span>Aliases and exclusion terms</li><li><span class="check">✓</span>Fastest paid monitoring cadence</li>';
+
+markup = replace(
+  markup,
+  '<button class="btn btn-ghost plan-btn" data-plan="Publisher">Choose Publisher</button>\n          </div>\n        </div>',
+  `<button class="btn btn-ghost plan-btn" data-plan="Publisher">Choose Publisher</button>
+          </div>
+          <div class="plan">
+            <h3>Crazy Dev / Big Publisher</h3><p class="desc">For high-output teams and publishers monitoring a very large game portfolio.</p>
+            <div class="price" data-monthly="$24.99" data-yearly="$249.90">$24.99 <small>/mo</small></div>
+            <div class="same-feature-badge">Same full feature set</div><ul>${crazyPlanFeatures}</ul>
+            <button class="btn btn-ghost plan-btn" data-plan="crazy">Choose Crazy Dev / Big Publisher</button>
+          </div>
+        </div>
+        <div class="custom-plan-note"><div><strong>Need more than 30 active games?</strong><span>We can set up a custom plan for larger portfolios.</span></div><a class="btn btn-ghost" href="mailto:${BRAND.supportEmail}?subject=Custom%20Who%20Plays%20My%20Game%20plan">Contact support</a></div>`,
+);
 
 export const landingMarkup = markup;
