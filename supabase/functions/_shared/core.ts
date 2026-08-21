@@ -126,7 +126,7 @@ function isPaidPlan(plan: Plan) {
 }
 
 export function twitchCadenceMinutes(plan: Plan) {
-  return isPaidPlan(plan) ? 2 : 5;
+  return isPaidPlan(plan) ? 10 : 10;
 }
 
 export function youtubeCadenceMinutes(plan: Plan) {
