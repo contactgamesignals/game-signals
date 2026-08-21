@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import {
   assertPaddleCheckoutEnabled,
   buildPaddlePriceCatalog,
+  buildPaddleRuntimePriceCatalog,
   mapPaddleSubscriptionStatus,
   paddleApiBase,
   paddleCancelAtPeriodEnd,
   paddleCatalogPlans,
+  PADDLE_LIVE_PRICE_IDS,
   priceMetadata,
   requirePaddlePrice,
   resolvePaddleEnvironment,
@@ -32,6 +34,17 @@ assert.deepEqual(priceMetadata(catalog, ids.PADDLE_PRICE_PUBLISHER_MONTHLY), {
   plan: "publisher",
   period: "monthly",
 });
+
+const liveCatalog = buildPaddleRuntimePriceCatalog("live", () => undefined);
+assert.equal(liveCatalog.length, 8);
+assert.equal(requirePaddlePrice(liveCatalog, "crazy", "monthly").priceId, PADDLE_LIVE_PRICE_IDS.crazy.monthly);
+assert.equal(requirePaddlePrice(liveCatalog, "crazy", "yearly").priceId, PADDLE_LIVE_PRICE_IDS.crazy.yearly);
+assert.deepEqual(paddleCatalogPlans(liveCatalog), ["indie", "studio", "publisher", "crazy"]);
+
+const sandboxCatalog = buildPaddleRuntimePriceCatalog("sandbox", () => undefined);
+assert.equal(sandboxCatalog.length, 6);
+assert.deepEqual(paddleCatalogPlans(sandboxCatalog), ["indie", "studio", "publisher"]);
+
 assert.equal(mapPaddleSubscriptionStatus("active"), "active");
 assert.equal(mapPaddleSubscriptionStatus("paused"), "past_due");
 assert.equal(mapPaddleSubscriptionStatus("unexpected"), "incomplete");
