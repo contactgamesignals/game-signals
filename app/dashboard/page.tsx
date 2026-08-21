@@ -7,6 +7,13 @@ import type { DashboardGame, DashboardMention } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+type DashboardStatsRow = {
+  signal_count: number | string | null;
+  live_now_count: number | string | null;
+  creator_count: number | string | null;
+  total_reach: number | string | null;
+};
+
 export default async function DashboardPage() {
   if (!isSupabaseConfigured()) {
     return (
@@ -53,10 +60,12 @@ export default async function DashboardPage() {
   const workspaceId = membershipData.workspace_id as string;
   const workspaceName = (workspaceValue?.name as string | undefined) ?? "My studio";
 
-  // These reads no longer wait on each other. Mentions are scoped through the
-  // games relationship, so games, subscription and mentions can load in one
-  // parallel round instead of waiting for the game IDs first.
-  const [{ data: gamesData }, { data: subscriptionData }, { data: mentionsData }] = await Promise.all([
+  const [
+    { data: gamesData },
+    { data: subscriptionData },
+    { data: mentionsData },
+    { data: statsData },
+  ] = await Promise.all([
     supabase
       .from("games")
       .select("id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at")
@@ -73,10 +82,24 @@ export default async function DashboardPage() {
       .eq("games.workspace_id", workspaceId)
       .order("detected_at", { ascending: false })
       .limit(100),
+    supabase.rpc("dashboard_signal_stats", { p_workspace_id: workspaceId }),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
   const mentions = (mentionsData ?? []) as DashboardMention[];
+  const statsRow = ((statsData ?? [])[0] ?? null) as DashboardStatsRow | null;
+  const fallbackCreators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
+  const fallbackReach = mentions.reduce(
+    (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
+    0,
+  );
+
+  const initialStats = {
+    signalCount: Number(statsRow?.signal_count ?? mentions.length),
+    liveNowCount: Number(statsRow?.live_now_count ?? 0),
+    creatorCount: Number(statsRow?.creator_count ?? fallbackCreators),
+    totalReach: Number(statsRow?.total_reach ?? fallbackReach),
+  };
 
   return (
     <DashboardClient
@@ -88,6 +111,7 @@ export default async function DashboardPage() {
         : "free"}
       initialGames={games}
       initialMentions={mentions}
+      initialStats={initialStats}
     />
   );
 }
