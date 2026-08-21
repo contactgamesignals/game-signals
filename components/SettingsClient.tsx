@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import EmailDigestSettings from "@/components/EmailDigestSettings";
+import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
 import { PLAN_LABELS, PLAN_LIMITS, normalizePlan } from "@/lib/plans";
@@ -76,6 +77,14 @@ const PAID_PLANS: PlanCard[] = [
     paddleMonthly: "$14.99 / mo",
     paddleYearly: "$149.90 / yr",
     description: "For publishers and teams running a larger game portfolio.",
+  },
+  {
+    plan: "crazy",
+    stripeMonthly: "$24.99 / mo",
+    stripeYearly: "$249.90 / yr",
+    paddleMonthly: "$24.99 / mo",
+    paddleYearly: "$249.90 / yr",
+    description: "For high-output teams and publishers monitoring a very large game portfolio.",
   },
 ];
 
@@ -499,6 +508,13 @@ export default function SettingsClient({
                   </button>
                 </article>
               ))}
+            </div>
+            <div className="custom-plan-note">
+              <div>
+                <strong>Need more than 30 active games?</strong>
+                <span>We can set up a custom plan for larger portfolios.</span>
+              </div>
+              <a className="btn btn-ghost" href={`mailto:${BRAND.supportEmail}?subject=Custom%20Who%20Plays%20My%20Game%20plan`}>Contact support</a>
             </div>
           </div>
         )}
