@@ -5,6 +5,7 @@ import {
   mapPaddleSubscriptionStatus,
   paddleApiBase,
   paddleCancelAtPeriodEnd,
+  paddleCatalogPlans,
   priceMetadata,
   requirePaddlePrice,
   resolvePaddleEnvironment,
@@ -18,10 +19,14 @@ const ids = {
   PADDLE_PRICE_STUDIO_YEARLY: "pri_01dddddddddddddddddddddddd",
   PADDLE_PRICE_PUBLISHER_MONTHLY: "pri_01eeeeeeeeeeeeeeeeeeeeeeee",
   PADDLE_PRICE_PUBLISHER_YEARLY: "pri_01ffffffffffffffffffffffff",
+  PADDLE_PRICE_CRAZY_MONTHLY: "pri_01gggggggggggggggggggggggg",
+  PADDLE_PRICE_CRAZY_YEARLY: "pri_01hhhhhhhhhhhhhhhhhhhhhhhh",
 };
 const catalog = buildPaddlePriceCatalog((key) => ids[key as keyof typeof ids]);
-assert.equal(catalog.length, 6);
+assert.equal(catalog.length, 8);
 assert.equal(requirePaddlePrice(catalog, "studio", "yearly").priceId, ids.PADDLE_PRICE_STUDIO_YEARLY);
+assert.equal(requirePaddlePrice(catalog, "crazy", "monthly").priceId, ids.PADDLE_PRICE_CRAZY_MONTHLY);
+assert.deepEqual(paddleCatalogPlans(catalog), ["indie", "studio", "publisher", "crazy"]);
 assert.deepEqual(priceMetadata(catalog, ids.PADDLE_PRICE_PUBLISHER_MONTHLY), {
   priceId: ids.PADDLE_PRICE_PUBLISHER_MONTHLY,
   plan: "publisher",
