@@ -119,10 +119,10 @@ export function chunks<T>(items: T[], size: number) {
   return result;
 }
 
-export type Plan = "free" | "indie" | "studio" | "publisher";
+export type Plan = "free" | "indie" | "studio" | "publisher" | "crazy";
 
 function isPaidPlan(plan: Plan) {
-  return plan === "indie" || plan === "studio" || plan === "publisher";
+  return plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy";
 }
 
 export function twitchCadenceMinutes(plan: Plan) {
