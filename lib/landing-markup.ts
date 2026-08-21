@@ -164,4 +164,8 @@ markup = replace(
   '<div class="notice">Paid checkout is available after registration.</div>',
 );
 
+markup = markup
+  .replaceAll("Up to 3 active games", "Up to 5 active games")
+  .replaceAll("Up to 10 active games", "Up to 15 active games");
+
 export const landingMarkup = markup;
