@@ -53,6 +53,10 @@ export const PADDLE_LIVE_PRICE_IDS = {
     monthly: "pri_01m06rqm0z6e330fwsefycd94c",
     yearly: "pri_01m06rssz63dvacvjs69d9jdh2",
   },
+  crazy: {
+    monthly: "pri_01m0k6kk8xnrzcen1hk1pvaqm3",
+    yearly: "pri_01m0k6n5vm11sk0pzcrrb0by0c",
+  },
 } as const;
 
 export type PaddlePriceCatalogEntry = {
@@ -124,7 +128,9 @@ function defaultPriceId(
   plan: PaddlePaidPlan,
   period: PaddleBillingPeriod,
 ) {
-  if (plan === "crazy") return undefined;
+  if (plan === "crazy") {
+    return environment === "live" ? PADDLE_LIVE_PRICE_IDS.crazy[period] : undefined;
+  }
   const catalog = environment === "live" ? PADDLE_LIVE_PRICE_IDS : PADDLE_SANDBOX_PRICE_IDS;
   return catalog[plan][period];
 }
