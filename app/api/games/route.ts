@@ -74,9 +74,17 @@ export async function POST(request: Request) {
   const plan = subscription?.status === "active" || subscription?.status === "trialing"
     ? normalizePlan(subscription?.plan)
     : "free";
+
+  if (plan === "free") {
+    return NextResponse.json(
+      { error: "Choose a paid plan before adding a game." },
+      { status: 403 },
+    );
+  }
+
   if ((count ?? 0) >= PLAN_LIMITS[plan].games) {
     return NextResponse.json(
-      { error: `The ${plan} plan supports up to ${PLAN_LIMITS[plan].games} active game(s). Pause a game or change plan to free a slot.` },
+      { error: `Your ${plan} plan supports up to ${PLAN_LIMITS[plan].games} active game(s). Pause a game or change plan to free a slot.` },
       { status: 403 },
     );
   }
