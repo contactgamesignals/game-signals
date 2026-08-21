@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
 
 const GAME_SELECT = "id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at";
 
@@ -76,6 +77,47 @@ export async function PATCH(
   if (typeof body.title !== "string") {
     if (typeof body.enabled !== "boolean") {
       return NextResponse.json({ error: "No supported update was provided." }, { status: 400 });
+    }
+
+    if (body.enabled) {
+      const { data: targetGame, error: targetGameError } = await supabase
+        .from("games")
+        .select("id, workspace_id, enabled")
+        .eq("id", id)
+        .maybeSingle();
+      if (targetGameError) return NextResponse.json({ error: targetGameError.message }, { status: 400 });
+      if (!targetGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
+
+      const [{ count }, { data: subscription }] = await Promise.all([
+        supabase
+          .from("games")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", targetGame.workspace_id)
+          .eq("enabled", true),
+        supabase
+          .from("subscriptions")
+          .select("plan, status")
+          .eq("workspace_id", targetGame.workspace_id)
+          .maybeSingle(),
+      ]);
+
+      const plan = subscription?.status === "active" || subscription?.status === "trialing"
+        ? normalizePlan(subscription?.plan)
+        : "free";
+
+      if (plan === "free") {
+        return NextResponse.json(
+          { error: "Choose a paid plan before resuming game monitoring." },
+          { status: 403 },
+        );
+      }
+
+      if (!targetGame.enabled && (count ?? 0) >= PLAN_LIMITS[plan].games) {
+        return NextResponse.json(
+          { error: `Your ${plan} plan already uses all ${PLAN_LIMITS[plan].games} active game slot(s). Pause another game or change plan first.` },
+          { status: 403 },
+        );
+      }
     }
 
     const { data: game, error } = await supabase
