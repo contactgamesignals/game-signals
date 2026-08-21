@@ -58,7 +58,11 @@
     .toggle button{border:0;background:transparent;color:#707a91;padding:8px 12px;border-radius:9px;cursor:pointer}
     .toggle button.active{background:#181d30;color:white}
     .plans{
-      display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+      display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
       gap:16px;align-items:stretch
     }
+    .custom-plan-note{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:18px;padding:18px 20px;border:1px solid rgba(255,255,255,.075);border-radius:15px;background:rgba(255,255,255,.018)}
+    .custom-plan-note>div{display:grid;gap:4px}.custom-plan-note strong{font-size:14px}.custom-plan-note span{color:#818ba1;font-size:12px}.custom-plan-note .btn{flex:0 0 auto}
+    @media(max-width:1180px){.plans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:620px){.custom-plan-note{align-items:stretch;flex-direction:column}.custom-plan-note .btn{width:100%}}
     
