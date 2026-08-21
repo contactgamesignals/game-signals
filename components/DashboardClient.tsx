@@ -9,6 +9,13 @@ import type { DashboardGame, DashboardMention } from "@/lib/types";
 import type { PlanName } from "@/lib/plans";
 import { PLAN_LABELS, PLAN_LIMITS } from "@/lib/plans";
 
+type DashboardStats = {
+  signalCount: number;
+  liveNowCount: number;
+  creatorCount: number;
+  totalReach: number;
+};
+
 type Props = {
   email: string;
   workspaceName: string;
@@ -16,6 +23,7 @@ type Props = {
   plan: PlanName;
   initialGames: DashboardGame[];
   initialMentions: DashboardMention[];
+  initialStats: DashboardStats;
 };
 
 type PendingGame = {
@@ -67,10 +75,12 @@ export default function DashboardClient({
   plan,
   initialGames,
   initialMentions,
+  initialStats,
 }: Props) {
   const router = useRouter();
   const [games, setGames] = useState(initialGames);
   const [mentions, setMentions] = useState(initialMentions);
+  const [stats, setStats] = useState(initialStats);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<DashboardGame | null>(null);
   const [title, setTitle] = useState("");
@@ -86,12 +96,6 @@ export default function DashboardClient({
     [mentions, filter],
   );
 
-  const liveNow = mentions.filter(isTwitchLive).length;
-  const totalReach = mentions.reduce(
-    (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
-    0,
-  );
-  const creators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const hasPaidPlan = plan !== "free";
   const gameLimit = hasPaidPlan ? PLAN_LIMITS[plan].games : 0;
   const planLabel = PLAN_LABELS[plan];
@@ -138,6 +142,10 @@ export default function DashboardClient({
   useEffect(() => {
     setMentions(initialMentions);
   }, [initialMentions]);
+
+  useEffect(() => {
+    setStats(initialStats);
+  }, [initialStats]);
 
   useEffect(() => {
     if (!hasPaidPlan || !games.some((game) => game.enabled)) return;
@@ -402,10 +410,10 @@ export default function DashboardClient({
           ) : null}
 
           <section className="dashboard-grid">
-            <div className="metric-card"><span>New signals</span><b>{mentions.length}</b></div>
-            <div className="metric-card"><span>Live now</span><b>{liveNow}</b></div>
-            <div className="metric-card"><span>Creators</span><b>{creators}</b></div>
-            <div className="metric-card"><span>Total reach</span><b>{totalReach.toLocaleString("en-US")}</b></div>
+            <div className="metric-card"><span>Signals</span><b>{stats.signalCount.toLocaleString("en-US")}</b></div>
+            <div className="metric-card"><span>Live now</span><b>{stats.liveNowCount.toLocaleString("en-US")}</b></div>
+            <div className="metric-card"><span>Creators</span><b>{stats.creatorCount.toLocaleString("en-US")}</b></div>
+            <div className="metric-card"><span>Total reach</span><b>{stats.totalReach.toLocaleString("en-US")}</b></div>
           </section>
 
           <section className="dashboard-panel" id="games">
@@ -449,7 +457,11 @@ export default function DashboardClient({
 
           <section className="dashboard-panel">
             <div className="dashboard-panel-head">
-              <div><div className="panel-title">Detected content</div><h2>Latest mentions</h2></div>
+              <div>
+                <div className="panel-title">Detected content</div>
+                <h2>Latest mentions</h2>
+                <span className="tiny">Latest 100 signals are shown here for a fast dashboard.</span>
+              </div>
               <div className="tabs">
                 {(["all", "youtube", "twitch"] as const).map((item) => (
                   <button key={item} className={`tab${filter === item ? " active" : ""}${item === "all" ? "" : ` platform-filter ${item}`}`} onClick={() => setFilter(item)}>
