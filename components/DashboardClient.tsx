@@ -34,6 +34,7 @@ type GameConfigResponse = {
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
 const PENDING_GAME_STORAGE_KEY = "who-plays-my-game-pending-game";
 const LEGACY_PENDING_GAME_STORAGE_KEY = "gamesignal-pending-game";
+const PLANS_HREF = "/dashboard/settings";
 
 function platformClass(platform: DashboardMention["platform"]) {
   if (platform === "youtube") return { cls: "y", short: "YT" };
@@ -91,10 +92,11 @@ export default function DashboardClient({
     0,
   );
   const creators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
-  const gameLimit = PLAN_LIMITS[plan].games;
+  const hasPaidPlan = plan !== "free";
+  const gameLimit = hasPaidPlan ? PLAN_LIMITS[plan].games : 0;
   const planLabel = PLAN_LABELS[plan];
-  const activeGames = games.filter((game) => game.enabled).length;
-  const atGameLimit = activeGames >= gameLimit;
+  const activeGames = hasPaidPlan ? games.filter((game) => game.enabled).length : 0;
+  const atGameLimit = hasPaidPlan && activeGames >= gameLimit;
 
   useEffect(() => {
     const supabase = createClient();
@@ -138,7 +140,7 @@ export default function DashboardClient({
   }, [initialMentions]);
 
   useEffect(() => {
-    if (plan === "free" || !games.some((game) => game.enabled)) return;
+    if (!hasPaidPlan || !games.some((game) => game.enabled)) return;
 
     const refresh = () => {
       if (!document.hidden) router.refresh();
@@ -155,11 +157,16 @@ export default function DashboardClient({
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [games, plan, router]);
+  }, [games, hasPaidPlan, router]);
 
   useEffect(() => {
     const pendingRaw = localStorage.getItem(PENDING_GAME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PENDING_GAME_STORAGE_KEY);
     if (!pendingRaw) return;
+
+    if (!hasPaidPlan) {
+      router.push(PLANS_HREF);
+      return;
+    }
 
     localStorage.removeItem(PENDING_GAME_STORAGE_KEY);
     localStorage.removeItem(LEGACY_PENDING_GAME_STORAGE_KEY);
@@ -174,9 +181,13 @@ export default function DashboardClient({
     } catch {
       // Ignore malformed browser data.
     }
-  }, []);
+  }, [hasPaidPlan, router]);
 
   function openNewMonitor() {
+    if (!hasPaidPlan) {
+      router.push(PLANS_HREF);
+      return;
+    }
     setEditingGame(null);
     setTitle("");
     setSteamUrl("");
@@ -243,6 +254,11 @@ export default function DashboardClient({
   }
 
   async function toggleGame(game: DashboardGame) {
+    if (!hasPaidPlan && !game.enabled) {
+      router.push(PLANS_HREF);
+      return;
+    }
+
     const nextEnabled = !game.enabled;
     setBusy(true);
     setMessage(null);
@@ -311,6 +327,7 @@ export default function DashboardClient({
           <nav className="side-nav">
             <Link className="side-link active" href="/dashboard">⌁ Signals</Link>
             <a className="side-link" href="#games">◫ Games</a>
+            <Link className="side-link" href={PLANS_HREF}>▣ Plans</Link>
             <Link className="side-link" href="/dashboard/settings">⚙ Settings</Link>
           </nav>
         </aside>
@@ -320,17 +337,17 @@ export default function DashboardClient({
             <div>
               <div className="kicker">Live workspace</div>
               <h1>Creator signals</h1>
-              <p>YouTube and Twitch monitoring is active. Kick is coming soon.</p>
+              <p>{hasPaidPlan ? "YouTube and Twitch monitoring is active. Kick is coming soon." : "Choose a plan to start YouTube and Twitch monitoring. Kick is coming soon."}</p>
             </div>
             <div className="dashboard-actions">
               <span className="plan-pill">
-                {plan === "free" ? `${activeGames}/${gameLimit} active games` : `${planLabel} · ${activeGames}/${gameLimit} active games`}
+                {hasPaidPlan ? `${planLabel} · ${activeGames}/${gameLimit} active games` : "0/0 active games"}
               </span>
-              {plan !== "free" ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
-              {atGameLimit ? (
-                <Link className="btn btn-primary" href="/dashboard/settings">
-                  {plan === "free" ? "Choose a plan" : "Change plan"}
-                </Link>
+              {hasPaidPlan ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
+              {!hasPaidPlan ? (
+                <Link className="btn btn-primary" href={PLANS_HREF}>Add game</Link>
+              ) : atGameLimit ? (
+                <Link className="btn btn-primary" href={PLANS_HREF}>Change plan</Link>
               ) : (
                 <button className="btn btn-primary" disabled={busy} onClick={openNewMonitor}>Add game</button>
               )}
@@ -338,11 +355,13 @@ export default function DashboardClient({
           </div>
 
           {message ? <div className="status-message">{message}</div> : null}
-          {atGameLimit ? (
+          {!hasPaidPlan ? (
             <div className="status-message">
-              {plan === "free"
-                ? "You are using the available active monitoring slot. Choose a plan in Settings to monitor more games."
-                : <>You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or change your plan in Settings to monitor another title.</>}
+              Choose a plan to add games and start creator monitoring. There is no free monitoring plan.
+            </div>
+          ) : atGameLimit ? (
+            <div className="status-message">
+              You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or change your plan in Settings to monitor another title.
             </div>
           ) : null}
 
@@ -357,8 +376,12 @@ export default function DashboardClient({
               </div>
               <div className="dashboard-panel-body">
                 <div className="settings-row" style={{ borderTop: 0 }}>
-                  <div><strong>1. Add a game</strong><p>Enter the title and optional aliases so {BRAND.name} knows what to look for.</p></div>
-                  <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
+                  <div><strong>1. Add a game</strong><p>{hasPaidPlan ? `Enter the title and optional aliases so ${BRAND.name} knows what to look for.` : "Choose a plan first, then add the title and optional aliases you want to monitor."}</p></div>
+                  {hasPaidPlan ? (
+                    <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
+                  ) : (
+                    <Link className="btn btn-primary" href={PLANS_HREF}>Add first game</Link>
+                  )}
                 </div>
                 <div className="settings-row">
                   <div><strong>2. Automatic scans start</strong><p>YouTube and Twitch checks are queued automatically. You do not need to press a scan button.</p></div>
@@ -372,7 +395,9 @@ export default function DashboardClient({
             </section>
           ) : mentions.length === 0 ? (
             <div className="status-message">
-              Your monitor is active and the first platform scans are queued. New YouTube videos and Twitch streams will appear here automatically when matching signals are found.
+              {hasPaidPlan
+                ? "Your monitor is active and the first platform scans are queued. New YouTube videos and Twitch streams will appear here automatically when matching signals are found."
+                : "Your saved games are paused until you choose an active paid plan."}
             </div>
           ) : null}
 
@@ -386,28 +411,37 @@ export default function DashboardClient({
           <section className="dashboard-panel" id="games">
             <div className="dashboard-panel-head">
               <div><div className="panel-title">Tracked portfolio</div><h2>Your games</h2></div>
-              <span className="tiny">YouTube + Twitch active · {activeGames}/{gameLimit} active slots used</span>
+              <span className="tiny">{hasPaidPlan ? `YouTube + Twitch active · ${activeGames}/${gameLimit} active slots used` : "Monitoring requires an active plan · 0/0 active slots used"}</span>
             </div>
             <div className="dashboard-panel-body">
-              {games.length ? games.map((game) => (
-                <div className="game-row" key={game.id}>
-                  <div>
-                    <div className="game-title">{game.title}</div>
-                    <div className="game-meta"><span className="inline-platform youtube" aria-hidden="true" />YouTube: {scanTime(game.youtube_last_scanned_at)} · <span className="inline-platform twitch" aria-hidden="true" />Twitch: {scanTime(game.twitch_last_scanned_at)}</div>
+              {games.length ? games.map((game) => {
+                const monitoringEnabled = hasPaidPlan && game.enabled;
+                return (
+                  <div className="game-row" key={game.id}>
+                    <div>
+                      <div className="game-title">{game.title}</div>
+                      <div className="game-meta"><span className="inline-platform youtube" aria-hidden="true" />YouTube: {scanTime(game.youtube_last_scanned_at)} · <span className="inline-platform twitch" aria-hidden="true" />Twitch: {scanTime(game.twitch_last_scanned_at)}</div>
+                    </div>
+                    <div className="game-status"><i />{monitoringEnabled ? "Monitoring" : "Paused"}</div>
+                    <div className="dashboard-actions">
+                      <button className="icon-btn" disabled={busy} onClick={() => openEditMonitor(game)}>Edit</button>
+                      {!hasPaidPlan ? (
+                        <Link className="icon-btn" href={PLANS_HREF}>Choose plan</Link>
+                      ) : (
+                        <button className="icon-btn" disabled={busy || (!game.enabled && atGameLimit)} onClick={() => toggleGame(game)}>
+                          {game.enabled ? "Pause" : atGameLimit ? "No available slot" : "Resume"}
+                        </button>
+                      )}
+                      <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
+                    </div>
                   </div>
-                  <div className="game-status"><i />{game.enabled ? "Monitoring" : "Paused"}</div>
-                  <div className="dashboard-actions">
-                    <button className="icon-btn" disabled={busy} onClick={() => openEditMonitor(game)}>Edit</button>
-                    <button className="icon-btn" disabled={busy || (!game.enabled && atGameLimit)} onClick={() => toggleGame(game)}>
-                      {game.enabled ? "Pause" : atGameLimit ? "No available slot" : "Resume"}
-                    </button>
-                    <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
-                  </div>
-                </div>
-              )) : (
+                );
+              }) : (
                 <div className="empty-state">
                   <strong>No games tracked yet</strong>
-                  Add your first game and {BRAND.name} will start monitoring YouTube and Twitch automatically.
+                  {hasPaidPlan
+                    ? `Add your first game and ${BRAND.name} will start monitoring YouTube and Twitch automatically.`
+                    : "Choose a plan, then add your first game to start monitoring YouTube and Twitch."}
                 </div>
               )}
             </div>
@@ -452,7 +486,9 @@ export default function DashboardClient({
               }) : (
                 <div className="empty-state">
                   <strong>No matching signals yet</strong>
-                  {BRAND.name} is monitoring your tracked games. New YouTube videos and Twitch streams will appear here automatically.
+                  {hasPaidPlan
+                    ? `${BRAND.name} is monitoring your tracked games. New YouTube videos and Twitch streams will appear here automatically.`
+                    : "Choose a plan to start creator monitoring and receive new signals."}
                 </div>
               )}
             </div>
