@@ -1,7 +1,10 @@
 export type PaddleEnvironment = "sandbox" | "live";
-export type PaddlePaidPlan = "indie" | "studio" | "publisher";
+export type PaddlePaidPlan = "indie" | "studio" | "publisher" | "crazy";
 export type PaddleBillingPeriod = "monthly" | "yearly";
 export type GameSignalSubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "incomplete";
+
+const PADDLE_PAID_PLANS: PaddlePaidPlan[] = ["indie", "studio", "publisher", "crazy"];
+const PADDLE_BILLING_PERIODS: PaddleBillingPeriod[] = ["monthly", "yearly"];
 
 export const PADDLE_PRICE_ENV_KEYS: Record<PaddlePaidPlan, Record<PaddleBillingPeriod, string>> = {
   indie: {
@@ -16,13 +19,13 @@ export const PADDLE_PRICE_ENV_KEYS: Record<PaddlePaidPlan, Record<PaddleBillingP
     monthly: "PADDLE_PRICE_PUBLISHER_MONTHLY",
     yearly: "PADDLE_PRICE_PUBLISHER_YEARLY",
   },
+  crazy: {
+    monthly: "PADDLE_PRICE_CRAZY_MONTHLY",
+    yearly: "PADDLE_PRICE_CRAZY_YEARLY",
+  },
 };
 
-// Paddle price IDs are public catalog identifiers, not credentials. Keep the
-// reviewed Sandbox and LIVE catalogs in source so plan mapping does not depend
-// on six duplicated runtime settings. Environment variables may still override
-// an individual price ID for an emergency catalog migration.
-export const PADDLE_SANDBOX_PRICE_IDS: Record<PaddlePaidPlan, Record<PaddleBillingPeriod, string>> = {
+export const PADDLE_SANDBOX_PRICE_IDS = {
   indie: {
     monthly: "pri_01m041w2rt1m5qm26yjygktnzj",
     yearly: "pri_01m04220y737wxhfphwbx7yscx",
@@ -35,9 +38,9 @@ export const PADDLE_SANDBOX_PRICE_IDS: Record<PaddlePaidPlan, Record<PaddleBilli
     monthly: "pri_01m042eynme90xtjwpsgpdbp33",
     yearly: "pri_01m042kp4p6r7baaea3w3pv7yb",
   },
-};
+} as const;
 
-export const PADDLE_LIVE_PRICE_IDS: Record<PaddlePaidPlan, Record<PaddleBillingPeriod, string>> = {
+export const PADDLE_LIVE_PRICE_IDS = {
   indie: {
     monthly: "pri_01m06qqrjk6ta8d7jjw5wx4mmj",
     yearly: "pri_01m06qtfrzvft7e1j8xz6ewy19",
@@ -50,7 +53,11 @@ export const PADDLE_LIVE_PRICE_IDS: Record<PaddlePaidPlan, Record<PaddleBillingP
     monthly: "pri_01m06rqm0z6e330fwsefycd94c",
     yearly: "pri_01m06rssz63dvacvjs69d9jdh2",
   },
-};
+  crazy: {
+    monthly: "pri_01m0k6kk8xnrzcen1hk1pvaqm3",
+    yearly: "pri_01m0k6n5vm11sk0pzcrrb0by0c",
+  },
+} as const;
 
 export type PaddlePriceCatalogEntry = {
   priceId: string;
@@ -59,7 +66,7 @@ export type PaddlePriceCatalogEntry = {
 };
 
 export function isPaddlePaidPlan(value: unknown): value is PaddlePaidPlan {
-  return value === "indie" || value === "studio" || value === "publisher";
+  return value === "indie" || value === "studio" || value === "publisher" || value === "crazy";
 }
 
 export function isPaddleBillingPeriod(value: unknown): value is PaddleBillingPeriod {
@@ -102,8 +109,8 @@ export function assertPaddleCheckoutEnabled(input: {
 
 export function buildPaddlePriceCatalog(readEnv: (key: string) => string | undefined): PaddlePriceCatalogEntry[] {
   const entries: PaddlePriceCatalogEntry[] = [];
-  for (const plan of ["indie", "studio", "publisher"] as const) {
-    for (const period of ["monthly", "yearly"] as const) {
+  for (const plan of PADDLE_PAID_PLANS) {
+    for (const period of PADDLE_BILLING_PERIODS) {
       const key = PADDLE_PRICE_ENV_KEYS[plan][period];
       const priceId = readEnv(key)?.trim();
       if (!priceId) continue;
@@ -116,17 +123,29 @@ export function buildPaddlePriceCatalog(readEnv: (key: string) => string | undef
   return entries;
 }
 
+function defaultPriceId(
+  environment: PaddleEnvironment,
+  plan: PaddlePaidPlan,
+  period: PaddleBillingPeriod,
+) {
+  if (plan === "crazy") {
+    return environment === "live" ? PADDLE_LIVE_PRICE_IDS.crazy[period] : undefined;
+  }
+  const catalog = environment === "live" ? PADDLE_LIVE_PRICE_IDS : PADDLE_SANDBOX_PRICE_IDS;
+  return catalog[plan][period];
+}
+
 export function buildPaddleRuntimePriceCatalog(
   environment: PaddleEnvironment,
   readEnv: (key: string) => string | undefined,
 ): PaddlePriceCatalogEntry[] {
   const entries: PaddlePriceCatalogEntry[] = [];
-  const defaultCatalog = environment === "live" ? PADDLE_LIVE_PRICE_IDS : PADDLE_SANDBOX_PRICE_IDS;
-  for (const plan of ["indie", "studio", "publisher"] as const) {
-    for (const period of ["monthly", "yearly"] as const) {
+  for (const plan of PADDLE_PAID_PLANS) {
+    for (const period of PADDLE_BILLING_PERIODS) {
       const key = PADDLE_PRICE_ENV_KEYS[plan][period];
       const configured = readEnv(key)?.trim();
-      const priceId = configured || defaultCatalog[plan][period];
+      const priceId = configured || defaultPriceId(environment, plan, period);
+      if (!priceId) continue;
       if (!/^pri_[a-z\d]{26}$/.test(priceId)) {
         throw new Error(`${key} is not a valid Paddle price ID.`);
       }
@@ -134,6 +153,12 @@ export function buildPaddleRuntimePriceCatalog(
     }
   }
   return entries;
+}
+
+export function paddleCatalogPlans(catalog: PaddlePriceCatalogEntry[]) {
+  return PADDLE_PAID_PLANS.filter((plan) =>
+    PADDLE_BILLING_PERIODS.every((period) => catalog.some((entry) => entry.plan === plan && entry.period === period)),
+  );
 }
 
 export function requirePaddlePrice(

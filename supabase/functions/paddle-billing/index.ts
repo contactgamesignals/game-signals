@@ -5,6 +5,7 @@ import {
   isPaddleBillingPeriod,
   isPaddlePaidPlan,
   paddleApiBase,
+  paddleCatalogPlans,
   requirePaddlePrice,
   resolvePaddleEnvironment,
   validatePaddleApiKey,
@@ -141,12 +142,15 @@ Deno.serve(async (request) => {
 
     let runtimeConfigured = false;
     let environment: PaddleEnvironment = "sandbox";
+    let availablePlans: string[] = [];
     try {
       const runtime = paddleRuntime();
       environment = runtime.environment;
-      runtimeConfigured = runtime.catalog.length === 6;
+      availablePlans = paddleCatalogPlans(runtime.catalog);
+      runtimeConfigured = ["indie", "studio", "publisher"].every((plan) => availablePlans.includes(plan));
     } catch {
       runtimeConfigured = false;
+      availablePlans = [];
     }
 
     const billingEnabled = Deno.env.get("PADDLE_BILLING_ENABLED") === "true";
@@ -167,6 +171,7 @@ Deno.serve(async (request) => {
         checkout_enabled: checkoutEnabled,
         provider: "paddle",
         paddle_mode: environment,
+        available_plans: availablePlans,
         plan: subscription.plan ?? "free",
         status: subscription.status ?? "trialing",
         has_customer: storedPaddleIdentity && Boolean(subscription.billing_customer_id),
@@ -180,8 +185,9 @@ Deno.serve(async (request) => {
     }
 
     const runtime = paddleRuntime();
-    if (runtime.catalog.length !== 6) {
-      return json({ error: "All six Paddle plan prices must be configured before billing is enabled." }, 503);
+    const runtimePlans = paddleCatalogPlans(runtime.catalog);
+    if (!["indie", "studio", "publisher"].every((plan) => runtimePlans.includes(plan))) {
+      return json({ error: "The core Paddle plan prices must be configured before billing is enabled." }, 503);
     }
 
     if (body.action === "portal") {

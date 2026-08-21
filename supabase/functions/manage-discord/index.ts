@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
 
     const plan = String(subscription?.plan ?? "free");
     const subscriptionActive = subscription?.status === "active" || subscription?.status === "trialing";
-    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher");
+    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy");
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const { data: existing, error: channelError } = await service

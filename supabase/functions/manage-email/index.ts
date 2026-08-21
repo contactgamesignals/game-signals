@@ -80,7 +80,7 @@ Deno.serve(async (request) => {
 
     const plan = String(subscription?.plan ?? "free");
     const subscriptionActive = subscription?.status === "active" || subscription?.status === "trialing";
-    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher");
+    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy");
     const providerConfigured = Boolean(Deno.env.get("RESEND_API_KEY") && Deno.env.get("RESEND_FROM_EMAIL"));
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
