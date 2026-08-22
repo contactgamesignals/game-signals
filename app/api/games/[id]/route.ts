@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
 
@@ -107,6 +108,7 @@ export async function PATCH(
     }
 
     let targetWorkspaceId: string | null = null;
+    const admin = getSupabaseAdminClient();
 
     if (body.enabled) {
       const { data: targetGame, error: targetGameError } = await supabase
@@ -127,7 +129,7 @@ export async function PATCH(
           .select("plan, status")
           .eq("workspace_id", targetWorkspaceId)
           .maybeSingle(),
-        supabase.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: targetWorkspaceId }),
+        admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: targetWorkspaceId }),
       ]);
 
       if (slotStateError) {
@@ -169,7 +171,7 @@ export async function PATCH(
     if (error) {
       const cooldownBlocked = error.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
       if (cooldownBlocked && targetWorkspaceId) {
-        const { data: refreshedStateData } = await supabase.rpc("workspace_game_slot_cooldown_state", {
+        const { data: refreshedStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
           p_workspace_id: targetWorkspaceId,
         });
         const refreshedState = ((refreshedStateData ?? [])[0] ?? null) as GameSlotState | null;
@@ -271,7 +273,8 @@ export async function DELETE(
 
   let slotState: GameSlotState | null = null;
   if (cooldownCreated) {
-    const { data: slotStateData } = await supabase.rpc("workspace_game_slot_cooldown_state", {
+    const admin = getSupabaseAdminClient();
+    const { data: slotStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
       p_workspace_id: deletedGame.workspace_id,
     });
     slotState = ((slotStateData ?? [])[0] ?? null) as GameSlotState | null;
