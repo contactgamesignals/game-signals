@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import EmailDigestSettings from "@/components/EmailDigestSettings";
+import PaidPlanChangePanel from "@/components/PaidPlanChangePanel";
 import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
@@ -139,7 +140,6 @@ export default function SettingsClient({
   const hasPaidPlan = effectivePlan !== "free";
   const hasExistingSubscription = billingHasSubscription && billingStatus !== "canceled";
   const providerLabel = BILLING_PROVIDER_LABELS[billingProvider];
-  const providerPortalLabel = billingProvider === "paddle" ? "Paddle Customer Portal" : "Stripe Customer Portal";
   const billingFunction = billingProvider === "paddle" ? "paddle-billing" : "stripe-billing";
   const checkoutConsentsReady =
     termsAccepted &&
@@ -385,11 +385,21 @@ export default function SettingsClient({
               <h3>{hasPaidPlan ? PLAN_LABELS[effectivePlan] : "Subscription"}</h3>
               <p>{hasPaidPlan ? gameLimitLabel(effectivePlan as PaidPlanName) : "Manage your subscription in the billing portal."}</p>
             </div>
-            <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
-              Manage billing
-            </button>
+            {hasPaidPlan ? (
+              <PaidPlanChangePanel
+                workspaceId={workspaceId}
+                currentPlan={effectivePlan as PaidPlanName}
+                billingProvider={billingProvider}
+                billingConfigured={billingConfigured}
+                billingHasCustomer={billingHasCustomer}
+              />
+            ) : (
+              <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
+                Manage billing
+              </button>
+            )}
             <p className="billing-portal-note">
-              Plan changes, payment methods, billing documents and cancellation are handled in {providerPortalLabel}.
+              Change your game limit here. Payment methods, billing documents and cancellation stay in the billing portal.
             </p>
           </div>
         ) : selectedPlanCard ? (
