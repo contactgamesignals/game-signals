@@ -12,10 +12,36 @@ type CreateGameBody = {
   excludes?: string;
 };
 
+type GameSlotState = {
+  active_games: number;
+  cooldown_slots: number;
+  allowed_slots: number;
+  effective_used_slots: number;
+  available_slots: number;
+  next_slot_available_at: string | null;
+};
+
 function parseTerms(value: string | undefined) {
   return Array.from(new Set(
     (value ?? "").split(",").map((item) => item.trim()).filter(Boolean),
   )).slice(0, 20);
+}
+
+function cooldownResponse(state: GameSlotState | null) {
+  const cooldownUntil = state?.next_slot_available_at ?? null;
+  const headers: Record<string, string> = {};
+  if (cooldownUntil) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000));
+    headers["Retry-After"] = String(retryAfterSeconds);
+  }
+
+  return NextResponse.json(
+    {
+      error: "A recently removed game slot is still cooling down. Removed active-game slots unlock 12 hours after deletion.",
+      cooldownUntil,
+    },
+    { status: 429, headers },
+  );
 }
 
 export async function POST(request: Request) {
@@ -62,15 +88,19 @@ export async function POST(request: Request) {
   }
 
   const workspaceId = membership.workspace_id as string;
-  const [{ count }, { data: subscription }] = await Promise.all([
-    supabase
-      .from("games")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("enabled", true),
+  const [
+    { data: subscription },
+    { data: slotStateData, error: slotStateError },
+  ] = await Promise.all([
     supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
+    supabase.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
   ]);
 
+  if (slotStateError) {
+    return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
+  }
+
+  const slotState = ((slotStateData ?? [])[0] ?? null) as GameSlotState | null;
   const plan = subscription?.status === "active" || subscription?.status === "trialing"
     ? normalizePlan(subscription?.plan)
     : "free";
@@ -82,9 +112,14 @@ export async function POST(request: Request) {
     );
   }
 
-  if ((count ?? 0) >= PLAN_LIMITS[plan].games) {
+  const gameLimit = PLAN_LIMITS[plan].games;
+  if (slotState && slotState.effective_used_slots >= gameLimit) {
+    if (slotState.cooldown_slots > 0 && slotState.active_games < gameLimit) {
+      return cooldownResponse(slotState);
+    }
+
     return NextResponse.json(
-      { error: `Your ${plan} plan supports up to ${PLAN_LIMITS[plan].games} active game(s). Pause a game or change plan to free a slot.` },
+      { error: `Your ${plan} plan supports up to ${gameLimit} active game(s). Pause a game or change plan to free a slot.` },
       { status: 403 },
     );
   }
@@ -97,6 +132,16 @@ export async function POST(request: Request) {
 
   if (error || !game) {
     const duplicate = error?.code === "23505";
+    const cooldownBlocked = error?.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
+
+    if (cooldownBlocked) {
+      const { data: refreshedStateData } = await supabase.rpc("workspace_game_slot_cooldown_state", {
+        p_workspace_id: workspaceId,
+      });
+      const refreshedState = ((refreshedStateData ?? [])[0] ?? null) as GameSlotState | null;
+      return cooldownResponse(refreshedState);
+    }
+
     return NextResponse.json(
       { error: duplicate ? "This game is already tracked." : error?.message ?? "Could not create the game." },
       { status: duplicate ? 409 : 500 },
