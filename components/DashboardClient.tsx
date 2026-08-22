@@ -40,6 +40,7 @@ type GameConfigResponse = {
 };
 
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
+const DASHBOARD_MENTIONS_PER_PLATFORM = 100;
 const PENDING_GAME_STORAGE_KEY = "who-plays-my-game-pending-game";
 const LEGACY_PENDING_GAME_STORAGE_KEY = "gamesignal-pending-game";
 const PLANS_HREF = "/dashboard/settings";
@@ -68,6 +69,18 @@ function isTwitchLive(mention: DashboardMention) {
   );
 }
 
+function capMentionsByPlatform(input: DashboardMention[]) {
+  const counts = new Map<DashboardMention["platform"], number>();
+  return [...input]
+    .sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime())
+    .filter((mention) => {
+      const count = counts.get(mention.platform) ?? 0;
+      if (count >= DASHBOARD_MENTIONS_PER_PLATFORM) return false;
+      counts.set(mention.platform, count + 1);
+      return true;
+    });
+}
+
 export default function DashboardClient({
   email,
   workspaceName,
@@ -79,7 +92,7 @@ export default function DashboardClient({
 }: Props) {
   const router = useRouter();
   const [games, setGames] = useState(initialGames);
-  const [mentions, setMentions] = useState(initialMentions);
+  const [mentions, setMentions] = useState(() => capMentionsByPlatform(initialMentions));
   const [stats, setStats] = useState(initialStats);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<DashboardGame | null>(null);
@@ -116,7 +129,7 @@ export default function DashboardClient({
           if (!gameTitle) return;
           setMentions((current) => {
             if (current.some((mention) => mention.id === row.id)) return current;
-            return [{ ...row, games: { title: gameTitle } }, ...current].slice(0, 100);
+            return capMentionsByPlatform([{ ...row, games: { title: gameTitle } }, ...current]);
           });
         },
       )
@@ -140,7 +153,7 @@ export default function DashboardClient({
   }, [initialGames]);
 
   useEffect(() => {
-    setMentions(initialMentions);
+    setMentions(capMentionsByPlatform(initialMentions));
   }, [initialMentions]);
 
   useEffect(() => {
@@ -460,7 +473,7 @@ export default function DashboardClient({
               <div>
                 <div className="panel-title">Detected content</div>
                 <h2>Latest mentions</h2>
-                <span className="tiny">Latest 100 signals are shown here for a fast dashboard.</span>
+                <span className="tiny">Up to 100 recent signals per platform are shown here for a fast dashboard.</span>
               </div>
               <div className="tabs">
                 {(["all", "youtube", "twitch"] as const).map((item) => (
