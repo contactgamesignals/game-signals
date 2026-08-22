@@ -162,6 +162,12 @@ markup = replace(
 
 markup = replace(
   markup,
+  '<div class="faq-item"><button class="faq-q">Can I cancel my subscription?<span>+</span></button><div class="faq-a">Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.</div></div>',
+  '<div class="faq-item"><button class="faq-q">Can creator monitoring help with Steam reviews and game marketing?<span>+</span></button><div class="faq-a"><strong>Want to increase the amount of positive reviews on Steam?</strong> Creator monitoring can support that goal as part of a broader game marketing and community strategy. Finding YouTube videos and Twitch streams early gives you more opportunities to support creators, answer player questions, join discussions and build positive community engagement. Who Plays My Game cannot guarantee review outcomes, but it helps you react while creator coverage is still fresh.</div></div>\n          <div class="faq-item"><button class="faq-q">Can I cancel my subscription?<span>+</span></button><div class="faq-a">Yes. Paid subscriptions are managed in Paddle Customer Portal, and cancellation keeps access until the end of the paid period. Unused time is not normally refunded or credited except where required by law.</div></div>',
+);
+
+markup = replace(
+  markup,
   '<div class="notice">New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.</div>',
   '<div class="notice">Paid checkout is available after registration.</div>',
 );
