@@ -24,6 +24,8 @@ type Props = {
   initialGames: DashboardGame[];
   initialMentions: DashboardMention[];
   initialStats: DashboardStats;
+  initialCooldownSlots: number;
+  initialNextSlotAvailableAt: string | null;
 };
 
 type PendingGame = {
@@ -37,6 +39,16 @@ type GameConfigResponse = {
   aliases?: string[];
   excludes?: string[];
   error?: string;
+  cooldownUntil?: string | null;
+};
+
+type DeleteGameResponse = {
+  ok?: boolean;
+  error?: string;
+  cooldownCreated?: boolean;
+  cooldownUntil?: string | null;
+  nextSlotAvailableAt?: string | null;
+  availableSlots?: number | null;
 };
 
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
@@ -57,6 +69,17 @@ function relativeTime(value: string) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
   return `${Math.floor(seconds / 86400)}d`;
+}
+
+function cooldownTimeLeft(value: string | null) {
+  if (!value) return "soon";
+  const minutes = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 60_000));
+  if (minutes <= 0) return "now";
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours > 0 && remainingMinutes > 0) return `${hours}h ${remainingMinutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainingMinutes}m`;
 }
 
 function scanTime(value: string | null) {
@@ -89,11 +112,16 @@ export default function DashboardClient({
   initialGames,
   initialMentions,
   initialStats,
+  initialCooldownSlots,
+  initialNextSlotAvailableAt,
 }: Props) {
   const router = useRouter();
   const [games, setGames] = useState(initialGames);
   const [mentions, setMentions] = useState(() => capMentionsByPlatform(initialMentions));
   const [stats, setStats] = useState(initialStats);
+  const [cooldownSlots, setCooldownSlots] = useState(initialCooldownSlots);
+  const [nextSlotAvailableAt, setNextSlotAvailableAt] = useState(initialNextSlotAvailableAt);
+  const [, setCooldownTick] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<DashboardGame | null>(null);
   const [title, setTitle] = useState("");
@@ -113,7 +141,10 @@ export default function DashboardClient({
   const gameLimit = hasPaidPlan ? PLAN_LIMITS[plan].games : 0;
   const planLabel = PLAN_LABELS[plan];
   const activeGames = hasPaidPlan ? games.filter((game) => game.enabled).length : 0;
-  const atGameLimit = hasPaidPlan && activeGames >= gameLimit;
+  const effectiveUsedSlots = hasPaidPlan ? activeGames + cooldownSlots : 0;
+  const availableSlots = hasPaidPlan ? Math.max(0, gameLimit - effectiveUsedSlots) : 0;
+  const atGameLimit = hasPaidPlan && effectiveUsedSlots >= gameLimit;
+  const cooldownBlocking = atGameLimit && cooldownSlots > 0 && activeGames < gameLimit;
 
   useEffect(() => {
     const supabase = createClient();
@@ -159,6 +190,24 @@ export default function DashboardClient({
   useEffect(() => {
     setStats(initialStats);
   }, [initialStats]);
+
+  useEffect(() => {
+    setCooldownSlots(initialCooldownSlots);
+    setNextSlotAvailableAt(initialNextSlotAvailableAt);
+  }, [initialCooldownSlots, initialNextSlotAvailableAt]);
+
+  useEffect(() => {
+    if (cooldownSlots <= 0) return;
+    const timer = window.setInterval(() => setCooldownTick((current) => current + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSlots]);
+
+  useEffect(() => {
+    if (!nextSlotAvailableAt) return;
+    const delay = Math.max(0, new Date(nextSlotAvailableAt).getTime() - Date.now()) + 1_000;
+    const timer = window.setTimeout(() => router.refresh(), delay);
+    return () => window.clearTimeout(timer);
+  }, [nextSlotAvailableAt, router]);
 
   useEffect(() => {
     if (!hasPaidPlan || !games.some((game) => game.enabled)) return;
@@ -209,6 +258,12 @@ export default function DashboardClient({
       router.push(PLANS_HREF);
       return;
     }
+    if (atGameLimit) {
+      setMessage(cooldownBlocking
+        ? `A recently removed game slot is cooling down. The next slot unlocks in ${cooldownTimeLeft(nextSlotAvailableAt)}.`
+        : `All ${gameLimit} active game slots are currently in use.`);
+      return;
+    }
     setEditingGame(null);
     setTitle("");
     setSteamUrl("");
@@ -250,7 +305,10 @@ export default function DashboardClient({
         body: JSON.stringify({ title, steamUrl, aliases, excludes }),
       });
       const result = (await response.json()) as GameConfigResponse;
-      if (!response.ok || !result.game) throw new Error(result.error ?? "Could not save the monitor.");
+      if (!response.ok || !result.game) {
+        if (response.status === 429) setModalOpen(false);
+        throw new Error(result.error ?? "Could not save the monitor.");
+      }
 
       if (editingGame) {
         setGames((current) => current.map((game) => game.id === result.game?.id ? result.game as DashboardGame : game));
@@ -301,16 +359,29 @@ export default function DashboardClient({
     }
   }
 
-  async function removeGame(id: string) {
-    if (!window.confirm("Remove this game and its monitoring data?")) return;
+  async function removeGame(game: DashboardGame) {
+    const confirmed = window.confirm(game.enabled
+      ? "Remove this game and its monitoring data? The freed active-game slot will be locked for 12 hours before it can be reused."
+      : "Remove this paused game and its monitoring data?");
+    if (!confirmed) return;
+
     setBusy(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/games/${id}`, { method: "DELETE" });
-      const result = (await response.json()) as { error?: string };
+      const response = await fetch(`/api/games/${game.id}`, { method: "DELETE" });
+      const result = (await response.json()) as DeleteGameResponse;
       if (!response.ok) throw new Error(result.error ?? "Could not remove the game.");
-      setGames((current) => current.filter((game) => game.id !== id));
-      setMessage("Game removed.");
+      setGames((current) => current.filter((item) => item.id !== game.id));
+
+      if (result.cooldownCreated) {
+        setCooldownSlots((current) => current + 1);
+        setNextSlotAvailableAt(result.nextSlotAvailableAt ?? null);
+        setMessage(result.availableSlots && result.availableSlots > 0
+          ? `Game removed. Its slot is cooling down for 12 hours, but you still have ${result.availableSlots} active slot${result.availableSlots === 1 ? "" : "s"} available now.`
+          : "Game removed. Its active-game slot is cooling down for 12 hours before it can be reused.");
+      } else {
+        setMessage("Paused game removed. No slot cooldown was created.");
+      }
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not remove the game.");
@@ -362,11 +433,15 @@ export default function DashboardClient({
             </div>
             <div className="dashboard-actions">
               <span className="plan-pill">
-                {hasPaidPlan ? `${planLabel} · ${activeGames}/${gameLimit} active games` : "0/0 active games"}
+                {hasPaidPlan
+                  ? `${planLabel} · ${activeGames}/${gameLimit} active games${cooldownSlots > 0 ? ` · ${cooldownSlots} slot${cooldownSlots === 1 ? "" : "s"} cooling down` : ""}`
+                  : "0/0 active games"}
               </span>
               {hasPaidPlan ? <a className="btn btn-ghost" href="/api/export">Export CSV</a> : null}
               {!hasPaidPlan ? (
                 <Link className="btn btn-primary" href={PLANS_HREF}>Add game</Link>
+              ) : cooldownBlocking ? (
+                <button className="btn btn-primary" disabled>Slot cooling down</button>
               ) : atGameLimit ? (
                 <Link className="btn btn-primary" href={PLANS_HREF}>Change plan</Link>
               ) : (
@@ -380,9 +455,17 @@ export default function DashboardClient({
             <div className="status-message">
               Choose a plan to add games and start creator monitoring. There is no free monitoring plan.
             </div>
+          ) : cooldownBlocking ? (
+            <div className="status-message">
+              A recently removed active-game slot is cooling down for 12 hours. The next slot unlocks in {cooldownTimeLeft(nextSlotAvailableAt)}.
+            </div>
           ) : atGameLimit ? (
             <div className="status-message">
-              You are using all {gameLimit} active monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or change your plan in Settings to monitor another title.
+              You are using all {gameLimit} monitoring slot{gameLimit === 1 ? "" : "s"} on {planLabel}. Pause a game or change your plan in Settings to monitor another title.
+            </div>
+          ) : cooldownSlots > 0 ? (
+            <div className="status-message">
+              {cooldownSlots} removed game slot{cooldownSlots === 1 ? " is" : "s are"} cooling down for 12 hours. You still have {availableSlots} active slot{availableSlots === 1 ? "" : "s"} available now.
             </div>
           ) : null}
 
@@ -398,10 +481,12 @@ export default function DashboardClient({
               <div className="dashboard-panel-body">
                 <div className="settings-row" style={{ borderTop: 0 }}>
                   <div><strong>1. Add a game</strong><p>{hasPaidPlan ? `Enter the title and optional aliases so ${BRAND.name} knows what to look for.` : "Choose a plan first, then add the title and optional aliases you want to monitor."}</p></div>
-                  {hasPaidPlan ? (
-                    <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
-                  ) : (
+                  {!hasPaidPlan ? (
                     <Link className="btn btn-primary" href={PLANS_HREF}>Add first game</Link>
+                  ) : cooldownBlocking ? (
+                    <button className="btn btn-primary" disabled>Slot cooling down</button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={openNewMonitor} disabled={busy}>Add first game</button>
                   )}
                 </div>
                 <div className="settings-row">
@@ -432,7 +517,11 @@ export default function DashboardClient({
           <section className="dashboard-panel" id="games">
             <div className="dashboard-panel-head">
               <div><div className="panel-title">Tracked portfolio</div><h2>Your games</h2></div>
-              <span className="tiny">{hasPaidPlan ? `YouTube + Twitch active · ${activeGames}/${gameLimit} active slots used` : "Monitoring requires an active plan · 0/0 active slots used"}</span>
+              <span className="tiny">
+                {hasPaidPlan
+                  ? `YouTube + Twitch active · ${activeGames}/${gameLimit} active${cooldownSlots > 0 ? ` · ${cooldownSlots} cooling down` : ""}`
+                  : "Monitoring requires an active plan · 0/0 active slots used"}
+              </span>
             </div>
             <div className="dashboard-panel-body">
               {games.length ? games.map((game) => {
@@ -450,10 +539,10 @@ export default function DashboardClient({
                         <Link className="icon-btn" href={PLANS_HREF}>Choose plan</Link>
                       ) : (
                         <button className="icon-btn" disabled={busy || (!game.enabled && atGameLimit)} onClick={() => toggleGame(game)}>
-                          {game.enabled ? "Pause" : atGameLimit ? "No available slot" : "Resume"}
+                          {game.enabled ? "Pause" : atGameLimit ? cooldownBlocking ? "Slot cooling down" : "No available slot" : "Resume"}
                         </button>
                       )}
-                      <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game.id)}>Remove</button>
+                      <button className="icon-btn danger" disabled={busy} onClick={() => removeGame(game)}>Remove</button>
                     </div>
                   </div>
                 );
