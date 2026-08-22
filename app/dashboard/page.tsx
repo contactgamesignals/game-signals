@@ -17,6 +17,15 @@ type DashboardStatsRow = {
   total_reach: number | string | null;
 };
 
+type GameSlotStateRow = {
+  active_games: number | string | null;
+  cooldown_slots: number | string | null;
+  allowed_slots: number | string | null;
+  effective_used_slots: number | string | null;
+  available_slots: number | string | null;
+  next_slot_available_at: string | null;
+};
+
 export default async function DashboardPage() {
   if (!isSupabaseConfigured()) {
     return (
@@ -69,6 +78,7 @@ export default async function DashboardPage() {
     { data: youtubeMentionsData },
     { data: twitchMentionsData },
     { data: statsData },
+    { data: slotStateData },
   ] = await Promise.all([
     supabase
       .from("games")
@@ -95,6 +105,7 @@ export default async function DashboardPage() {
       .order("detected_at", { ascending: false })
       .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
     supabase.rpc("dashboard_signal_stats", { p_workspace_id: workspaceId }),
+    supabase.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
@@ -103,6 +114,7 @@ export default async function DashboardPage() {
     ...((twitchMentionsData ?? []) as DashboardMention[]),
   ].sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
   const statsRow = ((statsData ?? [])[0] ?? null) as DashboardStatsRow | null;
+  const slotStateRow = ((slotStateData ?? [])[0] ?? null) as GameSlotStateRow | null;
   const fallbackCreators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const fallbackReach = mentions.reduce(
     (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
@@ -127,6 +139,8 @@ export default async function DashboardPage() {
       initialGames={games}
       initialMentions={mentions}
       initialStats={initialStats}
+      initialCooldownSlots={Number(slotStateRow?.cooldown_slots ?? 0)}
+      initialNextSlotAvailableAt={slotStateRow?.next_slot_available_at ?? null}
     />
   );
 }
