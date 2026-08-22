@@ -7,7 +7,7 @@ import type { DashboardGame, DashboardMention } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const DASHBOARD_MENTIONS_PER_PLATFORM = 100;
+const DASHBOARD_MENTIONS_PER_PLATFORM = 250;
 const DASHBOARD_MENTION_SELECT = "id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title, workspace_id)";
 
 type DashboardStatsRow = {
