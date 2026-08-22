@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizePlan } from "@/lib/plans";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 
@@ -71,6 +72,7 @@ export default async function DashboardPage() {
     : membershipData.workspaces;
   const workspaceId = membershipData.workspace_id as string;
   const workspaceName = (workspaceValue?.name as string | undefined) ?? "My studio";
+  const admin = getSupabaseAdminClient();
 
   const [
     { data: gamesData },
@@ -105,7 +107,7 @@ export default async function DashboardPage() {
       .order("detected_at", { ascending: false })
       .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
     supabase.rpc("dashboard_signal_stats", { p_workspace_id: workspaceId }),
-    supabase.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
+    admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
