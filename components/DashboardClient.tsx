@@ -40,7 +40,7 @@ type GameConfigResponse = {
 };
 
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
-const DASHBOARD_MENTIONS_PER_PLATFORM = 100;
+const DASHBOARD_MENTIONS_PER_PLATFORM = 250;
 const PENDING_GAME_STORAGE_KEY = "who-plays-my-game-pending-game";
 const LEGACY_PENDING_GAME_STORAGE_KEY = "gamesignal-pending-game";
 const PLANS_HREF = "/dashboard/settings";
@@ -473,7 +473,7 @@ export default function DashboardClient({
               <div>
                 <div className="panel-title">Detected content</div>
                 <h2>Latest mentions</h2>
-                <span className="tiny">Up to 100 recent signals per platform are shown here for a fast dashboard.</span>
+                <span className="tiny">Up to 250 recent signals per platform are shown here for a fast dashboard.</span>
               </div>
               <div className="tabs">
                 {(["all", "youtube", "twitch"] as const).map((item) => (
