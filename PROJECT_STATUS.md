@@ -51,9 +51,11 @@ Implemented and production-backed:
 - Twitch live-stream monitoring
 - Supabase-backed creator-signal dashboard
 - realtime mention updates
+- dashboard history balanced per platform, up to 250 recent YouTube and 250 recent Twitch signals
 - aliases and exclusion terms
 - game create/edit/pause/resume/remove flows
 - database-enforced plan limits
+- 12-hour deleted active-game slot cooldown
 - Discord alerts for active paid plans
 - opt-in daily email digests for active paid plans
 - CSV signal export
@@ -65,6 +67,23 @@ Implemented and production-backed:
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe
 
 Kick remains intentionally unavailable. Do not implement scraping or private endpoints as a workaround.
+
+## Game slot cooldown
+
+Deleting an active tracked game does not make its monitoring slot immediately reusable. That specific freed slot is reserved for 12 hours to prevent rapid game swapping.
+
+The rule is slot-based, not an account-wide lock:
+
+- effective used slots = active games + non-expired deleted-slot cooldowns
+- previously unused plan capacity remains available immediately
+- deleting a paused game creates no cooldown because it does not free an active slot
+- pausing a game itself does not create a cooldown
+- adding a game and resuming a paused game are both protected by the same database-enforced effective-slot limit
+- concurrent add/delete requests are serialized per workspace so they cannot race around the rule
+- cooldown records are stored in the non-public `private` schema
+- cooldown state is read only by server-side service-role code; it is not directly callable by authenticated clients
+
+Example on a 5-slot plan: 4 active games -> delete one active game -> 3 active + 1 cooling slot = 4 effective slots, so one new game can still be added. After that addition, 4 active + 1 cooling slot = 5 effective slots and another add is blocked until the cooldown expires.
 
 ## Authentication and signup legal evidence
 
@@ -181,6 +200,10 @@ Do not blindly change these notices without rechecking worker dependencies and a
 - no-plan/free active-game limit: 0
 - paid-plan features: SAME across Indie/Studio/Publisher/Crazy; capacity differs
 - limits: 0 / 1 / 5 / 15 / 30
+- deleting an active game reserves exactly that freed slot for 12 hours
+- deleting a paused game creates no slot cooldown
+- unused plan capacity remains usable while other deleted slots cool down
+- dashboard history: up to 250 YouTube + 250 Twitch signals
 - Paddle runtime: LIVE
 - Paddle LIVE checkout: ON
 - real LIVE paid subscription: ACTIVE and webhook-synchronized
