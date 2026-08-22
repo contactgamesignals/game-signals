@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +11,6 @@ type CreateGameBody = {
   steamUrl?: string;
   aliases?: string;
   excludes?: string;
-};
-
-type GameSlotState = {
-  active_games: number;
-  cooldown_slots: number;
-  allowed_slots: number;
-  effective_used_slots: number;
-  available_slots: number;
-  next_slot_available_at: string | null;
 };
 
 function parseTerms(value: string | undefined) {
@@ -89,20 +80,16 @@ export async function POST(request: Request) {
   }
 
   const workspaceId = membership.workspace_id as string;
-  const admin = getSupabaseAdminClient();
-  const [
-    { data: subscription },
-    { data: slotStateData, error: slotStateError },
-  ] = await Promise.all([
+  const [{ data: subscription }, slotStateResult] = await Promise.all([
     supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
-    admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
+    readGameSlotState(workspaceId),
   ]);
 
-  if (slotStateError) {
+  if (slotStateResult.error) {
     return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
   }
 
-  const slotState = ((slotStateData ?? [])[0] ?? null) as GameSlotState | null;
+  const slotState = slotStateResult.state;
   const plan = subscription?.status === "active" || subscription?.status === "trialing"
     ? normalizePlan(subscription?.plan)
     : "free";
@@ -137,11 +124,8 @@ export async function POST(request: Request) {
     const cooldownBlocked = error?.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
 
     if (cooldownBlocked) {
-      const { data: refreshedStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
-        p_workspace_id: workspaceId,
-      });
-      const refreshedState = ((refreshedStateData ?? [])[0] ?? null) as GameSlotState | null;
-      return cooldownResponse(refreshedState);
+      const refreshedState = await readGameSlotState(workspaceId);
+      return cooldownResponse(refreshedState.state);
     }
 
     return NextResponse.json(
