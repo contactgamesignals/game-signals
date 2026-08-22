@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
 
 const GAME_SELECT = "id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at";
 const GAME_SLOT_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-
-type GameSlotState = {
-  active_games: number;
-  cooldown_slots: number;
-  allowed_slots: number;
-  effective_used_slots: number;
-  available_slots: number;
-  next_slot_available_at: string | null;
-};
 
 function parseTerms(value: unknown) {
   if (typeof value !== "string") return [];
@@ -108,7 +99,6 @@ export async function PATCH(
     }
 
     let targetWorkspaceId: string | null = null;
-    const admin = getSupabaseAdminClient();
 
     if (body.enabled) {
       const { data: targetGame, error: targetGameError } = await supabase
@@ -120,23 +110,20 @@ export async function PATCH(
       if (!targetGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
       targetWorkspaceId = targetGame.workspace_id as string;
-      const [
-        { data: subscription },
-        { data: slotStateData, error: slotStateError },
-      ] = await Promise.all([
+      const [{ data: subscription }, slotStateResult] = await Promise.all([
         supabase
           .from("subscriptions")
           .select("plan, status")
           .eq("workspace_id", targetWorkspaceId)
           .maybeSingle(),
-        admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: targetWorkspaceId }),
+        readGameSlotState(targetWorkspaceId),
       ]);
 
-      if (slotStateError) {
+      if (slotStateResult.error) {
         return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
       }
 
-      const slotState = ((slotStateData ?? [])[0] ?? null) as GameSlotState | null;
+      const slotState = slotStateResult.state;
       const plan = subscription?.status === "active" || subscription?.status === "trialing"
         ? normalizePlan(subscription?.plan)
         : "free";
@@ -171,11 +158,8 @@ export async function PATCH(
     if (error) {
       const cooldownBlocked = error.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
       if (cooldownBlocked && targetWorkspaceId) {
-        const { data: refreshedStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
-          p_workspace_id: targetWorkspaceId,
-        });
-        const refreshedState = ((refreshedStateData ?? [])[0] ?? null) as GameSlotState | null;
-        return cooldownResponse(refreshedState);
+        const refreshedState = await readGameSlotState(targetWorkspaceId);
+        return cooldownResponse(refreshedState.state);
       }
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -273,11 +257,8 @@ export async function DELETE(
 
   let slotState: GameSlotState | null = null;
   if (cooldownCreated) {
-    const admin = getSupabaseAdminClient();
-    const { data: slotStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
-      p_workspace_id: deletedGame.workspace_id,
-    });
-    slotState = ((slotStateData ?? [])[0] ?? null) as GameSlotState | null;
+    const slotStateResult = await readGameSlotState(deletedGame.workspace_id as string);
+    slotState = slotStateResult.state;
   }
 
   return NextResponse.json({
