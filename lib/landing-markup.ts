@@ -117,6 +117,7 @@ const developerStory = `<section class="section developer-proof-section" id="bui
             <h2>We needed this for our own game too.</h2>
             <p>Who Plays My Game is built by the team at Lumino Games, developers of AFTERBLAST. We know what it is like to keep searching YouTube and Twitch to find out whether someone covered your game, started a stream, or mentioned it without ever contacting the studio.</p>
             <p>We built one place that watches for those moments automatically, so game teams can react while the creator activity still matters.</p>
+            <p><strong>Turn creator coverage into community momentum.</strong> Respond to YouTube videos and Twitch streams while the conversation is fresh. Fast interaction with content creators and their audiences can help game developers build stronger community engagement, reach more potential players, and encourage more positive Steam reviews.</p>
           </div>
           <div class="developer-proof-side">
             <span class="developer-proof-label">FROM THE TEAM BEHIND</span>
