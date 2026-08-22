@@ -1,8 +1,8 @@
 # Who Plays My Game - current project status
 
-Last updated: 2026-08-18.
+Last updated: 2026-08-22.
 
-This file is the compact source of truth for the current product state. Historical GameSignal readiness/checkpoint files remain audit history. Current code, runtime and this document take precedence where older notes conflict.
+This file is the compact source of truth for the current product state. Current code, production runtime and this document take precedence where older readiness/checkpoint notes conflict. Historical GameSignal identifiers and immutable billing/legal evidence remain unchanged for compatibility and audit continuity.
 
 ## Brand and operator
 
@@ -16,9 +16,7 @@ This file is the compact source of truth for the current product state. Historic
 - NIP: `6762600090`
 - REGON: `389433660`
 
-The support phone is intentionally kept in operator/legal contact information and transactional agreement confirmation rather than promoted in marketing copy.
-
-Historical technical identifiers such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and some evidence labels remain intentionally unchanged for compatibility and audit continuity. Historical frozen billing/contract evidence is not rewritten when current operator data changes.
+Historical technical names such as `GAMESIGNAL_*`, repository/project name `game-signals`, migration names and evidence labels remain intentionally unchanged where renaming would create compatibility or audit risk.
 
 ## Writing style invariant
 
@@ -26,21 +24,24 @@ Do not use Unicode en dash or em dash characters in product copy, emails, genera
 
 ## Public launch state
 
-Free public beta signup is OPEN.
+Public signup is OPEN.
 
-A new Free workspace can track one active game. Free signup creates no payment obligation. Public registration is enabled in both the frontend and database.
+A new workspace starts without a paid plan. The current database-enforced active-game limit for the no-plan/free state is 0, so active monitoring requires a paid subscription. Account creation itself creates no payment obligation.
 
-Paddle LIVE checkout is now technically enabled for the final end-to-end launch test. A LIVE checkout has been created successfully, but the first real payment has not yet been completed. Treat paid launch as final-validation-in-progress until the completed transaction, webhook synchronization, active subscription and Customer Portal are confirmed.
+Paddle LIVE is the current new-sales route. A real LIVE Paddle subscription has been paid, synchronized by webhook and is active in production with stored LIVE customer/subscription identity. Customer Portal support is active.
 
 ## Paid plan model
 
-Indie, Studio and Publisher intentionally have the same paid feature set and the same paid monitoring cadence. The only commercial difference between paid tiers is the number of active monitored games:
+All paid plans intentionally have the same feature set. The commercial difference is active-game capacity:
 
-- Indie: 1 active game
-- Studio: up to 3 active games
-- Publisher: up to 10 active games
+- Indie: 1 active game - $2.99/month or $29.90/year
+- Studio: up to 5 active games - $7.99/month or $79.90/year
+- Publisher: up to 15 active games - $14.99/month or $149.90/year
+- Crazy Dev / Big Publisher: up to 30 active games - $24.99/month or $249.90/year
 
-Every active paid plan includes YouTube and Twitch monitoring, Discord alerts, opt-in daily email digest, CSV signal export, aliases/exclusion terms, pause/resume, billing portal access and the fastest paid monitoring cadence. Do not reintroduce feature gating between Indie, Studio and Publisher unless the product model is explicitly changed again.
+Every active paid plan includes YouTube and Twitch monitoring, realtime creator-signal dashboard, Discord alerts, opt-in daily email digest, CSV signal export, aliases/exclusion terms, pause/resume and billing portal access.
+
+Do not reintroduce feature gating between paid tiers unless the product model is explicitly changed again.
 
 ## Live product
 
@@ -48,63 +49,53 @@ Implemented and production-backed:
 
 - YouTube video monitoring
 - Twitch live-stream monitoring
-- real Supabase-backed creator-signal dashboard
+- Supabase-backed creator-signal dashboard
+- realtime mention updates
 - aliases and exclusion terms
 - game create/edit/pause/resume/remove flows
-- realtime mention updates
-- Discord alerts for every active paid plan
-- opt-in daily email digests for every active paid plan
-- plan-based active-game limits
-- CSV signal export for every active paid plan
+- database-enforced plan limits
+- Discord alerts for active paid plans
+- opt-in daily email digests for active paid plans
+- CSV signal export
 - account/workspace settings, export and guarded deletion
 - public Terms, Privacy, Withdrawal and Refund Policy pages
-- Paddle Merchant of Record billing integration verified in Sandbox and staged in LIVE
-- Paddle Customer Portal integration
+- Paddle Merchant of Record LIVE checkout and webhook synchronization
+- Paddle Customer Portal
+- in-app Paddle paid-plan changes
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe
 
 Kick remains intentionally unavailable. Do not implement scraping or private endpoints as a workaround.
 
 ## Authentication and signup legal evidence
 
-Production Auth is configured on the canonical domain with:
+Production Auth uses the canonical domain and supports:
 
 - email/password signup and login
 - forgot/reset password
 - Resend custom SMTP on verified `auth.whoplaysmygame.com`
 - Cloudflare Turnstile enforced server-side on public email/password auth flows
 
-Real recovery email delivery and real browser login with Turnstile were verified. Requests without CAPTCHA were rejected with `captcha_failed`.
+Public signup requires visible acceptance of current Terms and acknowledgement of the Privacy Policy. The database independently fail-closes signup unless current legal-version metadata is present, and accepted versions/timestamp are stored in service-role-only evidence.
 
-Public signup requires a visible checkbox agreeing to current Terms and acknowledging the Privacy Policy. The frontend sends exact legal versions in Supabase user metadata.
+The account agreement confirmation flow is ACTIVE. It sends a concise branded email plus `who-plays-my-game-account-agreement.pdf`, freezes the full confirmation text before sending, verifies its SHA-256, uses Resend idempotency and persists delivery state.
 
-The database trigger `handle_new_user()` independently fail-closes signup unless it receives current acceptance metadata. Accepted versions and a database timestamp are stored in service-role-only `account_legal_acceptances`. New subscriptions created by signup are Free and default to `billing_provider='paddle'`.
+## Monitoring and notification runtime
 
-## Account agreement confirmation
+Active production workers/schedulers:
 
-The database stores delivery evidence for the signup agreement confirmation: frozen confirmation text, SHA-256, status, provider message ID, attempts, sent timestamp and error state.
+- Twitch scanner
+- YouTube scanner
+- Discord notification worker
+- daily email digest worker
 
-Supabase Edge Function `send-account-agreement-confirmation` is ACTIVE. Current version sends:
+Current cadence logic:
 
-- a concise branded welcome/account-ready email
-- a PDF attachment named `who-plays-my-game-account-agreement.pdf` containing the full durable account agreement confirmation
-- direct links to dashboard, Terms, Privacy and Withdrawal information
+- Twitch: 10 minutes when a game is due
+- YouTube paid: 30 minutes when due
+- YouTube no-plan/free cadence value: 120 minutes, although the current no-plan/free active-game limit is 0
+- daily email digest: once daily at `06:00 UTC`
 
-The function still freezes the full confirmation text before sending, verifies its SHA-256, uses a Resend idempotency key and persists sending/delivered/failed/needs_review state.
-
-Future confirmations use the current registered address and ASCII-safe PDF typography. Already frozen/delivered historical confirmations remain immutable and are not rewritten.
-
-## Monitoring and email runtime
-
-Active:
-
-- Twitch Edge Function and scheduler
-- YouTube Edge Function and scheduler
-- Discord notification worker and scheduler
-- daily email digest worker and scheduler
-
-Paid monitoring cadence is intentionally uniform across Indie, Studio and Publisher: Twitch every 2 minutes and YouTube every 30 minutes when due. Free remains on the slower Free cadence.
-
-The product digest runs once daily at `06:00 UTC`, processes the previous complete UTC day, sends nothing when no matching signals exist, groups by recipient and is capped at one digest per recipient per day. Resend idempotency protects against retry duplicates.
+The Twitch scheduler itself runs every minute and the scanner checks each game's due time. The YouTube scheduler runs every 15 minutes and similarly processes due games. Discord delivery runs every minute. The daily digest processes the previous complete UTC day, sends nothing when there are no matching signals and uses idempotency to protect against duplicates.
 
 Do not replace daily digest email with instant per-signal email. Realtime belongs in dashboard and Discord.
 
@@ -112,79 +103,55 @@ Do not replace daily digest email with instant per-signal email. Realtime belong
 
 - Vercel production hosting
 - apex redirects to `www`
-- Cloudflare DNS records remain DNS-only for Vercel
-- legacy `game-signals.vercel.app` permanently redirects matching paths to the canonical host
+- Cloudflare DNS records for Vercel remain DNS-only
+- legacy `game-signals.vercel.app` redirects matching paths to the canonical host
 - canonical metadata uses `www.whoplaysmygame.com`
 - `/robots.txt` and `/sitemap.xml` are live
 - dedicated SEO pages exist for Twitch stream alerts, YouTube game monitoring and game creator monitoring
 
-## Billing
+## Paddle billing
 
-### Paddle Merchant of Record - current customer route
+Paddle is the current Merchant of Record route for new subscriptions. Existing Stripe-backed records remain Stripe-associated and are not silently converted.
 
-New subscription records default to Paddle. Existing Stripe-backed records remain Stripe-associated.
+LIVE production configuration includes:
 
-Prices:
-
-- Indie: $2.99/month or $29.90/year
-- Studio: $7.99/month or $79.90/year
-- Publisher: $14.99/month or $149.90/year
-
-The price difference represents active-game capacity only, not feature access.
-
-Sandbox verified transaction creation, webhook synchronization, Paddle-Signature verification, active subscription state, customer/subscription IDs, Customer Portal, end-of-period cancellation and duplicate-subscription protection.
-
-One historical Paddle Sandbox subscription remains on the internal `luminotax@gmail.com` test workspace. Its billing environment is explicitly `sandbox`, so its customer/subscription IDs are never sent to the LIVE Paddle API.
-
-### Paddle LIVE - current state
-
-Completed:
-
-- business verification passed
-- identity verification passed
-- three products and six LIVE prices created
-- all six LIVE `pri_...` IDs mapped in application billing code
-- LIVE API key stored in Supabase
-- LIVE client-side token stored in Vercel Production
-- LIVE notification destination created for the Supabase `paddle-webhook` endpoint
-- LIVE webhook signing secret stored in Supabase
-- domain accepted for LIVE checkout
-- default payment link configured
-- PayPal, Apple Pay and Google Pay enabled in addition to cards
-- payout settings configured for Lumino Games
-- Paddle runtime switched to `live`
+- verified business/account
+- LIVE API key stored only server-side
+- LIVE Paddle.js client token in Vercel Production
+- LIVE webhook destination and signing secret
+- approved checkout domain and default payment link
+- PayPal, Apple Pay and Google Pay in addition to cards where Paddle makes them available
+- `PADDLE_ENV=live`
 - `PADDLE_BILLING_ENABLED=true`
 - `PADDLE_LIVE_BILLING_ENABLED=true`
-- Sandbox checkout remains disabled
-- `/pay` confirmed to load Paddle.js with a LIVE client token
-- first LIVE checkout transaction successfully created for Indie monthly
-- LIVE checkout displayed correct $2.99 total and Polish VAT calculation
+- public Sandbox checkout disabled
+- all four paid plans mapped to LIVE Paddle prices
 
-Current final validation transaction:
+A real LIVE Indie monthly subscription is currently active and synchronized in Supabase. Its current period ends on 2026-09-21. LIVE customer and subscription IDs are stored and Customer Portal integration is available.
 
-- transaction ID: `txn_01m08zermaw59av5apry5kae85`
-- plan: Indie
-- billing period: monthly
-- buyer type: individual
-- consent evidence recorded
-- workspace billing environment: `live`
-- transaction has not yet been paid
+A historical Paddle Sandbox subscription is retained for internal test history. Billing environment is stored per subscription so Sandbox identity is never sent to the LIVE Paddle API.
 
-Still required before declaring paid launch fully validated:
+### In-app Change Plan
 
-- complete one real LIVE payment
-- confirm Paddle transaction reaches completed status
-- confirm LIVE webhook deliveries return 2xx
-- confirm Supabase subscription changes from Free to active Indie
-- confirm LIVE Paddle customer and subscription IDs are stored
-- confirm Customer Portal opens for the new LIVE customer
-- cancel/refund the internal validation subscription if desired after testing
+Implemented on production:
+
+- current billing period is preserved during this flow
+- immediate upgrade uses Paddle proration and charges only the calculated difference for the remainder of the period
+- upgrade can instead be scheduled for the next renewal
+- downgrade is allowed only for the next renewal
+- downgrade is blocked until active games fit the target plan limit
+- the system never chooses games to pause automatically
+- scheduled changes use `pending_plan`, `pending_plan_effective_at` and `pending_plan_requested_at`
+- current entitlement stays active until the scheduled renewal is successfully paid
+- monthly-to-yearly and yearly-to-monthly switching is intentionally deferred to a separate future flow
+
+On 2026-08-22 the first LIVE Change Plan preview exposed `not authorized to read subscription`. Production data remained unchanged. The cause was missing Paddle API-key subscription permission, not database corruption or a plan-change code failure. The existing LIVE key was updated to `Subscriptions: Write`, which also supplies the read access required by the preview. A post-permission end-to-end retry is the current validation step.
 
 ## Legacy Stripe and KSeF
 
-Stripe LIVE is OFF for new sales. KSeF PROD is OFF. Legacy direct Stripe/KSeF infrastructure is preserved only for rollback/history and is separated from the current Paddle route.
+Stripe LIVE is OFF for new sales. KSeF PROD is OFF. Legacy direct Stripe/KSeF infrastructure remains only for rollback/history and is separated from the current Paddle route.
 
-The old Stripe tax-ID reconciliation function remains deployed, but its scheduler is disabled because there are no reconciliation candidates.
+The old Stripe tax-ID reconciliation function remains deployed but its scheduler is disabled.
 
 Do not rewrite immutable historical direct-billing evidence just to match current branding, address or style.
 
@@ -198,32 +165,39 @@ Current versions:
 
 Operator contact uses the current registered address, support email and public support phone. `/refunds` provides the standalone Refund Policy URL used for Paddle verification.
 
-Future Paddle checkout consent records use current Terms/Privacy versions.
-
 ## Security
 
-Known reviewed Supabase advisor notices:
+Known reviewed Supabase advisor notices remain intentionally tracked:
 
-- Leaked Password Protection remains unavailable on the current Supabase Free plan
-- `pg_net` remains in public because the scheduler depends on pg_cron and pg_net
-- RLS-without-policy INFO notices concern internal service-role-only billing tables with no `anon` or `authenticated` access
+- Leaked Password Protection is unavailable/disabled in the current setup
+- `pg_net` remains in `public` because the scheduler depends on pg_cron and pg_net
+- RLS-without-policy INFO notices concern internal service-role-only billing/legal tables with no client policy by design
 
-RLS is enabled on reviewed public application/billing tables. Workspace helpers use `auth.uid()`, SECURITY DEFINER, fixed search paths and no client CREATE permission in the private schema.
+Do not blindly change these notices without rechecking worker dependencies and access-control intent.
 
-## Launch invariants
+## Current launch invariants
 
-- Free public beta signup: OPEN
-- paid-plan features: SAME across Indie/Studio/Publisher; only active-game limit differs
-- public Paddle Sandbox new checkout: OFF
+- public signup: OPEN
+- no-plan/free active-game limit: 0
+- paid-plan features: SAME across Indie/Studio/Publisher/Crazy; capacity differs
+- limits: 0 / 1 / 5 / 15 / 30
 - Paddle runtime: LIVE
-- Paddle LIVE checkout gate: ON for final validation
-- first real LIVE payment: NOT YET COMPLETED
+- Paddle LIVE checkout: ON
+- real LIVE paid subscription: ACTIVE and webhook-synchronized
+- Paddle Customer Portal: ACTIVE
+- in-app Change Plan: IMPLEMENTED, final LIVE path validation in progress
+- Paddle LIVE API key subscription permission: WRITE enabled on 2026-08-22
+- public Paddle Sandbox new checkout: OFF
 - Stripe LIVE new sales: OFF
 - KSeF PROD: OFF
 - Kick: OFF
 - Turnstile: ON
 - Auth email: ON through Resend
-- account agreement email: concise body plus PDF attachment
+- account agreement confirmation: ON, concise body plus PDF attachment
 - product email: opt-in daily digest only
 - no secrets committed to Git
 - preserve RLS and worker authorization
+
+## Next validation step
+
+Retry the existing LIVE Indie -> Studio Change Plan preview after the Paddle permission update. First verify that Paddle returns the exact preview amounts without changing the subscription. Then separately validate immediate upgrade, next-renewal upgrade and downgrade paths before considering Change Plan fully closed.
