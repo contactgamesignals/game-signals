@@ -7,6 +7,9 @@ import type { DashboardGame, DashboardMention } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+const DASHBOARD_MENTIONS_PER_PLATFORM = 100;
+const DASHBOARD_MENTION_SELECT = "id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title, workspace_id)";
+
 type DashboardStatsRow = {
   signal_count: number | string | null;
   live_now_count: number | string | null;
@@ -63,7 +66,8 @@ export default async function DashboardPage() {
   const [
     { data: gamesData },
     { data: subscriptionData },
-    { data: mentionsData },
+    { data: youtubeMentionsData },
+    { data: twitchMentionsData },
     { data: statsData },
   ] = await Promise.all([
     supabase
@@ -78,15 +82,26 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("mentions")
-      .select("id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title, workspace_id)")
+      .select(DASHBOARD_MENTION_SELECT)
       .eq("games.workspace_id", workspaceId)
+      .eq("platform", "youtube")
       .order("detected_at", { ascending: false })
-      .limit(100),
+      .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
+    supabase
+      .from("mentions")
+      .select(DASHBOARD_MENTION_SELECT)
+      .eq("games.workspace_id", workspaceId)
+      .eq("platform", "twitch")
+      .order("detected_at", { ascending: false })
+      .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
     supabase.rpc("dashboard_signal_stats", { p_workspace_id: workspaceId }),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
-  const mentions = (mentionsData ?? []) as DashboardMention[];
+  const mentions = [
+    ...((youtubeMentionsData ?? []) as DashboardMention[]),
+    ...((twitchMentionsData ?? []) as DashboardMention[]),
+  ].sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
   const statsRow = ((statsData ?? [])[0] ?? null) as DashboardStatsRow | null;
   const fallbackCreators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const fallbackReach = mentions.reduce(
