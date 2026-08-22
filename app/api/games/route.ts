@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,23 @@ function parseTerms(value: string | undefined) {
   return Array.from(new Set(
     (value ?? "").split(",").map((item) => item.trim()).filter(Boolean),
   )).slice(0, 20);
+}
+
+function cooldownResponse(state: GameSlotState | null) {
+  const cooldownUntil = state?.next_slot_available_at ?? null;
+  const headers: Record<string, string> = {};
+  if (cooldownUntil) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000));
+    headers["Retry-After"] = String(retryAfterSeconds);
+  }
+
+  return NextResponse.json(
+    {
+      error: "A recently removed game slot is still cooling down. Removed active-game slots unlock 12 hours after deletion.",
+      cooldownUntil,
+    },
+    { status: 429, headers },
+  );
 }
 
 export async function POST(request: Request) {
@@ -62,15 +80,16 @@ export async function POST(request: Request) {
   }
 
   const workspaceId = membership.workspace_id as string;
-  const [{ count }, { data: subscription }] = await Promise.all([
-    supabase
-      .from("games")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("enabled", true),
+  const [{ data: subscription }, slotStateResult] = await Promise.all([
     supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
+    readGameSlotState(workspaceId),
   ]);
 
+  if (slotStateResult.error) {
+    return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
+  }
+
+  const slotState = slotStateResult.state;
   const plan = subscription?.status === "active" || subscription?.status === "trialing"
     ? normalizePlan(subscription?.plan)
     : "free";
@@ -82,9 +101,14 @@ export async function POST(request: Request) {
     );
   }
 
-  if ((count ?? 0) >= PLAN_LIMITS[plan].games) {
+  const gameLimit = PLAN_LIMITS[plan].games;
+  if (slotState && slotState.effective_used_slots >= gameLimit) {
+    if (slotState.cooldown_slots > 0 && slotState.active_games < gameLimit) {
+      return cooldownResponse(slotState);
+    }
+
     return NextResponse.json(
-      { error: `Your ${plan} plan supports up to ${PLAN_LIMITS[plan].games} active game(s). Pause a game or change plan to free a slot.` },
+      { error: `Your ${plan} plan supports up to ${gameLimit} active game(s). Pause a game or change plan to free a slot.` },
       { status: 403 },
     );
   }
@@ -97,6 +121,13 @@ export async function POST(request: Request) {
 
   if (error || !game) {
     const duplicate = error?.code === "23505";
+    const cooldownBlocked = error?.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
+
+    if (cooldownBlocked) {
+      const refreshedState = await readGameSlotState(workspaceId);
+      return cooldownResponse(refreshedState.state);
+    }
+
     return NextResponse.json(
       { error: duplicate ? "This game is already tracked." : error?.message ?? "Could not create the game." },
       { status: duplicate ? 409 : 500 },

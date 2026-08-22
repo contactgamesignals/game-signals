@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
 
 const GAME_SELECT = "id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at";
+const GAME_SLOT_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 function parseTerms(value: unknown) {
   if (typeof value !== "string") return [];
@@ -20,6 +22,23 @@ function validHttpUrl(value: string | null) {
   } catch {
     return false;
   }
+}
+
+function cooldownResponse(state: GameSlotState | null) {
+  const cooldownUntil = state?.next_slot_available_at ?? null;
+  const headers: Record<string, string> = {};
+  if (cooldownUntil) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000));
+    headers["Retry-After"] = String(retryAfterSeconds);
+  }
+
+  return NextResponse.json(
+    {
+      error: "A recently removed game slot is still cooling down. Removed active-game slots unlock 12 hours after deletion.",
+      cooldownUntil,
+    },
+    { status: 429, headers },
+  );
 }
 
 export async function GET(
@@ -79,6 +98,8 @@ export async function PATCH(
       return NextResponse.json({ error: "No supported update was provided." }, { status: 400 });
     }
 
+    let targetWorkspaceId: string | null = null;
+
     if (body.enabled) {
       const { data: targetGame, error: targetGameError } = await supabase
         .from("games")
@@ -88,19 +109,21 @@ export async function PATCH(
       if (targetGameError) return NextResponse.json({ error: targetGameError.message }, { status: 400 });
       if (!targetGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
-      const [{ count }, { data: subscription }] = await Promise.all([
-        supabase
-          .from("games")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", targetGame.workspace_id)
-          .eq("enabled", true),
+      targetWorkspaceId = targetGame.workspace_id as string;
+      const [{ data: subscription }, slotStateResult] = await Promise.all([
         supabase
           .from("subscriptions")
           .select("plan, status")
-          .eq("workspace_id", targetGame.workspace_id)
+          .eq("workspace_id", targetWorkspaceId)
           .maybeSingle(),
+        readGameSlotState(targetWorkspaceId),
       ]);
 
+      if (slotStateResult.error) {
+        return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
+      }
+
+      const slotState = slotStateResult.state;
       const plan = subscription?.status === "active" || subscription?.status === "trialing"
         ? normalizePlan(subscription?.plan)
         : "free";
@@ -112,9 +135,14 @@ export async function PATCH(
         );
       }
 
-      if (!targetGame.enabled && (count ?? 0) >= PLAN_LIMITS[plan].games) {
+      const gameLimit = PLAN_LIMITS[plan].games;
+      if (!targetGame.enabled && slotState && slotState.effective_used_slots >= gameLimit) {
+        if (slotState.cooldown_slots > 0 && slotState.active_games < gameLimit) {
+          return cooldownResponse(slotState);
+        }
+
         return NextResponse.json(
-          { error: `Your ${plan} plan already uses all ${PLAN_LIMITS[plan].games} active game slot(s). Pause another game or change plan first.` },
+          { error: `Your ${plan} plan already uses all ${gameLimit} active game slot(s). Pause another game or change plan first.` },
           { status: 403 },
         );
       }
@@ -127,7 +155,14 @@ export async function PATCH(
       .select(GAME_SELECT)
       .maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      const cooldownBlocked = error.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
+      if (cooldownBlocked && targetWorkspaceId) {
+        const refreshedState = await readGameSlotState(targetWorkspaceId);
+        return cooldownResponse(refreshedState.state);
+      }
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (!game) return NextResponse.json({ error: "Game not found." }, { status: 404 });
     return NextResponse.json({ game });
   }
@@ -205,7 +240,32 @@ export async function DELETE(
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  const { error } = await supabase.from("games").delete().eq("id", id);
+  const { data: deletedGame, error } = await supabase
+    .from("games")
+    .delete()
+    .eq("id", id)
+    .select("id, workspace_id, title, enabled")
+    .maybeSingle();
+
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true });
+  if (!deletedGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
+
+  const cooldownCreated = Boolean(deletedGame.enabled);
+  const cooldownUntil = cooldownCreated
+    ? new Date(Date.now() + GAME_SLOT_COOLDOWN_MS).toISOString()
+    : null;
+
+  let slotState: GameSlotState | null = null;
+  if (cooldownCreated) {
+    const slotStateResult = await readGameSlotState(deletedGame.workspace_id as string);
+    slotState = slotStateResult.state;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    cooldownCreated,
+    cooldownUntil,
+    nextSlotAvailableAt: slotState?.next_slot_available_at ?? null,
+    availableSlots: slotState?.available_slots ?? null,
+  });
 }
