@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
 
@@ -88,12 +89,13 @@ export async function POST(request: Request) {
   }
 
   const workspaceId = membership.workspace_id as string;
+  const admin = getSupabaseAdminClient();
   const [
     { data: subscription },
     { data: slotStateData, error: slotStateError },
   ] = await Promise.all([
     supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
-    supabase.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
+    admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
   ]);
 
   if (slotStateError) {
@@ -135,7 +137,7 @@ export async function POST(request: Request) {
     const cooldownBlocked = error?.code === "P0001" && error.message.includes("GAME_SLOT_COOLDOWN");
 
     if (cooldownBlocked) {
-      const { data: refreshedStateData } = await supabase.rpc("workspace_game_slot_cooldown_state", {
+      const { data: refreshedStateData } = await admin.rpc("workspace_game_slot_cooldown_state", {
         p_workspace_id: workspaceId,
       });
       const refreshedState = ((refreshedStateData ?? [])[0] ?? null) as GameSlotState | null;
