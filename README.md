@@ -7,16 +7,19 @@ Production: `https://www.whoplaysmygame.com`
 ## Current product
 
 - Next.js App Router frontend on Vercel.
-- Supabase email/password authentication and protected dashboard.
+- Supabase authentication and protected dashboard.
 - PostgreSQL workspaces, subscriptions, games, aliases, mentions, scan history and notification records.
 - Real YouTube video monitoring and Twitch live-stream monitoring.
 - Realtime creator-signal dashboard.
 - Game aliases and exclusion terms.
-- Database-enforced active-game limits: Free 1, Indie 1, Studio 3, Publisher 10.
-- Discord alerts for eligible plans.
-- Paddle Merchant-of-Record billing integration in SANDBOX, including Checkout and Customer Portal.
-- Stripe direct-billing code retained as a sandbox/rollback and historical accounting path; Stripe LIVE is not enabled.
-- Kick monitoring and production email alerts remain intentionally unavailable.
+- Database-enforced active-game limits: no plan 0, Indie 1, Studio 5, Publisher 15, Crazy 30.
+- Discord alerts for active paid plans.
+- Opt-in daily email digest for active paid plans.
+- CSV signal export.
+- Paddle Merchant-of-Record LIVE billing, Checkout, webhooks and Customer Portal.
+- In-app Paddle plan changes with proration and next-renewal scheduling.
+- Stripe direct-billing code retained only as a legacy/rollback path; Stripe LIVE new sales are off.
+- Kick monitoring remains intentionally unavailable pending supported developer/API access.
 
 ## Production domains
 
@@ -26,7 +29,7 @@ Canonical URL:
 https://www.whoplaysmygame.com
 ```
 
-The apex domain redirects to `www` through Vercel. DNS is delegated through Cloudflare in DNS-only mode for the Vercel records.
+The apex domain redirects to `www` through Vercel. Cloudflare DNS records used by Vercel remain DNS-only.
 
 ## Local setup
 
@@ -45,18 +48,18 @@ Do not commit service-role keys, Paddle/Stripe secrets, platform API keys, Disco
 
 ## Supabase Auth production configuration
 
-The hosted Auth project should use the canonical production domain:
+The hosted Auth project uses the canonical production domain:
 
 ```text
 Site URL: https://www.whoplaysmygame.com
 Redirect URL: https://www.whoplaysmygame.com/auth/callback
 ```
 
-Keep local development redirects separately if needed.
+Cloudflare Turnstile is enforced on public email/password auth flows and Resend provides production auth email delivery.
 
 ## External platform secrets
 
-Real platform scanning uses Supabase Edge Function secrets such as:
+Real platform scanning uses server-side secrets such as:
 
 ```text
 TWITCH_CLIENT_ID
@@ -64,19 +67,24 @@ TWITCH_CLIENT_SECRET
 YOUTUBE_API_KEY
 ```
 
-The internal cron secret is generated/stored through the existing Supabase Vault/runtime setup and is not committed to Git.
+Internal scheduler authorization and all billing credentials remain server-side and are not committed to Git.
 
 ## Billing
 
-New subscription checkout currently defaults to Paddle SANDBOX. The application keeps provider identity per subscription so an existing Stripe-backed subscription is not silently converted to Paddle.
+New paid subscriptions use Paddle LIVE. Provider identity is stored per subscription so legacy Stripe-backed subscriptions are not silently converted.
 
-Paddle-related runtime configuration is deliberately fail-closed. LIVE billing requires a separate explicit LIVE environment/key/unlock and must not be enabled as part of ordinary deployments.
+Current paid plans:
 
-Current Paddle Sandbox price catalog:
+- Indie: 1 active game - $2.99/month or $29.90/year
+- Studio: up to 5 active games - $7.99/month or $79.90/year
+- Publisher: up to 15 active games - $14.99/month or $149.90/year
+- Crazy Dev / Big Publisher: up to 30 active games - $24.99/month or $249.90/year
 
-- Indie: $2.99 monthly / $29.90 yearly
-- Studio: $7.99 monthly / $79.90 yearly
-- Publisher: $14.99 monthly / $149.90 yearly
+All paid plans intentionally share the same feature set.
+
+The in-app Change Plan flow preserves the current monthly/yearly billing period. Upgrades can apply immediately with Paddle proration or at the next renewal. Downgrades apply at the next renewal only and are blocked until the workspace fits the target active-game limit. Monthly/yearly switching is intentionally deferred to a separate future flow.
+
+Paddle Sandbox identity is kept separate from LIVE identity. Public Sandbox checkout is disabled.
 
 ## Edge Functions
 
@@ -87,28 +95,32 @@ scan-twitch
 scan-youtube
 notify-discord
 manage-discord
+manage-email
+notify-email
 paddle-billing
 paddle-webhook
 ```
 
-Some workers deliberately disable Supabase gateway JWT verification because they implement their own authenticated-user or internal-cron authorization. Preserve the existing authorization model when deploying them.
+Some workers deliberately disable Supabase gateway JWT verification because they implement their own authenticated-user, webhook or internal-cron authorization. Preserve the existing authorization model when deploying them.
 
 ## Monitoring cadence
 
-- Twitch scheduler: active, with per-plan due-time logic.
-- YouTube scheduler: active, quota-conscious scheduling.
-- Discord delivery: active.
-- Email delivery scheduler: intentionally inactive until a production sender is ready.
+- Twitch: due every 10 minutes; scheduler checks every minute.
+- YouTube paid: due every 30 minutes; scheduler runs every 15 minutes.
+- Discord delivery: every minute.
+- Daily email digest: 06:00 UTC.
 
 ## Product truth
 
-- YouTube: live.
-- Twitch: live.
-- Discord: live on eligible plans.
-- Paddle: Sandbox only.
-- Kick: coming soon, pending supported developer/API access.
-- Production email alerts: coming soon.
-- Stripe LIVE: off.
-- KSeF production submission: off.
+- YouTube: LIVE.
+- Twitch: LIVE.
+- Discord: LIVE for active paid plans.
+- Daily email digest: LIVE and opt-in.
+- Paddle LIVE Checkout/webhooks/Customer Portal: LIVE.
+- Real Paddle paid subscription synchronization: VERIFIED.
+- In-app Change Plan: IMPLEMENTED, final LIVE path validation in progress.
+- Kick: OFF.
+- Stripe LIVE new sales: OFF.
+- KSeF production submission: OFF.
 
-For the most current engineering state and launch gates, see `PROJECT_STATUS.md`.
+For the authoritative current engineering and launch state, see `PROJECT_STATUS.md`.
