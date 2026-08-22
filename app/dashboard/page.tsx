@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { readGameSlotState } from "@/lib/game-slot-cooldown";
 import { normalizePlan } from "@/lib/plans";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 
@@ -16,15 +16,6 @@ type DashboardStatsRow = {
   live_now_count: number | string | null;
   creator_count: number | string | null;
   total_reach: number | string | null;
-};
-
-type GameSlotStateRow = {
-  active_games: number | string | null;
-  cooldown_slots: number | string | null;
-  allowed_slots: number | string | null;
-  effective_used_slots: number | string | null;
-  available_slots: number | string | null;
-  next_slot_available_at: string | null;
 };
 
 export default async function DashboardPage() {
@@ -72,7 +63,6 @@ export default async function DashboardPage() {
     : membershipData.workspaces;
   const workspaceId = membershipData.workspace_id as string;
   const workspaceName = (workspaceValue?.name as string | undefined) ?? "My studio";
-  const admin = getSupabaseAdminClient();
 
   const [
     { data: gamesData },
@@ -80,7 +70,7 @@ export default async function DashboardPage() {
     { data: youtubeMentionsData },
     { data: twitchMentionsData },
     { data: statsData },
-    { data: slotStateData },
+    slotStateResult,
   ] = await Promise.all([
     supabase
       .from("games")
@@ -107,7 +97,7 @@ export default async function DashboardPage() {
       .order("detected_at", { ascending: false })
       .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
     supabase.rpc("dashboard_signal_stats", { p_workspace_id: workspaceId }),
-    admin.rpc("workspace_game_slot_cooldown_state", { p_workspace_id: workspaceId }),
+    readGameSlotState(workspaceId),
   ]);
 
   const games = (gamesData ?? []) as DashboardGame[];
@@ -116,7 +106,7 @@ export default async function DashboardPage() {
     ...((twitchMentionsData ?? []) as DashboardMention[]),
   ].sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
   const statsRow = ((statsData ?? [])[0] ?? null) as DashboardStatsRow | null;
-  const slotStateRow = ((slotStateData ?? [])[0] ?? null) as GameSlotStateRow | null;
+  const slotState = slotStateResult.state;
   const fallbackCreators = new Set(mentions.map((mention) => mention.creator_name.toLowerCase())).size;
   const fallbackReach = mentions.reduce(
     (total, mention) => total + (mention.view_count ?? mention.viewer_count ?? 0),
@@ -141,8 +131,8 @@ export default async function DashboardPage() {
       initialGames={games}
       initialMentions={mentions}
       initialStats={initialStats}
-      initialCooldownSlots={Number(slotStateRow?.cooldown_slots ?? 0)}
-      initialNextSlotAvailableAt={slotStateRow?.next_slot_available_at ?? null}
+      initialCooldownSlots={slotState?.cooldown_slots ?? 0}
+      initialNextSlotAvailableAt={slotState?.next_slot_available_at ?? null}
     />
   );
 }
