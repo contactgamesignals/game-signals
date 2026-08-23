@@ -19,10 +19,10 @@ jobs:
 
       - name: Typecheck scaled Edge Functions
         run: |
-          deno check supabase/functions/scan-youtube/index.ts
-          deno check supabase/functions/scan-twitch/index.ts
-          deno check supabase/functions/notify-discord/index.ts
-          deno check supabase/functions/notify-email/index.ts
+          deno check --node-modules-dir=auto supabase/functions/scan-youtube/index.ts
+          deno check --node-modules-dir=auto supabase/functions/scan-twitch/index.ts
+          deno check --node-modules-dir=auto supabase/functions/notify-discord/index.ts
+          deno check --node-modules-dir=auto supabase/functions/notify-email/index.ts
 
       - name: Test YouTube detail queue in isolated PostgreSQL 17
         shell: bash
