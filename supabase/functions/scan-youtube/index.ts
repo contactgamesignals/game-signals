@@ -1,4 +1,11 @@
 import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
+import {
+  classifyYouTubeSearchCandidate,
+  matchesYouTubeTrackedGame,
+  youtubeWordCount,
+  type YouTubeSearchItem as SearchItem,
+  type YouTubeVideoDetail as VideoDetail,
+} from "../_shared/youtube-matching.ts";
 
 type Game = {
   id: string;
@@ -14,33 +21,10 @@ type Game = {
   youtube_last_revalidated_at: string | null;
 };
 
-type SearchItem = {
-  id: { videoId: string };
-  snippet: {
-    publishedAt: string;
-    channelId: string;
-    title: string;
-    channelTitle: string;
-    description?: string;
-    thumbnails?: {
-      high?: { url: string };
-      medium?: { url: string };
-      default?: { url: string };
-    };
-  };
-};
-
 type SearchPayload = {
   items?: SearchItem[];
   nextPageToken?: string;
   pageInfo?: { totalResults?: number; resultsPerPage?: number };
-};
-
-type VideoDetail = {
-  views: number;
-  categoryId: string | null;
-  description: string;
-  tags: string[];
 };
 
 type ExistingMention = {
@@ -74,10 +58,40 @@ type SearchResult = {
   error: string | null;
 };
 
+type PageClassification = {
+  accepted: SearchItem[];
+  needsDetail: SearchItem[];
+  rejectedExternalIds: string[];
+};
+
+type DetailCandidate = {
+  game_id: string;
+  external_id: string;
+  raw_payload: SearchItem;
+  attempts: number;
+};
+
+type QueueProcessingResult = {
+  claimed: number;
+  accepted: number;
+  rejected: number;
+  quotaLimited: boolean;
+  error: string | null;
+};
+
+type StatsResult = {
+  views: Map<string, number>;
+  requestedBatches: number;
+  grantedBatches: number;
+  failedBatches: number;
+};
+
 const YOUTUBE_SEARCH_PAGE_SIZE = 50;
 const YOUTUBE_SCHEDULER_BATCH_SIZE = 80;
 const YOUTUBE_SEARCH_CONCURRENCY = 8;
 const YOUTUBE_DETAILS_CONCURRENCY = 8;
+const YOUTUBE_STATS_CONCURRENCY = 8;
+const YOUTUBE_DETAIL_QUEUE_BATCH_SIZE = 500;
 const YOUTUBE_REVALIDATE_EVERY_MS = 24 * 60 * 60_000;
 const YOUTUBE_REVALIDATE_LIMIT = 100;
 const YOUTUBE_LEASE_SECONDS = 120;
@@ -96,146 +110,6 @@ const GAME_SELECT = [
   "youtube_last_revalidated_at",
 ].join(",");
 
-const STRONG_GAME_CONTEXT_HINTS = [
-  "gameplay", "playthrough", "walkthrough", "let's play", "lets play", "review", "trailer", "first look",
-  "impressions", "roguelike", "roguelite", "fps", "first person shooter", "shooter", "boss fight", "speedrun",
-  "steam", "early access", "demo", "hardcore", "episode", "part", "chapter", "run", "guide", "tips",
-  "stream", "vod",
-];
-
-const OTHER_GAME_ANCHORS = [
-  "minecraft", "roblox", "fortnite", "valorant", "counter strike", "cs2", "league of legends", "dota 2",
-  "grand theft auto", "gta 5", "gta v", "call of duty", "warzone", "apex legends", "overwatch", "terraria",
-  "rust", "palworld", "elden ring", "hades ii", "helldivers 2", "marvel rivals", "deadlock", "destiny 2",
-  "rainbow six siege", "rocket league", "pubg", "escape from tarkov", "world of warcraft", "final fantasy xiv",
-  "genshin impact", "spongebob", "last island of survival", "rock band", "starrupture", "uhc", "smp",
-];
-
-function normalizeWords(value: string) {
-  return value
-    .normalize("NFKD")
-    .toLocaleLowerCase()
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function containsPhrase(value: string, phrase: string) {
-  const haystack = normalizeWords(value);
-  const needle = normalizeWords(phrase);
-  if (!haystack || !needle) return false;
-  return ` ${haystack} `.includes(` ${needle} `);
-}
-
-function wordCount(value: string) {
-  const normalized = normalizeWords(value);
-  return normalized ? normalized.split(" ").length : 0;
-}
-
-function phraseOccurrences(value: string, phrase: string) {
-  const haystack = ` ${normalizeWords(value)} `;
-  const needle = normalizeWords(phrase);
-  if (!needle) return 0;
-  return Math.max(0, haystack.split(` ${needle} `).length - 1);
-}
-
-function exactHashtagMatch(value: string, phrase: string) {
-  const needle = normalizeWords(phrase);
-  if (!needle || needle.includes(" ")) return false;
-  for (const match of value.matchAll(/#([\p{L}\p{N}_-]+)/gu)) {
-    if (normalizeWords(match[1] ?? "") === needle) return true;
-  }
-  return false;
-}
-
-function exactTagMatch(tags: string[], phrase: string) {
-  const needle = normalizeWords(phrase);
-  return tags.some((tag) => normalizeWords(tag) === needle);
-}
-
-function hasStrongGameContext(value: string) {
-  return STRONG_GAME_CONTEXT_HINTS.some((hint) => containsPhrase(value, hint));
-}
-
-function hasForeignGameAnchor(value: string, includes: string[]) {
-  return OTHER_GAME_ANCHORS.some((anchor) => {
-    if (!containsPhrase(value, anchor)) return false;
-    return !includes.some((include) => containsPhrase(include, anchor) || containsPhrase(anchor, include));
-  });
-}
-
-function explicitMixedCoverage(title: string) {
-  const normalized = ` ${normalizeWords(title)} `;
-  return title.includes("+") || title.includes("&") || /\bvs\.?\b/i.test(title) || normalized.includes(" versus ") || normalized.includes(" and ");
-}
-
-function gameTitleSyntax(title: string, phrase: string) {
-  const normalizedTitle = normalizeWords(title);
-  const needle = normalizeWords(phrase);
-  if (!normalizedTitle || !needle) return false;
-  if (normalizedTitle.endsWith(` in ${needle}`) || normalizedTitle === `in ${needle}`) return true;
-
-  const prefixPatterns = ["playing", "play", "beat", "beating", "trying", "try"];
-  if (prefixPatterns.some((prefix) => normalizedTitle.includes(`${prefix} ${needle}`))) return true;
-
-  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const titleWithMarker = new RegExp(`(^|[|:\\-])\\s*${escaped}\\s*(?:#?\\d|[|:\\-])`, "iu");
-  const titleAfterSeparator = new RegExp(`[|:\\-]\\s*${escaped}\\s*$`, "iu");
-  const numberedAfterTitle = new RegExp(`(^|\\s)${escaped}\\s*#?\\d`, "iu");
-  return titleWithMarker.test(title) || titleAfterSeparator.test(title) || numberedAfterTitle.test(title);
-}
-
-function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, phrase: string, allContext: string, includes: string[]) {
-  const title = item.snippet.title;
-  const titleMatch = containsPhrase(title, phrase);
-  const hashtagMatch = exactHashtagMatch(`${title} ${item.snippet.description ?? ""}`, phrase) || exactTagMatch(detail.tags, phrase);
-  const strongContext = hasStrongGameContext(allContext);
-  const syntaxMatch = gameTitleSyntax(title, phrase);
-  const episodeMarker = /\b(part|episode|ep|chapter|run)\s*#?\d+/i.test(normalizeWords(title));
-  const repeatedTarget = phraseOccurrences(`${title} ${item.snippet.description ?? ""}`, phrase) >= 2;
-  const foreignAnchor = hasForeignGameAnchor(allContext, includes);
-  const mixedCoverage = explicitMixedCoverage(title);
-
-  if (!titleMatch && !hashtagMatch) return false;
-  if (foreignAnchor && !mixedCoverage) return false;
-  if (foreignAnchor && mixedCoverage && !hashtagMatch && !episodeMarker && !syntaxMatch) return false;
-
-  let score = 0;
-  if (titleMatch) score += 3;
-  if (hashtagMatch) score += 1;
-  if (strongContext) score += 2;
-  if (syntaxMatch) score += 2;
-  if (episodeMarker) score += 1;
-  if (repeatedTarget) score += 1;
-
-  return score >= 5;
-}
-
-function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, includes: string[], excludes: string[]) {
-  if (!detail || detail.categoryId !== "20") return false;
-
-  const allContext = [
-    item.snippet.title,
-    item.snippet.description ?? "",
-    detail.description,
-    ...detail.tags,
-  ].join(" ");
-
-  if (excludes.some((phrase) => containsPhrase(allContext, phrase))) return false;
-
-  const matchedIncludes = includes.filter((phrase) => containsPhrase(allContext, phrase));
-  if (!matchedIncludes.length) return false;
-
-  const multiWordMatch = matchedIncludes.some((phrase) => wordCount(phrase) > 1);
-  if (multiWordMatch) {
-    const foreignAnchor = hasForeignGameAnchor(allContext, includes);
-    return !foreignAnchor || explicitMixedCoverage(item.snippet.title);
-  }
-
-  return matchedIncludes.some((phrase) => singleWordGameLooksIntentional(item, detail, phrase, allContext, includes));
-}
-
 async function mapLimit<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
@@ -251,7 +125,11 @@ async function mapLimit<T, R>(items: T[], concurrency: number, worker: (item: T,
   return results;
 }
 
-async function reserveQuota(supabase: ReturnType<typeof serviceClient>, bucket: "youtube_search" | "youtube_general", requested: number) {
+async function reserveQuota(
+  supabase: ReturnType<typeof serviceClient>,
+  bucket: "youtube_search" | "youtube_general" | "youtube_stats",
+  requested: number,
+) {
   if (requested <= 0) return 0;
   const { data, error } = await supabase.rpc("reserve_monitoring_quota", {
     p_bucket: bucket,
@@ -270,15 +148,38 @@ async function releaseClaims(supabase: ReturnType<typeof serviceClient>, games: 
   if (error) throw error;
 }
 
+function thumbnailFor(item: SearchItem) {
+  return item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? null;
+}
+
+function mentionRow(gameId: string, item: SearchItem, views: number | null) {
+  const reach = views ?? 0;
+  return {
+    game_id: gameId,
+    platform: "youtube" as const,
+    external_id: item.id.videoId,
+    creator_external_id: item.snippet.channelId,
+    creator_name: item.snippet.channelTitle,
+    title: item.snippet.title,
+    url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+    thumbnail_url: thumbnailFor(item),
+    view_count: views,
+    published_at: item.snippet.publishedAt,
+    last_seen_at: new Date().toISOString(),
+    signal_score: signalScore(reach, false),
+    raw_payload: item,
+  };
+}
+
 async function fetchVideoDetailBatch(ids: string[], apiKey: string) {
   const details = new Map<string, VideoDetail>();
   if (!ids.length) return details;
 
-  const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-  detailsUrl.searchParams.set("part", "statistics,snippet");
-  detailsUrl.searchParams.set("id", ids.join(","));
-  detailsUrl.searchParams.set("key", apiKey);
-  const response = await fetch(detailsUrl);
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+  url.searchParams.set("part", "statistics,snippet");
+  url.searchParams.set("id", ids.join(","));
+  url.searchParams.set("key", apiKey);
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`YouTube video details failed: ${response.status} ${(await response.text()).slice(0, 1000)}`);
   }
@@ -313,6 +214,58 @@ async function fetchVideoDetailsBatched(ids: string[], apiKey: string) {
   return details;
 }
 
+async function fetchStatsBatch(ids: string[], apiKey: string) {
+  const views = new Map<string, number>();
+  if (!ids.length) return views;
+
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos:batchGetStats");
+  url.searchParams.set("part", "statistics");
+  url.searchParams.set("id", ids.join(","));
+  url.searchParams.set("key", apiKey);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`YouTube batch stats failed: ${response.status} ${(await response.text()).slice(0, 1000)}`);
+
+  const payload = await response.json() as {
+    items?: Array<{ id: string; statistics?: { viewCount?: string } }>;
+  };
+  for (const item of payload.items ?? []) views.set(item.id, Number(item.statistics?.viewCount ?? 0));
+  return views;
+}
+
+async function fetchBestEffortStats(
+  supabase: ReturnType<typeof serviceClient>,
+  ids: string[],
+  apiKey: string,
+): Promise<StatsResult> {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  const batches = chunks(uniqueIds, 50);
+  if (!batches.length) return { views: new Map(), requestedBatches: 0, grantedBatches: 0, failedBatches: 0 };
+
+  try {
+    const granted = await reserveQuota(supabase, "youtube_stats", batches.length);
+    const runnable = batches.slice(0, granted);
+    const results = await mapLimit(runnable, YOUTUBE_STATS_CONCURRENCY, async (batch) => {
+      try {
+        return { views: await fetchStatsBatch(batch, apiKey), failed: false };
+      } catch (error) {
+        console.error("YouTube stats enrichment failed", error);
+        return { views: new Map<string, number>(), failed: true };
+      }
+    });
+
+    const views = new Map<string, number>();
+    let failedBatches = 0;
+    for (const result of results) {
+      if (result.failed) failedBatches += 1;
+      for (const [id, count] of result.views) views.set(id, count);
+    }
+    return { views, requestedBatches: batches.length, grantedBatches: granted, failedBatches };
+  } catch (error) {
+    console.error("YouTube stats quota reservation failed", error);
+    return { views: new Map(), requestedBatches: batches.length, grantedBatches: 0, failedBatches: 0 };
+  }
+}
+
 function shouldRevalidate(game: Game, now: Date) {
   if (!game.youtube_last_revalidated_at) return true;
   return now.getTime() - new Date(game.youtube_last_revalidated_at).getTime() >= YOUTUBE_REVALIDATE_EVERY_MS;
@@ -343,24 +296,35 @@ async function revalidateRecentMentions(
       .update({ youtube_last_revalidated_at: new Date().toISOString() })
       .eq("id", game.id);
     if (updateError) throw updateError;
-    return { removed: 0, skippedQuota: false };
+    return { removed: 0, refreshed: 0, skippedQuota: false };
   }
 
   const neededDetailCalls = Math.ceil(mentions.length / 50);
   const granted = await reserveQuota(supabase, "youtube_general", neededDetailCalls);
-  if (granted < neededDetailCalls) return { removed: 0, skippedQuota: true };
+  if (granted < neededDetailCalls) return { removed: 0, refreshed: 0, skippedQuota: true };
 
   const details = await fetchVideoDetailsBatched(mentions.map((mention) => mention.external_id), apiKey);
   const rejectedIds: string[] = [];
+  const refreshRows: Array<Record<string, unknown>> = [];
+
   for (const mention of mentions) {
     const item = mention.raw_payload;
     if (!item?.id?.videoId || !item.snippet?.title) continue;
-    if (!matchesTrackedGame(item, details.get(mention.external_id), includes, excludes)) rejectedIds.push(mention.id);
+    const detail = details.get(mention.external_id);
+    if (!matchesYouTubeTrackedGame(item, detail, includes, excludes)) {
+      rejectedIds.push(mention.id);
+      continue;
+    }
+    refreshRows.push(mentionRow(game.id, item, detail?.views ?? null));
   }
 
   if (rejectedIds.length) {
     const { error: deleteError } = await supabase.from("mentions").delete().in("id", rejectedIds);
     if (deleteError) throw deleteError;
+  }
+  if (refreshRows.length) {
+    const { error: upsertError } = await supabase.from("mentions").upsert(refreshRows, { onConflict: "game_id,platform,external_id" });
+    if (upsertError) throw upsertError;
   }
 
   const { error: updateError } = await supabase
@@ -368,7 +332,7 @@ async function revalidateRecentMentions(
     .update({ youtube_last_revalidated_at: new Date().toISOString() })
     .eq("id", game.id);
   if (updateError) throw updateError;
-  return { removed: rejectedIds.length, skippedQuota: false };
+  return { removed: rejectedIds.length, refreshed: refreshRows.length, skippedQuota: false };
 }
 
 function prepareGame(game: Game, aliases: AliasRow[], now: Date): PreparedGame {
@@ -463,6 +427,129 @@ async function recordFailedSearch(supabase: ReturnType<typeof serviceClient>, re
   if (claimResult.error) throw claimResult.error;
 }
 
+async function enqueueDetailCandidates(
+  supabase: ReturnType<typeof serviceClient>,
+  rows: Array<{ game_id: string; external_id: string; raw_payload: SearchItem }>,
+) {
+  if (!rows.length) return 0;
+  const { data, error } = await supabase.rpc("enqueue_youtube_detail_candidates", { p_items: rows });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+function candidatePairs(candidates: DetailCandidate[]) {
+  return candidates.map((candidate) => ({ game_id: candidate.game_id, external_id: candidate.external_id }));
+}
+
+async function processPendingDetailCandidates(
+  supabase: ReturnType<typeof serviceClient>,
+  apiKey: string,
+): Promise<QueueProcessingResult> {
+  const { data: claimedData, error: claimError } = await supabase.rpc("claim_youtube_detail_candidates", {
+    p_limit: YOUTUBE_DETAIL_QUEUE_BATCH_SIZE,
+    p_lease_seconds: YOUTUBE_LEASE_SECONDS,
+  });
+  if (claimError) return { claimed: 0, accepted: 0, rejected: 0, quotaLimited: false, error: claimError.message };
+
+  const claimed = (claimedData ?? []) as DetailCandidate[];
+  if (!claimed.length) return { claimed: 0, accepted: 0, rejected: 0, quotaLimited: false, error: null };
+
+  const detailCallsNeeded = Math.ceil(claimed.length / 50);
+  let granted = 0;
+  try {
+    granted = await reserveQuota(supabase, "youtube_general", detailCallsNeeded);
+  } catch (error) {
+    await supabase.rpc("release_youtube_detail_candidates", {
+      p_pairs: candidatePairs(claimed),
+      p_retry_after_seconds: 60,
+      p_increment_attempts: false,
+    }).catch(() => undefined);
+    return { claimed: claimed.length, accepted: 0, rejected: 0, quotaLimited: true, error: error instanceof Error ? error.message : String(error) };
+  }
+
+  const runnable = claimed.slice(0, granted * 50);
+  const deferred = claimed.slice(runnable.length);
+  if (deferred.length) {
+    await supabase.rpc("release_youtube_detail_candidates", {
+      p_pairs: candidatePairs(deferred),
+      p_retry_after_seconds: 60,
+      p_increment_attempts: false,
+    });
+  }
+  if (!runnable.length) {
+    return { claimed: claimed.length, accepted: 0, rejected: 0, quotaLimited: true, error: null };
+  }
+
+  try {
+    const details = await fetchVideoDetailsBatched(runnable.map((candidate) => candidate.external_id), apiKey);
+    const gameIds = Array.from(new Set(runnable.map((candidate) => candidate.game_id)));
+    const [{ data: gameData, error: gameError }, { data: aliasData, error: aliasError }] = await Promise.all([
+      supabase.from("games").select("id, title").in("id", gameIds),
+      supabase.from("game_aliases").select("game_id, phrase, type").in("game_id", gameIds),
+    ]);
+    if (gameError) throw gameError;
+    if (aliasError) throw aliasError;
+
+    const titleByGame = new Map((gameData ?? []).map((game) => [String(game.id), String(game.title)]));
+    const aliases = (aliasData ?? []) as AliasRow[];
+    const acceptedRows: Array<Record<string, unknown>> = [];
+    let rejected = 0;
+
+    for (const candidate of runnable) {
+      const title = titleByGame.get(candidate.game_id);
+      const item = candidate.raw_payload;
+      if (!title || !item?.id?.videoId || !item.snippet?.title) {
+        rejected += 1;
+        continue;
+      }
+
+      const gameAliases = aliases.filter((row) => row.game_id === candidate.game_id);
+      const includes = Array.from(new Set([
+        title,
+        ...gameAliases.filter((row) => row.type === "include").map((row) => row.phrase),
+      ]));
+      const excludes = gameAliases.filter((row) => row.type === "exclude").map((row) => row.phrase);
+      const detail = details.get(candidate.external_id);
+      if (!matchesYouTubeTrackedGame(item, detail, includes, excludes)) {
+        rejected += 1;
+        continue;
+      }
+      acceptedRows.push(mentionRow(candidate.game_id, item, detail?.views ?? null));
+    }
+
+    if (acceptedRows.length) {
+      const { error: upsertError } = await supabase.from("mentions").upsert(acceptedRows, { onConflict: "game_id,platform,external_id" });
+      if (upsertError) throw upsertError;
+    }
+
+    const { error: completeError } = await supabase.rpc("complete_youtube_detail_candidates", {
+      p_pairs: candidatePairs(runnable),
+    });
+    if (completeError) throw completeError;
+
+    return {
+      claimed: claimed.length,
+      accepted: acceptedRows.length,
+      rejected,
+      quotaLimited: deferred.length > 0,
+      error: null,
+    };
+  } catch (error) {
+    await supabase.rpc("release_youtube_detail_candidates", {
+      p_pairs: candidatePairs(runnable),
+      p_retry_after_seconds: 60,
+      p_increment_attempts: true,
+    }).catch(() => undefined);
+    return {
+      claimed: claimed.length,
+      accepted: 0,
+      rejected: 0,
+      quotaLimited: deferred.length > 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -521,12 +608,16 @@ Deno.serve(async (request) => {
       games = (data ?? []) as Game[];
     }
 
-    if (!games.length) return json({ ok: true, games: 0, mentions: 0, quota_limited: false });
+    if (!games.length) {
+      const detailQueue = await processPendingDetailCandidates(supabase, apiKey);
+      return json({ ok: !detailQueue.error, games: 0, mentions: detailQueue.accepted, quota_limited: detailQueue.quotaLimited, detail_queue: detailQueue });
+    }
 
     const searchGranted = await reserveQuota(supabase, "youtube_search", games.length);
     if (searchGranted <= 0) {
       await releaseClaims(supabase, games);
-      return json({ ok: true, games: 0, mentions: 0, quota_limited: true, claimed: games.length });
+      const detailQueue = await processPendingDetailCandidates(supabase, apiKey);
+      return json({ ok: !detailQueue.error, games: 0, mentions: detailQueue.accepted, quota_limited: true, claimed: games.length, detail_queue: detailQueue });
     }
 
     const runnableGames = games.slice(0, searchGranted);
@@ -557,39 +648,47 @@ Deno.serve(async (request) => {
 
     const successfulSearches = searchResults.filter((result): result is SearchResult & { payload: SearchPayload } => Boolean(result.payload && !result.error));
     if (!successfulSearches.length) {
-      return json({ ok: false, games: runnableGames.length, mentions: 0, failed: failedSearches.length, quota_limited: false }, 207);
+      const detailQueue = await processPendingDetailCandidates(supabase, apiKey);
+      return json({ ok: false, games: runnableGames.length, mentions: detailQueue.accepted, failed: failedSearches.length, quota_limited: false, detail_queue: detailQueue }, 207);
     }
 
-    const allCandidateIds = Array.from(new Set(successfulSearches.flatMap((result) =>
-      (result.payload.items ?? []).map((item) => item.id.videoId).filter(Boolean)
-    )));
-    const detailCallsNeeded = Math.ceil(allCandidateIds.length / 50);
-    const detailGranted = await reserveQuota(supabase, "youtube_general", detailCallsNeeded);
+    const classificationByGame = new Map<string, PageClassification>();
+    const queuedCandidates: Array<{ game_id: string; external_id: string; raw_payload: SearchItem }> = [];
+    const directAcceptedIds: string[] = [];
 
-    if (detailGranted < detailCallsNeeded) {
-      await releaseClaims(supabase, successfulSearches.map((result) => result.prepared.game));
-      for (const result of successfulSearches) {
-        await supabase.from("scan_runs").insert({
-          game_id: result.prepared.game.id,
-          platform: "youtube",
-          status: "failed",
-          started_at: result.prepared.runStarted.toISOString(),
-          finished_at: new Date().toISOString(),
-          error: "YouTube general quota pacing deferred video details. The same search window will be retried.",
-          metadata: {
-            query: result.prepared.searchTerm,
-            published_after: result.prepared.windowStart,
-            published_before: result.prepared.windowEnd,
-            candidate_count: result.payload.items?.length ?? 0,
-            continuation_page: Boolean(result.prepared.pageToken),
-          },
-        });
+    for (const result of successfulSearches) {
+      const classification: PageClassification = { accepted: [], needsDetail: [], rejectedExternalIds: [] };
+      for (const item of result.payload.items ?? []) {
+        const videoId = item.id.videoId;
+        if (!videoId) continue;
+        const decision = classifyYouTubeSearchCandidate(item, result.prepared.includes, result.prepared.excludes);
+        if (decision === "accept") {
+          classification.accepted.push(item);
+          directAcceptedIds.push(videoId);
+        } else if (decision === "needs_detail") {
+          classification.needsDetail.push(item);
+          queuedCandidates.push({ game_id: result.prepared.game.id, external_id: videoId, raw_payload: item });
+        } else {
+          classification.rejectedExternalIds.push(videoId);
+        }
       }
-      return json({ ok: true, games: 0, mentions: 0, quota_limited: true, search_pages_consumed: successfulSearches.length });
+      classificationByGame.set(result.prepared.game.id, classification);
     }
 
-    const details = await fetchVideoDetailsBatched(allCandidateIds, apiKey);
-    let totalMentions = 0;
+    // Persist every ambiguous result before any scan window can advance. If this
+    // fails, the invocation fails and the leased search window is retried safely.
+    await enqueueDetailCandidates(supabase, queuedCandidates);
+
+    // View counts are useful but not required to discover a creator. The new
+    // batchGetStats quota can run out without blocking mention insertion.
+    const stats = await fetchBestEffortStats(supabase, directAcceptedIds, apiKey);
+
+    // Full videos.list metadata is reserved for ambiguous candidates. This queue
+    // is durable, so general quota pressure can delay validation but cannot make
+    // the search page disappear.
+    const detailQueue = await processPendingDetailCandidates(supabase, apiKey);
+
+    let totalMentions = detailQueue.accepted;
     let completedGames = 0;
     let continuationGames = 0;
     let revalidationRemovedTotal = 0;
@@ -597,46 +696,16 @@ Deno.serve(async (request) => {
     for (const result of successfulSearches) {
       const { prepared, payload } = result;
       const game = prepared.game;
-      const items = payload.items ?? [];
-      const acceptedRows: Array<Record<string, unknown>> = [];
-      const filteredExternalIds: string[] = [];
-      let missingVideoDetails = 0;
+      const classification = classificationByGame.get(game.id) ?? { accepted: [], needsDetail: [], rejectedExternalIds: [] };
+      const acceptedRows = classification.accepted.map((item) => mentionRow(game.id, item, stats.views.get(item.id.videoId) ?? null));
 
-      for (const item of items) {
-        const videoId = item.id.videoId;
-        const detail = details.get(videoId);
-        if (!detail) missingVideoDetails += 1;
-        if (!matchesTrackedGame(item, detail, prepared.includes, prepared.excludes)) {
-          filteredExternalIds.push(videoId);
-          continue;
-        }
-
-        const views = detail?.views ?? 0;
-        const thumbnail = item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? null;
-        acceptedRows.push({
-          game_id: game.id,
-          platform: "youtube",
-          external_id: videoId,
-          creator_external_id: item.snippet.channelId,
-          creator_name: item.snippet.channelTitle,
-          title: item.snippet.title,
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          thumbnail_url: thumbnail,
-          view_count: views,
-          published_at: item.snippet.publishedAt,
-          last_seen_at: new Date().toISOString(),
-          signal_score: signalScore(views, false),
-          raw_payload: item,
-        });
-      }
-
-      if (filteredExternalIds.length) {
+      if (classification.rejectedExternalIds.length) {
         const { error: deleteError } = await supabase
           .from("mentions")
           .delete()
           .eq("game_id", game.id)
           .eq("platform", "youtube")
-          .in("external_id", filteredExternalIds);
+          .in("external_id", classification.rejectedExternalIds);
         if (deleteError) throw deleteError;
       }
 
@@ -648,12 +717,14 @@ Deno.serve(async (request) => {
       }
 
       let revalidatedRemoved = 0;
+      let revalidatedRefreshed = 0;
       let revalidationSkippedQuota = false;
       let revalidationError: string | null = null;
       if (shouldRevalidate(game, now)) {
         try {
           const revalidation = await revalidateRecentMentions(supabase, game, prepared.includes, prepared.excludes, apiKey);
           revalidatedRemoved = revalidation.removed;
+          revalidatedRefreshed = revalidation.refreshed;
           revalidationSkippedQuota = revalidation.skippedQuota;
           revalidationRemovedTotal += revalidatedRemoved;
         } catch (error) {
@@ -706,17 +777,22 @@ Deno.serve(async (request) => {
             search_page_size: YOUTUBE_SEARCH_PAGE_SIZE,
             page_number: nextPageNumber,
             continuation_page: Boolean(prepared.pageToken),
-            candidate_count: items.length,
+            candidate_count: payload.items?.length ?? 0,
             search_total_results_approx: payload.pageInfo?.totalResults ?? null,
             search_has_next_page: Boolean(nextPageToken),
             search_results_truncated: false,
             pagination_in_progress: Boolean(nextPageToken),
-            filtered_out: filteredExternalIds.length,
-            missing_video_details: missingVideoDetails,
+            snippet_accepted: classification.accepted.length,
+            detail_candidates_queued: classification.needsDetail.length,
+            snippet_rejected: classification.rejectedExternalIds.length,
+            stats_enriched: classification.accepted.filter((item) => stats.views.has(item.id.videoId)).length,
+            stats_quota_limited: stats.grantedBatches < stats.requestedBatches,
+            stats_failed_batches: stats.failedBatches,
             revalidated_removed: revalidatedRemoved,
+            revalidated_refreshed: revalidatedRefreshed,
             revalidation_skipped_quota: revalidationSkippedQuota,
             revalidation_error: revalidationError,
-            strict_single_word_filter: prepared.includes.some((phrase) => wordCount(phrase) === 1),
+            strict_single_word_filter: prepared.includes.some((phrase) => youtubeWordCount(phrase) === 1),
             queue_delay_minutes: prepared.queueDelayMinutes,
             scan_interval_minutes: prepared.scanIntervalMinutes,
           },
@@ -731,16 +807,18 @@ Deno.serve(async (request) => {
     }
 
     return json({
-      ok: failedSearches.length === 0,
+      ok: failedSearches.length === 0 && !detailQueue.error,
       games: runnableGames.length,
       completed_games: completedGames,
       continuation_games: continuationGames,
       mentions: totalMentions,
       revalidated_removed: revalidationRemovedTotal,
       failed: failedSearches.length,
-      deferred_by_quota: deferredGames.length,
-      quota_limited: deferredGames.length > 0,
-    }, failedSearches.length === 0 ? 200 : 207);
+      deferred_by_search_quota: deferredGames.length,
+      search_quota_limited: deferredGames.length > 0,
+      stats_quota_limited: stats.grantedBatches < stats.requestedBatches,
+      detail_queue: detailQueue,
+    }, failedSearches.length === 0 && !detailQueue.error ? 200 : 207);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
