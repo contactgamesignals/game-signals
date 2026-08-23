@@ -314,7 +314,7 @@ Deno.serve(async (request) => {
       const { data, error } = await supabase.from("games").select(GAME_SELECT).eq("id", body.game_id).eq("enabled", true).maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: "Game not found or monitoring is paused." }, 404);
-      const game = data as Game;
+      const game = data as unknown as Game;
 
       if (!auth.internal && game.twitch_last_scanned_at) {
         const retryAt = new Date(new Date(game.twitch_last_scanned_at).getTime() + MANUAL_SCAN_COOLDOWN_MS);
