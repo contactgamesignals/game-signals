@@ -22,6 +22,32 @@ create index if not exists youtube_detail_candidates_queue_idx
   on public.youtube_detail_candidates (available_at, first_seen_at)
   where claimed_at is null;
 
+create or replace function public.enqueue_youtube_detail_candidates(p_items jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  insert into public.youtube_detail_candidates(game_id, external_id, raw_payload)
+  select x.game_id, x.external_id, x.raw_payload
+  from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as x(game_id uuid, external_id text, raw_payload jsonb)
+  where x.game_id is not null
+    and nullif(trim(x.external_id), '') is not null
+    and x.raw_payload is not null
+  on conflict (game_id, external_id) do update
+  set raw_payload = excluded.raw_payload;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.enqueue_youtube_detail_candidates(jsonb) from public, anon, authenticated;
+grant execute on function public.enqueue_youtube_detail_candidates(jsonb) to service_role;
+
 create or replace function public.claim_youtube_detail_candidates(
   p_limit integer default 500,
   p_lease_seconds integer default 120
