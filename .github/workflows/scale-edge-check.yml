@@ -29,4 +29,8 @@ jobs:
         shell: bash
         run: |
           docker pull postgres:17-alpine
-          bash scripts/test-youtube-detail-queue-postgres.sh
+          if ! bash scripts/test-youtube-detail-queue-postgres.sh; then
+            echo "PostgreSQL container startup raced with its initialization; retrying the isolated regression once."
+            sleep 2
+            bash scripts/test-youtube-detail-queue-postgres.sh
+          fi
