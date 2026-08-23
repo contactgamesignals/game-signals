@@ -108,13 +108,13 @@ export default function MarketingRealityPatch() {
       if (notice) notice.textContent = "Interactive demo. Production monitoring is live for YouTube and Twitch; every paid plan includes Discord alerts, CSV export and opt-in daily email digests. Kick is coming soon.";
 
       const onboardingNotice = document.querySelector<HTMLElement>("#onboardingModal .notice");
-      if (onboardingNotice) onboardingNotice.textContent = "After signup, YouTube and Twitch monitoring starts automatically. Notification settings are available in your account; Kick is coming soon.";
+      if (onboardingNotice) onboardingNotice.textContent = "Active YouTube and Twitch monitoring starts after you choose a paid plan. Notification settings are available in your account; Kick is coming soon.";
 
       const planNotice = document.querySelector<HTMLElement>("#planModal .notice");
       if (planNotice) planNotice.textContent = "Paid checkout is available after registration.";
 
       const pricingLead = document.querySelector<HTMLElement>(".pricing-head .section-lead");
-      if (pricingLead) pricingLead.textContent = "Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.";
+      if (pricingLead) pricingLead.textContent = "Every paid plan includes the same features and monitoring cadence. The only difference is how many active games you can monitor.";
 
       const sharedPaidFeatures = [
         "YouTube + Twitch monitoring",

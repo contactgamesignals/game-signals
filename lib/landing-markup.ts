@@ -172,6 +172,12 @@ markup = replace(
   '<div class="notice">Paid checkout is available after registration.</div>',
 );
 
+markup = replace(
+  markup,
+  '<p class="section-lead">Indie, Studio and Publisher include the same paid features and the same monitoring cadence. The only difference is how many active games you can monitor.</p>',
+  '<p class="section-lead">Every paid plan includes the same features and monitoring cadence. The only difference is how many active games you can monitor.</p>',
+);
+
 markup = markup
   .replaceAll("Up to 3 active games", "Up to 5 active games")
   .replaceAll("Up to 10 active games", "Up to 15 active games");
