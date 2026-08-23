@@ -46,6 +46,10 @@ $$;
 revoke all on function public.claim_youtube_detail_candidates(integer, integer) from public, anon, authenticated;
 grant execute on function public.claim_youtube_detail_candidates(integer, integer) to service_role;
 
+-- Replace the earlier two-argument helper instead of leaving an obsolete
+-- overload callable after rollout.
+drop function if exists public.release_youtube_detail_candidates(jsonb, integer);
+
 create or replace function public.release_youtube_detail_candidates(
   p_pairs jsonb,
   p_retry_after_seconds integer default 60,
