@@ -21,7 +21,7 @@ function item(title: string, description = ""): YouTubeSearchItem {
 assert.equal(
   classifyYouTubeSearchCandidate(item("AFTERBLAST gameplay - first run"), ["AFTERBLAST"], []),
   "accept",
-  "A clear multiword game title in a gaming search result should not spend general quota.",
+  "A clear single-token game title with strong gaming context should not spend general quota.",
 );
 
 assert.equal(
@@ -44,8 +44,19 @@ assert.equal(
 
 assert.equal(
   classifyYouTubeSearchCandidate(item("AFTERBLAST gameplay", "Minecraft challenge"), ["AFTERBLAST"], []),
-  "reject",
-  "A foreign-game anchor without explicit mixed coverage should be rejected early.",
+  "needs_detail",
+  "An ambiguous single-token title with a foreign-game anchor should require full metadata validation.",
+);
+
+assert.equal(
+  matchesYouTubeTrackedGame(item("AFTERBLAST gameplay", "Minecraft challenge"), {
+    views: 100,
+    categoryId: "20",
+    description: "Minecraft challenge gameplay",
+    tags: ["Minecraft"],
+  }, ["AFTERBLAST"], []),
+  false,
+  "Full metadata must reject a foreign-game anchor when mixed coverage is not explicit.",
 );
 
 assert.equal(
