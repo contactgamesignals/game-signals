@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { edgeFunctionErrorMessage } from "@/lib/supabase/function-error";
 import { COMPANY } from "@/lib/company";
 
 type Props = {
@@ -81,7 +82,9 @@ export default function WorkspaceSettings({
       const { data, error: functionError } = await supabase.functions.invoke("delete-account", {
         body: { confirmation: deleteConfirmation },
       });
-      if (functionError) throw new Error(functionError.message);
+      if (functionError) {
+        throw new Error(await edgeFunctionErrorMessage(functionError, "Could not delete the account."));
+      }
       const result = (data ?? {}) as DeleteAccountResponse;
       if (!result.ok) throw new Error(result.error ?? "Account deletion is not available yet.");
       await supabase.auth.signOut();
