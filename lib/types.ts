@@ -12,6 +12,7 @@ export type DashboardGame = {
 export type DashboardMention = {
   id: string;
   game_id: string;
+  workspace_id: string;
   platform: "youtube" | "twitch" | "kick";
   creator_name: string;
   title: string;

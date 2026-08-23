@@ -9,7 +9,7 @@ import type { DashboardGame, DashboardMention } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_MENTIONS_PER_PLATFORM = 250;
-const DASHBOARD_MENTION_SELECT = "id, game_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title, workspace_id)";
+const DASHBOARD_MENTION_SELECT = "id, game_id, workspace_id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, published_at, detected_at, last_seen_at, signal_score, games!inner(title)";
 
 type DashboardStatsRow = {
   signal_count: number | string | null;
@@ -85,14 +85,14 @@ export default async function DashboardPage() {
     supabase
       .from("mentions")
       .select(DASHBOARD_MENTION_SELECT)
-      .eq("games.workspace_id", workspaceId)
+      .eq("workspace_id", workspaceId)
       .eq("platform", "youtube")
       .order("detected_at", { ascending: false })
       .limit(DASHBOARD_MENTIONS_PER_PLATFORM),
     supabase
       .from("mentions")
       .select(DASHBOARD_MENTION_SELECT)
-      .eq("games.workspace_id", workspaceId)
+      .eq("workspace_id", workspaceId)
       .eq("platform", "twitch")
       .order("detected_at", { ascending: false })
       .limit(DASHBOARD_MENTIONS_PER_PLATFORM),

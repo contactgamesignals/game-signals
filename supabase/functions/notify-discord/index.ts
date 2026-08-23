@@ -1,33 +1,27 @@
 import { authorizeRequest, json, jsonHeaders, serviceClient } from "../_shared/core.ts";
 
-type Mention = {
-  id: string;
-  platform: "youtube" | "twitch" | "kick";
+type DeliveryJob = {
+  mention_id: string;
+  notification_channel_id: string;
+  destination: string;
+  platform: "youtube" | "twitch";
   creator_name: string;
-  title: string;
-  url: string;
+  content_title: string;
+  content_url: string;
   thumbnail_url: string | null;
   viewer_count: number | null;
   view_count: number | null;
   detected_at: string;
-  games: { title: string; workspace_id: string } | { title: string; workspace_id: string }[];
-};
-
-type Channel = {
-  id: string;
+  game_title: string;
   workspace_id: string;
-  destination: string;
-  minimum_live_viewers: number;
-};
-
-type Delivery = {
-  mention_id: string;
-  notification_channel_id: string;
-  status: "pending" | "delivered" | "failed";
   attempts: number;
 };
 
 const DASHBOARD_URL = "https://www.whoplaysmygame.com/dashboard";
+const DISCORD_QUEUE_BATCH_SIZE = 250;
+const DISCORD_DESTINATION_CONCURRENCY = 6;
+const DISCORD_INVOCATION_BUDGET_MS = 90_000;
+const MAX_INLINE_RATE_LIMIT_WAIT_MS = 5_000;
 
 function trimText(value: string, max: number) {
   const normalized = value.trim();
@@ -59,30 +53,28 @@ function discordRelativeTime(value: string) {
   return `<t:${Math.floor(timestamp / 1000)}:R>`;
 }
 
-function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id: string }) {
-  const isYouTube = mention.platform === "youtube";
-  const isTwitch = mention.platform === "twitch";
-  const isKick = mention.platform === "kick";
-  const platformName = isYouTube ? "YouTube" : isTwitch ? "Twitch" : "Kick";
-  const platformEmoji = isYouTube ? "🔴" : isTwitch ? "🟣" : "🟢";
-  const color = isYouTube ? 0xff0033 : isTwitch ? 0x9146ff : 0x53fc18;
-  const reach = mention.view_count ?? mention.viewer_count ?? 0;
-  const mediaUrl = safeHttpUrl(mention.url);
-  const thumbnailUrl = safeHttpUrl(mention.thumbnail_url);
-  const rawCreatorName = trimText(mention.creator_name || "Unknown creator", 120);
-  const rawGameTitle = trimText(game.title, 120);
-  const rawContentTitle = trimText(mention.title || `${rawCreatorName} on ${platformName}`, 300);
+function buildDiscordEmbed(job: DeliveryJob) {
+  const isYouTube = job.platform === "youtube";
+  const platformName = isYouTube ? "YouTube" : "Twitch";
+  const platformEmoji = isYouTube ? "🔴" : "🟣";
+  const color = isYouTube ? 0xff0033 : 0x9146ff;
+  const reach = job.view_count ?? job.viewer_count ?? 0;
+  const mediaUrl = safeHttpUrl(job.content_url);
+  const thumbnailUrl = safeHttpUrl(job.thumbnail_url);
+  const rawCreatorName = trimText(job.creator_name || "Unknown creator", 120);
+  const rawGameTitle = trimText(job.game_title, 120);
+  const rawContentTitle = trimText(job.content_title || `${rawCreatorName} on ${platformName}`, 300);
   const creatorName = escapeDiscordMarkdown(rawCreatorName);
   const gameTitle = escapeDiscordMarkdown(rawGameTitle);
   const contentTitle = escapeDiscordMarkdown(rawContentTitle);
 
   const title = isYouTube
     ? `${platformEmoji} New YouTube video detected`
-    : `${platformEmoji} ${rawCreatorName} is LIVE on ${platformName}`;
+    : `${platformEmoji} ${rawCreatorName} is LIVE on Twitch`;
 
   const description = isYouTube
     ? `**${contentTitle}**\n\n**${creatorName}** published a new video matching **${gameTitle}**.`
-    : `**${contentTitle}**\n\n**${creatorName}** just went live with **${gameTitle}**${isKick ? " on Kick" : ""}.`;
+    : `**${contentTitle}**\n\n**${creatorName}** just went live with **${gameTitle}**.`;
 
   const fields = [
     { name: "🎮 Game", value: `**${gameTitle}**`, inline: true },
@@ -94,16 +86,13 @@ function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id
     },
     {
       name: "🕒 Detected",
-      value: discordRelativeTime(mention.detected_at),
+      value: discordRelativeTime(job.detected_at),
       inline: true,
     },
   ];
 
   const links = [`[Open dashboard](${DASHBOARD_URL})`];
-  if (mediaUrl) {
-    const action = isYouTube ? "▶ Watch on YouTube" : `▶ Watch on ${platformName}`;
-    links.unshift(`[${action}](${mediaUrl})`);
-  }
+  if (mediaUrl) links.unshift(`[${isYouTube ? "▶ Watch on YouTube" : "▶ Watch on Twitch"}](${mediaUrl})`);
   fields.push({ name: "🔗 Quick links", value: links.join("  •  "), inline: false });
 
   return {
@@ -118,122 +107,162 @@ function buildDiscordEmbed(mention: Mention, game: { title: string; workspace_id
     fields,
     image: thumbnailUrl ? { url: thumbnailUrl } : undefined,
     footer: { text: `Who Plays My Game • ${platformName} creator monitoring` },
-    timestamp: mention.detected_at,
+    timestamp: job.detected_at,
   };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterSeconds(response: Response, bodyText: string) {
+  const headerSeconds = Number(response.headers.get("Retry-After"));
+  if (Number.isFinite(headerSeconds) && headerSeconds > 0) return Math.ceil(headerSeconds);
+
+  try {
+    const payload = JSON.parse(bodyText) as { retry_after?: number };
+    const value = Number(payload.retry_after ?? 0);
+    if (Number.isFinite(value) && value > 0) return Math.max(1, Math.ceil(value));
+  } catch {
+    // Discord may return non-JSON errors. Use the normal retry below.
+  }
+  return 60;
+}
+
+async function completeDelivery(
+  supabase: ReturnType<typeof serviceClient>,
+  job: DeliveryJob,
+  success: boolean,
+  error: string | null,
+  retryAfter: number,
+) {
+  const { error: rpcError } = await supabase.rpc("complete_discord_delivery", {
+    p_mention_id: job.mention_id,
+    p_notification_channel_id: job.notification_channel_id,
+    p_success: success,
+    p_error: error,
+    p_retry_after_seconds: retryAfter,
+  });
+  if (rpcError) throw rpcError;
+}
+
+async function processDestination(
+  supabase: ReturnType<typeof serviceClient>,
+  jobs: DeliveryJob[],
+  invocationStartedAt: number,
+) {
+  let delivered = 0;
+  let failed = 0;
+  let rateLimited = 0;
+
+  for (const job of jobs) {
+    if (Date.now() - invocationStartedAt >= DISCORD_INVOCATION_BUDGET_MS) break;
+
+    let response: Response;
+    let responseText = "";
+    try {
+      response = await fetch(job.destination, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": Deno.env.get("DISCORD_USER_AGENT") ?? "WhoPlaysMyGame/0.1",
+        },
+        body: JSON.stringify({
+          username: "Who Plays My Game",
+          allowed_mentions: { parse: [] },
+          embeds: [buildDiscordEmbed(job)],
+        }),
+      });
+      if (!response.ok) responseText = (await response.text()).slice(0, 1000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await completeDelivery(supabase, job, false, message, 60);
+      failed += 1;
+      continue;
+    }
+
+    if (response.ok) {
+      await completeDelivery(supabase, job, true, null, 0);
+      delivered += 1;
+      continue;
+    }
+
+    if (response.status === 429) {
+      const retryAfter = retryAfterSeconds(response, responseText);
+      await completeDelivery(supabase, job, false, responseText || "Discord rate limited the webhook.", retryAfter);
+      rateLimited += 1;
+      if (retryAfter * 1000 <= MAX_INLINE_RATE_LIMIT_WAIT_MS && Date.now() - invocationStartedAt + retryAfter * 1000 < DISCORD_INVOCATION_BUDGET_MS) {
+        await sleep(retryAfter * 1000 + 100);
+      }
+      continue;
+    }
+
+    const retryAfter = response.status >= 500 ? 60 : 300;
+    await completeDelivery(supabase, job, false, responseText || `Discord rejected the webhook (${response.status}).`, retryAfter);
+    failed += 1;
+  }
+
+  return { delivered, failed, rateLimited };
+}
+
+async function mapLimit<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const runners = Array.from({ length: Math.min(Math.max(1, concurrency), Math.max(1, items.length)) }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
 }
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
+  const invocationStartedAt = Date.now();
+
   try {
     const auth = await authorizeRequest(request);
     if (!auth.internal) return json({ error: "Discord delivery is an internal worker." }, 403);
 
     const supabase = serviceClient();
-    const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-    const [{ data: mentionsData }, { data: channelsData }] = await Promise.all([
-      supabase
-        .from("mentions")
-        .select("id, platform, creator_name, title, url, thumbnail_url, viewer_count, view_count, detected_at, games(title, workspace_id)")
-        .gte("detected_at", since)
-        .order("detected_at", { ascending: false })
-        .limit(500),
-      supabase
-        .from("notification_channels")
-        .select("id, workspace_id, destination, minimum_live_viewers")
-        .eq("type", "discord")
-        .eq("enabled", true),
-    ]);
+    const { data, error } = await supabase.rpc("claim_discord_deliveries", {
+      p_limit: DISCORD_QUEUE_BATCH_SIZE,
+      p_lease_seconds: 120,
+    });
+    if (error) throw error;
 
-    const mentions = (mentionsData ?? []) as Mention[];
-    const allChannels = (channelsData ?? []) as Channel[];
-    if (!mentions.length || !allChannels.length) return json({ ok: true, delivered: 0, retried: 0 });
+    const jobs = (data ?? []) as DeliveryJob[];
+    if (!jobs.length) return json({ ok: true, claimed: 0, delivered: 0, failed: 0, rate_limited: 0 });
 
-    const workspaceIds = Array.from(new Set(allChannels.map((channel) => channel.workspace_id)));
-    const { data: subscriptionsData } = await supabase
-      .from("subscriptions")
-      .select("workspace_id, plan, status")
-      .in("workspace_id", workspaceIds);
-
-    const allowedWorkspaces = new Set(
-      (subscriptionsData ?? [])
-        .filter((subscription) =>
-          (subscription.status === "active" || subscription.status === "trialing") &&
-          (subscription.plan === "indie" || subscription.plan === "studio" || subscription.plan === "publisher" || subscription.plan === "crazy"),
-        )
-        .map((subscription) => subscription.workspace_id as string),
-    );
-
-    const channels = allChannels.filter((channel) => allowedWorkspaces.has(channel.workspace_id));
-    if (!channels.length) return json({ ok: true, delivered: 0, retried: 0 });
-
-    const mentionIds = mentions.map((mention) => mention.id);
-    const channelIds = channels.map((channel) => channel.id);
-    const { data: deliveryData } = await supabase
-      .from("delivered_notifications")
-      .select("mention_id, notification_channel_id, status, attempts")
-      .in("mention_id", mentionIds)
-      .in("notification_channel_id", channelIds);
-
-    const deliveries = new Map<string, Delivery>();
-    for (const row of (deliveryData ?? []) as Delivery[]) {
-      deliveries.set(`${row.mention_id}:${row.notification_channel_id}`, row);
+    const byDestination = new Map<string, DeliveryJob[]>();
+    for (const job of jobs) {
+      const destinationJobs = byDestination.get(job.destination) ?? [];
+      destinationJobs.push(job);
+      byDestination.set(job.destination, destinationJobs);
     }
 
-    let delivered = 0;
-    let retried = 0;
+    const groups = Array.from(byDestination.values());
+    const results = await mapLimit(groups, DISCORD_DESTINATION_CONCURRENCY, (group) => processDestination(supabase, group, invocationStartedAt));
 
-    for (const mention of mentions) {
-      const game = Array.isArray(mention.games) ? mention.games[0] : mention.games;
-      if (!game) continue;
+    const delivered = results.reduce((sum, result) => sum + result.delivered, 0);
+    const failed = results.reduce((sum, result) => sum + result.failed, 0);
+    const rateLimited = results.reduce((sum, result) => sum + result.rateLimited, 0);
 
-      const relevantChannels = channels.filter((channel) => channel.workspace_id === game.workspace_id);
-      for (const channel of relevantChannels) {
-        const key = `${mention.id}:${channel.id}`;
-        const previous = deliveries.get(key);
-        if (previous?.status === "delivered") continue;
-        if ((previous?.attempts ?? 0) >= 5) continue;
-
-        const liveViewers = mention.viewer_count ?? 0;
-        if (mention.platform !== "youtube" && liveViewers < channel.minimum_live_viewers) continue;
-
-        if (previous) retried += 1;
-        const response = await fetch(channel.destination, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": Deno.env.get("DISCORD_USER_AGENT") ?? "WhoPlaysMyGame/0.1",
-          },
-          body: JSON.stringify({
-            username: "Who Plays My Game",
-            allowed_mentions: { parse: [] },
-            embeds: [buildDiscordEmbed(mention, game)],
-          }),
-        });
-
-        const success = response.ok;
-        const attempts = (previous?.attempts ?? 0) + 1;
-        await supabase.from("delivered_notifications").upsert({
-          mention_id: mention.id,
-          notification_channel_id: channel.id,
-          delivered_at: success ? new Date().toISOString() : null,
-          status: success ? "delivered" : "failed",
-          error: success ? null : (await response.text()).slice(0, 1000),
-          attempts,
-        }, { onConflict: "mention_id,notification_channel_id" });
-
-        deliveries.set(key, {
-          mention_id: mention.id,
-          notification_channel_id: channel.id,
-          status: success ? "delivered" : "failed",
-          attempts,
-        });
-        if (success) delivered += 1;
-      }
-    }
-
-    return json({ ok: true, delivered, retried });
+    return json({
+      ok: true,
+      claimed: jobs.length,
+      delivered,
+      failed,
+      rate_limited: rateLimited,
+      destinations: groups.length,
+      execution_ms: Date.now() - invocationStartedAt,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return json({ error: message }, message === "Unauthorized" ? 401 : 500);
