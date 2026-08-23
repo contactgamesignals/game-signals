@@ -146,6 +146,21 @@ async function completeDelivery(
   if (rpcError) throw rpcError;
 }
 
+async function deferRateLimitedDelivery(
+  supabase: ReturnType<typeof serviceClient>,
+  job: DeliveryJob,
+  error: string,
+  retryAfter: number,
+) {
+  const { error: rpcError } = await supabase.rpc("defer_discord_rate_limited_delivery", {
+    p_mention_id: job.mention_id,
+    p_notification_channel_id: job.notification_channel_id,
+    p_error: error,
+    p_retry_after_seconds: retryAfter,
+  });
+  if (rpcError) throw rpcError;
+}
+
 async function processDestination(
   supabase: ReturnType<typeof serviceClient>,
   jobs: DeliveryJob[],
@@ -189,7 +204,7 @@ async function processDestination(
 
     if (response.status === 429) {
       const retryAfter = retryAfterSeconds(response, responseText);
-      await completeDelivery(supabase, job, false, responseText || "Discord rate limited the webhook.", retryAfter);
+      await deferRateLimitedDelivery(supabase, job, responseText || "Discord rate limited the webhook.", retryAfter);
       rateLimited += 1;
       if (retryAfter * 1000 <= MAX_INLINE_RATE_LIMIT_WAIT_MS && Date.now() - invocationStartedAt + retryAfter * 1000 < DISCORD_INVOCATION_BUDGET_MS) {
         await sleep(retryAfter * 1000 + 100);
