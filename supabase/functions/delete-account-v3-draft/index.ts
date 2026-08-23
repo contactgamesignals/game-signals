@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
           .eq("workspace_id", workspaceId),
         service
           .from("subscriptions")
-          .select("status, stripe_customer_id, stripe_subscription_id, cancel_at_period_end, current_period_end")
+          .select("status, billing_provider, billing_customer_id, billing_subscription_id, stripe_customer_id, stripe_subscription_id, cancel_at_period_end, current_period_end")
           .eq("workspace_id", workspaceId)
           .maybeSingle(),
         service
@@ -82,21 +82,23 @@ Deno.serve(async (request) => {
         });
       }
 
-      if (subscription?.stripe_subscription_id && subscription.status !== "canceled") {
+      const hasProviderSubscription = Boolean(subscription?.billing_subscription_id || subscription?.stripe_subscription_id);
+      if (hasProviderSubscription && subscription?.status !== "canceled") {
+        const providerName = subscription?.billing_provider === "paddle" ? "Paddle" : "Stripe Customer Portal";
         return json({
           ok: false,
-          error: subscription.cancel_at_period_end
+          error: subscription?.cancel_at_period_end
             ? "Your paid subscription is scheduled to end. Delete the account after the paid period finishes."
-            : "Cancel the paid subscription in Stripe Customer Portal before deleting the account.",
+            : `Cancel the paid subscription in ${providerName} before deleting the account.`,
           code: "active_subscription",
           requires_billing_portal: true,
-          current_period_end: subscription.current_period_end,
+          current_period_end: subscription?.current_period_end,
         });
       }
 
-      // v3 must never run without the seller-side archive migration. Even a workspace that
-      // never paid receives a billing_accounts row at workspace creation, so absence means
-      // the retention-safe schema is not ready and deletion must fail closed.
+      // Account deletion must never run without the seller-side archive migration. Even a
+      // workspace that never paid receives a billing_accounts row at workspace creation, so
+      // absence means the retention-safe schema is not ready and deletion must fail closed.
       if (!billingAccount?.id || billingAccount.workspace_id !== workspaceId) {
         return json({
           ok: false,
@@ -105,8 +107,9 @@ Deno.serve(async (request) => {
         }, 503);
       }
 
-      // For a workspace that ever had Stripe billing, verify that the durable archive already
-      // carries the same routing identifiers before the deletable subscriptions row disappears.
+      // Legacy Stripe identifiers still have to match the durable seller archive before the
+      // deletable subscriptions row disappears. Paddle uses provider-neutral identifiers and
+      // must not be compared against these Stripe-only archive columns.
       if (subscription?.stripe_customer_id && billingAccount.stripe_customer_id !== subscription.stripe_customer_id) {
         return json({
           ok: false,
@@ -130,8 +133,6 @@ Deno.serve(async (request) => {
     if (deleteError) throw deleteError;
 
     if (workspaceId) {
-      // The workspace is removed by the existing Auth->workspace cascade. The archive migration's
-      // BEFORE DELETE trigger must detach, not delete, the seller-side billing account.
       const { data: retained, error: retainedError } = await service
         .from("billing_accounts")
         .select("id, workspace_id, workspace_reference, account_deleted_at")
