@@ -13,14 +13,24 @@ docker run -d --rm \
   -e POSTGRES_DB=gamesignal_test \
   postgres:17-alpine >/dev/null
 
-for _ in $(seq 1 40); do
+ready_streak=0
+for _ in $(seq 1 60); do
   if docker exec "$CONTAINER" pg_isready -U postgres -d gamesignal_test >/dev/null 2>&1; then
-    break
+    ready_streak=$((ready_streak + 1))
+    if [ "$ready_streak" -ge 3 ]; then
+      break
+    fi
+  else
+    ready_streak=0
   fi
   sleep 0.5
 done
 
-docker exec "$CONTAINER" pg_isready -U postgres -d gamesignal_test >/dev/null
+if [ "$ready_streak" -lt 3 ]; then
+  echo "PostgreSQL did not become stably ready for the monitoring scale test." >&2
+  docker logs "$CONTAINER" >&2 || true
+  exit 2
+fi
 
 cat >"$SQL" <<'SQL'
 \set ON_ERROR_STOP on
