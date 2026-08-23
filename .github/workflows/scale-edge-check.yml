@@ -1,0 +1,31 @@
+name: Scale Edge Checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  edge-scale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Typecheck scaled Edge Functions
+        run: |
+          deno check supabase/functions/scan-youtube/index.ts
+          deno check supabase/functions/scan-twitch/index.ts
+          deno check supabase/functions/notify-discord/index.ts
+          deno check supabase/functions/notify-email/index.ts
+
+      - name: Test YouTube detail queue in isolated PostgreSQL 17
+        shell: bash
+        run: |
+          docker pull postgres:17-alpine
+          bash scripts/test-youtube-detail-queue-postgres.sh
