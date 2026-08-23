@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { COMPANY } from "@/lib/company";
-import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
+import { getLegalSupportPhone, LEGAL_UPDATED_DATES, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: `Terms - ${COMPANY.productName}`,
@@ -21,9 +21,9 @@ export default function TermsPage() {
 
         <div className="kicker" style={{ marginTop: 24 }}>Legal · public beta</div>
         <h1>{COMPANY.productName} Subscription Terms</h1>
-        <p>Last updated: {LEGAL_UPDATED_DATE} · Terms version: {LEGAL_VERSIONS.terms}</p>
+        <p>Last updated: {LEGAL_UPDATED_DATES.terms} · Terms version: {LEGAL_VERSIONS.terms}</p>
         <p>
-          These Terms govern access to {COMPANY.productName}, a software-as-a-service product operated by {COMPANY.legalName}. Public account registration and the core monitoring service are available in beta. New real-money subscriptions remain unavailable until the separate Paddle LIVE checkout is activated.
+          These Terms govern access to {COMPANY.productName}, a software-as-a-service product operated by {COMPANY.legalName}. Public account registration is available, and active monitoring is provided through paid subscriptions processed through Paddle LIVE.
         </p>
 
         <h2>1. Operator and contact</h2>
@@ -37,13 +37,13 @@ export default function TermsPage() {
 
         <h2>2. Public beta and billing provider</h2>
         <p>
-          Public signup and the free product experience are available. New paid checkout is temporarily locked while Paddle LIVE account, domain, catalog and webhook configuration are completed. Paddle Sandbox remains only as internal test history and cannot create a real-money charge.
+          Public signup is available. Creating an account is free and does not create a recurring payment obligation. The current no-plan account state has no active monitoring slots, so active YouTube and Twitch monitoring requires a paid plan. New paid subscriptions are processed through Paddle LIVE. Paddle Sandbox remains only as internal test history and cannot create a real-money charge through the public product.
         </p>
         <p>
           For a transaction completed through Paddle, Paddle acts as Merchant of Record for the customer transaction. Paddle handles the payment transaction, applicable indirect transaction taxes and customer billing documents under its own buyer terms and checkout disclosures. {COMPANY.legalName} remains the operator of the {COMPANY.productName} software and is responsible for the product access and functionality described in these Terms.
         </p>
         <p>
-          The codebase also retains a Stripe sandbox/direct-billing fallback for technical rollback and legacy testing. It is not the default checkout for new subscriptions. No direct LIVE billing route will be enabled without separate legal, tax and operational approval.
+          The codebase also retains a Stripe sandbox/direct-billing fallback for technical rollback and legacy testing. It is not the default checkout for new subscriptions. No direct Stripe LIVE billing route will be enabled without separate legal, tax and operational approval.
         </p>
 
         <h2>3. Individual and company purchases</h2>
@@ -56,7 +56,7 @@ export default function TermsPage() {
 
         <h2>4. Service, functionality and technical requirements</h2>
         <p>
-          {COMPANY.productName} helps users monitor public creator activity connected with games. The public beta currently supports YouTube video monitoring and Twitch stream monitoring. Discord alerts and opt-in daily email digests are available on eligible plans. Kick monitoring remains unavailable until the required API/commercial access is in place.
+          {COMPANY.productName} helps users monitor public creator activity connected with games. The public beta currently supports YouTube video monitoring and Twitch stream monitoring. Discord alerts and opt-in daily email digests are available on paid plans. Kick monitoring remains unavailable until the required API/commercial access is in place.
         </p>
         <p>
           The service is web-based and requires a current mainstream browser, internet access and an account capable of receiving authentication messages. Connected features may require an account, webhook or other access on the relevant third-party service.
@@ -67,10 +67,10 @@ export default function TermsPage() {
 
         <h2>5. Plans, prices and recurring subscriptions</h2>
         <p>
-          Paid plans are intended to be recurring monthly or yearly subscriptions. Before any real payment order, the checkout provider must show the selected product, billing period, recurring nature of the subscription and the final amount due, including applicable transaction taxes handled by that provider.
+          Paid plans are recurring monthly or yearly subscriptions unless the checkout expressly states otherwise. Before any real payment order, Paddle Checkout shows the selected product, billing period, recurring nature of the subscription and the final amount due, including applicable transaction taxes handled by Paddle.
         </p>
         <p>
-          Prices shown on the website before Paddle LIVE activation describe the planned paid plans and do not themselves create a charge. Once LIVE checkout is enabled, the amount displayed in the final Paddle Checkout is controlling for that transaction.
+          Website prices describe the available subscription plans. The amount, currency, taxes and billing period displayed in the final Paddle Checkout are controlling for that transaction. Creating an account or viewing a plan does not itself create a charge.
         </p>
 
         <h2>6. Cancellation and subscription management</h2>
@@ -110,7 +110,7 @@ export default function TermsPage() {
           You are responsible for keeping account access secure, using accurate information and controlling who can access your workspace. You must not attempt to access another workspace without permission.
         </p>
         <p>
-          Workspace limits depend on the plan. If a plan changes to a lower active-game limit, {COMPANY.productName} may pause excess monitors rather than delete them. Re-activating monitors above the current plan limit is blocked.
+          Workspace limits depend on the plan. A change to a lower active-game limit is blocked until the number of active games fits the target plan. {COMPANY.productName} does not automatically choose or pause games as part of a downgrade. Resuming a paused monitor is also blocked when it would exceed the current active-game limit.
         </p>
 
         <h2>11. Monitoring configuration and false positives</h2>
