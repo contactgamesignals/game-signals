@@ -1,6 +1,6 @@
 # Who Plays My Game - current project status
 
-Last updated: 2026-08-22.
+Last updated: 2026-08-23.
 
 This file is the compact source of truth for the current product state. Current code, production runtime and this document take precedence where older readiness/checkpoint notes conflict. Historical GameSignal identifiers and immutable billing/legal evidence remain unchanged for compatibility and audit continuity.
 
@@ -102,21 +102,49 @@ The account agreement confirmation flow is ACTIVE. It sends a concise branded em
 
 Active production workers/schedulers:
 
-- Twitch scanner
-- YouTube scanner
-- Discord notification worker
-- daily email digest worker
+- Twitch scanner v38
+- YouTube scanner v40
+- Discord notification worker v35
+- daily email digest worker v25
 
 Current cadence logic:
 
 - Twitch: 10 minutes when a game is due
 - YouTube paid: 30 minutes when due
 - YouTube no-plan/free cadence value: 120 minutes, although the current no-plan/free active-game limit is 0
-- daily email digest: once daily at `06:00 UTC`
+- daily email digest: at most one digest per recipient for the previous complete UTC day
 
-The Twitch scheduler itself runs every minute and the scanner checks each game's due time. The YouTube scheduler runs every 15 minutes and similarly processes due games. Discord delivery runs every minute. The daily digest processes the previous complete UTC day, sends nothing when there are no matching signals and uses idempotency to protect against duplicates.
+The Twitch scheduler runs every minute and the scanner claims only due games. The YouTube scheduler remains every 15 minutes and similarly claims only due games. Discord delivery runs every minute from a durable delivery queue. The daily digest destination queue drains every 5 minutes from 06:00 through 11:59 UTC, sends nothing when there are no matching signals, and uses provider idempotency plus durable delivery state to protect against duplicates.
 
 Do not replace daily digest email with instant per-signal email. Realtime belongs in dashboard and Discord.
+
+### Scaled monitoring rollout
+
+The monitoring runtime was reworked and production-validated on 2026-08-23 for a target architecture of up to 1000 active tracked games. This is an architecture capacity target, not a promise that the current external YouTube quota can already sustain 1000 games at the paid 30-minute cadence.
+
+Production scaling safeguards now include:
+
+- per-platform game leases with `FOR UPDATE SKIP LOCKED`, preventing overlapping workers from scanning the same due game
+- frozen YouTube scan windows and durable page tokens, so pagination resumes instead of repeating or losing later pages
+- YouTube snippet-first classification, with full video details requested only for ambiguous candidates
+- a durable YouTube detail-candidate queue, so quota pressure delays validation instead of losing candidates
+- best-effort YouTube view-stat enrichment separated from creator detection
+- Twitch category IDs cached for seven days instead of resolving the same category on every scan
+- grouped Twitch category requests, pagination, rate-limit safety and execution-time guards
+- durable Discord delivery jobs with retry timing instead of repeatedly polling only the newest mentions
+- SQL-aggregated email summaries and a destination queue instead of loading a large global mention window into one Edge invocation
+- direct indexed `workspace_id` ownership on mentions for dashboard and notification filtering
+- bounded batch writes and daily cleanup of internal scan/delivery diagnostics
+
+The isolated PostgreSQL regression creates 1000 paid active games plus additional non-paid controls and verifies leasing, queue isolation and no duplicate claims. Production stress validation also completed a full Counter-Strike 2 Twitch scan with more than 2000 simultaneous stream rows without truncation.
+
+### YouTube external quota gate
+
+The current production Search Queries budget intentionally remains conservative at 100 search requests/day with a peak reservation of 4/minute. The one-minute YouTube scheduler is NOT enabled.
+
+At 1000 active paid games and a 30-minute cadence, one search request per game per scan would already require 48,000 `search.list` requests/day before pagination. The capacity regression therefore models a future Search Queries target of about 100,000/day, giving room for more than one result page per scan on average.
+
+Do not increase the YouTube scheduler cadence or production Search Queries budget until Google explicitly approves sufficient quota. After approval, the architecture can be scaled by a controlled configuration/scheduler rollout instead of another monitoring rewrite.
 
 ## Domain, hosting and SEO
 
@@ -204,6 +232,10 @@ Do not blindly change these notices without rechecking worker dependencies and a
 - deleting a paused game creates no slot cooldown
 - unused plan capacity remains usable while other deleted slots cool down
 - dashboard history: up to 250 YouTube + 250 Twitch signals
+- scaled monitoring queues and leases: LIVE
+- 1000-game architecture regression: PASS
+- YouTube 1000-game full-cadence external quota: NOT YET APPROVED
+- YouTube scheduler: every 15 minutes, intentionally gated
 - Paddle runtime: LIVE
 - Paddle LIVE checkout: ON
 - real LIVE paid subscription: ACTIVE and webhook-synchronized
