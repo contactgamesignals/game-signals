@@ -39,6 +39,11 @@ export default function YouTubeGameMonitoringPage() {
           Start with the exact game title, then add aliases, studio-specific phrases or exclusion terms when needed. This is especially important for games with short, common or ambiguous names. Matching results surface the creator, video title, link and available public reach signals so your team can decide what deserves attention.
         </p>
 
+        <h2>How do I find YouTubers playing my game?</h2>
+        <p>
+          Add your game title and useful aliases to {BRAND.name}. The service monitors YouTube for new videos related to your game and surfaces matching creators in one dashboard, helping you find YouTubers who are already covering or playing your game even if you did not know their channel before.
+        </p>
+
         <h2>Why monitor YouTube creator coverage?</h2>
         <ul>
           <li>Discover reviews, let&apos;s plays, impressions and recommendation videos you did not arrange yourself.</li>
