@@ -42,6 +42,11 @@ export default function TwitchStreamAlertsPage() {
           Paid plans include Discord alerts alongside the live dashboard, so teams can react without repeatedly searching Twitch. All paid plans use the same monitoring cadence; the plan difference is the number of active games you can track.
         </p>
 
+        <h2>How do I get notified when someone streams my game?</h2>
+        <p>
+          Add your game to {BRAND.name} and enable Twitch monitoring. When a matching creator starts streaming your game, the stream can appear in your dashboard and paid plans can send a Discord alert, helping you react while the stream is still live. You do not need to connect your own Twitch channel.
+        </p>
+
         <h2>Who uses Twitch stream alerts?</h2>
         <ul>
           <li>Indie game developers who want to notice organic streams during launch or Early Access.</li>
