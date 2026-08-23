@@ -5,14 +5,13 @@ const source = readFileSync(resolve(process.cwd(), "supabase/functions/scan-yout
 
 const requiredSnippets = [
   "const YOUTUBE_SEARCH_PAGE_SIZE = 50;",
-  "const YOUTUBE_GAMING_TOPIC_ID = \"/m/0bzvm2\";",
-  "searchUrl.searchParams.set(\"topicId\", YOUTUBE_GAMING_TOPIC_ID);",
+  "searchUrl.searchParams.set(\"videoCategoryId\", \"20\");",
   "searchUrl.searchParams.set(\"safeSearch\", \"none\");",
   "searchUrl.searchParams.set(\"maxResults\", String(YOUTUBE_SEARCH_PAGE_SIZE));",
+  "youtube_category_id: \"20\"",
   "search_has_next_page: searchHasNextPage",
   "search_results_truncated: searchHasNextPage",
   "candidate_count: items.length",
-  "accepted_non_gaming: acceptedNonGaming",
   "queue_delay_minutes: queueDelayMinutes",
   "scan_interval_minutes: scanIntervalMinutes",
   "if (aliasesError) throw aliasesError;",
@@ -28,15 +27,15 @@ for (const snippet of requiredSnippets) {
 }
 
 const forbiddenSnippets = [
-  "searchUrl.searchParams.set(\"videoCategoryId\", \"20\")",
-  "if (!detail || detail.categoryId !== \"20\") return false;",
+  "YOUTUBE_GAMING_TOPIC_ID",
+  "searchUrl.searchParams.set(\"topicId\"",
   "if (!detailsResponse.ok) continue;",
   "searchUrl.searchParams.set(\"maxResults\", \"25\")",
 ];
 
 for (const snippet of forbiddenSnippets) {
   if (source.includes(snippet)) {
-    throw new Error(`YouTube discovery regression: forbidden old behavior is present: ${snippet}`);
+    throw new Error(`YouTube discovery regression: forbidden behavior is present: ${snippet}`);
   }
 }
 
