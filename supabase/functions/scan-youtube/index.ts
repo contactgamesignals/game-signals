@@ -7,7 +7,6 @@ type VideoDetail = { views: number; categoryId: string | null; description: stri
 type ExistingMention = { id: string; external_id: string; raw_payload: SearchItem | null };
 
 const YOUTUBE_SEARCH_PAGE_SIZE = 50;
-const YOUTUBE_GAMING_TOPIC_ID = "/m/0bzvm2";
 
 const STRONG_GAME_CONTEXT_HINTS = [
   "gameplay", "playthrough", "walkthrough", "let's play", "lets play", "review", "trailer", "first look",
@@ -126,7 +125,7 @@ function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, p
 }
 
 function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, includes: string[], excludes: string[]) {
-  if (!detail) return false;
+  if (!detail || detail.categoryId !== "20") return false;
 
   const allContext = [
     item.snippet.title,
@@ -139,10 +138,6 @@ function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, i
 
   const matchedIncludes = includes.filter((phrase) => containsPhrase(allContext, phrase));
   if (!matchedIncludes.length) return false;
-
-  const titleMatches = matchedIncludes.some((phrase) => containsPhrase(item.snippet.title, phrase));
-  const strongContext = hasStrongGameContext(allContext);
-  if (detail.categoryId !== "20" && !titleMatches && !strongContext) return false;
 
   const multiWordMatch = matchedIncludes.some((phrase) => wordCount(phrase) > 1);
   if (multiWordMatch) {
@@ -287,7 +282,7 @@ Deno.serve(async (request) => {
       const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
       searchUrl.searchParams.set("part", "snippet");
       searchUrl.searchParams.set("type", "video");
-      searchUrl.searchParams.set("topicId", YOUTUBE_GAMING_TOPIC_ID);
+      searchUrl.searchParams.set("videoCategoryId", "20");
       searchUrl.searchParams.set("safeSearch", "none");
       searchUrl.searchParams.set("order", "date");
       searchUrl.searchParams.set("maxResults", String(YOUTUBE_SEARCH_PAGE_SIZE));
@@ -310,7 +305,6 @@ Deno.serve(async (request) => {
 
       let gameMentions = 0;
       let filteredOut = 0;
-      let acceptedNonGaming = 0;
       let missingVideoDetails = 0;
       for (const item of items) {
         const videoId = item.id.videoId;
@@ -324,7 +318,6 @@ Deno.serve(async (request) => {
         }
 
         const views = detail?.views ?? 0;
-        if (detail?.categoryId !== "20") acceptedNonGaming += 1;
         const thumbnail = item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? null;
         const { error: upsertError } = await supabase.from("mentions").upsert({
           game_id: game.id,
@@ -361,7 +354,7 @@ Deno.serve(async (request) => {
           metadata: {
             query: searchTerm,
             published_after: publishedAfter,
-            youtube_topic_id: YOUTUBE_GAMING_TOPIC_ID,
+            youtube_category_id: "20",
             safe_search: "none",
             search_page_size: YOUTUBE_SEARCH_PAGE_SIZE,
             candidate_count: items.length,
@@ -369,7 +362,6 @@ Deno.serve(async (request) => {
             search_has_next_page: searchHasNextPage,
             search_results_truncated: searchHasNextPage,
             filtered_out: filteredOut,
-            accepted_non_gaming: acceptedNonGaming,
             missing_video_details: missingVideoDetails,
             revalidated_removed: revalidatedRemoved,
             strict_single_word_filter: includes.some((phrase) => wordCount(phrase) === 1),
