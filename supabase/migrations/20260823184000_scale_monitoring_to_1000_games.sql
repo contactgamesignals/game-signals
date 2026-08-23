@@ -33,7 +33,7 @@ create index if not exists mentions_workspace_platform_detected_idx
 
 create index if not exists mentions_workspace_twitch_last_seen_idx
   on public.mentions (workspace_id, last_seen_at desc)
-  where platform::text = 'twitch';
+  where platform = 'twitch'::public.mention_platform;
 
 create or replace function private.set_mention_workspace_id()
 returns trigger
