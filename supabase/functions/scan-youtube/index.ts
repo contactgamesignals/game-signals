@@ -441,6 +441,20 @@ function candidatePairs(candidates: DetailCandidate[]) {
   return candidates.map((candidate) => ({ game_id: candidate.game_id, external_id: candidate.external_id }));
 }
 
+async function releaseDetailCandidatesBestEffort(
+  supabase: ReturnType<typeof serviceClient>,
+  candidates: DetailCandidate[],
+  incrementAttempts: boolean,
+) {
+  if (!candidates.length) return;
+  const { error } = await supabase.rpc("release_youtube_detail_candidates", {
+    p_pairs: candidatePairs(candidates),
+    p_retry_after_seconds: 60,
+    p_increment_attempts: incrementAttempts,
+  });
+  if (error) console.error("Could not release YouTube detail candidate leases", error);
+}
+
 async function processPendingDetailCandidates(
   supabase: ReturnType<typeof serviceClient>,
   apiKey: string,
@@ -459,22 +473,22 @@ async function processPendingDetailCandidates(
   try {
     granted = await reserveQuota(supabase, "youtube_general", detailCallsNeeded);
   } catch (error) {
-    await supabase.rpc("release_youtube_detail_candidates", {
-      p_pairs: candidatePairs(claimed),
-      p_retry_after_seconds: 60,
-      p_increment_attempts: false,
-    }).catch(() => undefined);
+    await releaseDetailCandidatesBestEffort(supabase, claimed, false);
     return { claimed: claimed.length, accepted: 0, rejected: 0, quotaLimited: true, error: error instanceof Error ? error.message : String(error) };
   }
 
   const runnable = claimed.slice(0, granted * 50);
   const deferred = claimed.slice(runnable.length);
   if (deferred.length) {
-    await supabase.rpc("release_youtube_detail_candidates", {
+    const { error } = await supabase.rpc("release_youtube_detail_candidates", {
       p_pairs: candidatePairs(deferred),
       p_retry_after_seconds: 60,
       p_increment_attempts: false,
     });
+    if (error) {
+      await releaseDetailCandidatesBestEffort(supabase, runnable, false);
+      return { claimed: claimed.length, accepted: 0, rejected: 0, quotaLimited: true, error: error.message };
+    }
   }
   if (!runnable.length) {
     return { claimed: claimed.length, accepted: 0, rejected: 0, quotaLimited: true, error: null };
@@ -535,11 +549,7 @@ async function processPendingDetailCandidates(
       error: null,
     };
   } catch (error) {
-    await supabase.rpc("release_youtube_detail_candidates", {
-      p_pairs: candidatePairs(runnable),
-      p_retry_after_seconds: 60,
-      p_increment_attempts: true,
-    }).catch(() => undefined);
+    await releaseDetailCandidatesBestEffort(supabase, runnable, true);
     return {
       claimed: claimed.length,
       accepted: 0,
@@ -580,7 +590,7 @@ Deno.serve(async (request) => {
       const { data, error } = await supabase.from("games").select(GAME_SELECT).eq("id", body.game_id).eq("enabled", true).maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: "Game not found or monitoring is paused." }, 404);
-      const game = data as Game;
+      const game = data as unknown as Game;
 
       if (!auth.internal && game.youtube_next_scan_at && new Date(game.youtube_next_scan_at).getTime() > Date.now() && !game.youtube_scan_page_token) {
         return json({
