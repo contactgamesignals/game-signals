@@ -8,13 +8,18 @@ const requiredSnippets = [
   "searchUrl.searchParams.set(\"videoCategoryId\", \"20\");",
   "searchUrl.searchParams.set(\"safeSearch\", \"none\");",
   "searchUrl.searchParams.set(\"maxResults\", String(YOUTUBE_SEARCH_PAGE_SIZE));",
+  "searchUrl.searchParams.set(\"publishedBefore\", prepared.windowEnd);",
+  "searchUrl.searchParams.set(\"pageToken\", prepared.pageToken);",
   "youtube_category_id: \"20\"",
-  "search_has_next_page: searchHasNextPage",
-  "search_results_truncated: searchHasNextPage",
+  "pagination_in_progress: Boolean(nextPageToken)",
   "candidate_count: items.length",
-  "queue_delay_minutes: queueDelayMinutes",
-  "scan_interval_minutes: scanIntervalMinutes",
-  "if (aliasesError) throw aliasesError;",
+  "queue_delay_minutes: prepared.queueDelayMinutes",
+  "scan_interval_minutes: prepared.scanIntervalMinutes",
+  "claim_due_youtube_games",
+  "reserve_monitoring_quota",
+  "fetchVideoDetailsBatched",
+  "youtube_last_revalidated_at",
+  "if (aliasError) throw aliasError;",
   "if (subscriptionError) throw subscriptionError;",
   "if (upsertError) throw upsertError;",
   "YouTube video details failed:",
@@ -29,8 +34,8 @@ for (const snippet of requiredSnippets) {
 const forbiddenSnippets = [
   "YOUTUBE_GAMING_TOPIC_ID",
   "searchUrl.searchParams.set(\"topicId\"",
-  "if (!detailsResponse.ok) continue;",
   "searchUrl.searchParams.set(\"maxResults\", \"25\")",
+  "const YOUTUBE_SCHEDULER_BATCH_SIZE = 1;",
 ];
 
 for (const snippet of forbiddenSnippets) {
@@ -39,4 +44,4 @@ for (const snippet of forbiddenSnippets) {
   }
 }
 
-console.log("YouTube discovery safeguards are present.");
+console.log("YouTube discovery and pagination safeguards are present.");
