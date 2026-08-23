@@ -2,8 +2,12 @@ import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore
 
 type Game = { id: string; workspace_id: string; title: string; youtube_last_scanned_at: string | null; youtube_next_scan_at: string | null };
 type SearchItem = { id: { videoId: string }; snippet: { publishedAt: string; channelId: string; title: string; channelTitle: string; description?: string; thumbnails?: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } } };
+type SearchPayload = { items?: SearchItem[]; nextPageToken?: string; pageInfo?: { totalResults?: number; resultsPerPage?: number } };
 type VideoDetail = { views: number; categoryId: string | null; description: string; tags: string[] };
 type ExistingMention = { id: string; external_id: string; raw_payload: SearchItem | null };
+
+const YOUTUBE_SEARCH_PAGE_SIZE = 50;
+const YOUTUBE_GAMING_TOPIC_ID = "/m/0bzvm2";
 
 const STRONG_GAME_CONTEXT_HINTS = [
   "gameplay", "playthrough", "walkthrough", "let's play", "lets play", "review", "trailer", "first look",
@@ -122,7 +126,7 @@ function singleWordGameLooksIntentional(item: SearchItem, detail: VideoDetail, p
 }
 
 function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, includes: string[], excludes: string[]) {
-  if (!detail || detail.categoryId !== "20") return false;
+  if (!detail) return false;
 
   const allContext = [
     item.snippet.title,
@@ -135,6 +139,10 @@ function matchesTrackedGame(item: SearchItem, detail: VideoDetail | undefined, i
 
   const matchedIncludes = includes.filter((phrase) => containsPhrase(allContext, phrase));
   if (!matchedIncludes.length) return false;
+
+  const titleMatches = matchedIncludes.some((phrase) => containsPhrase(item.snippet.title, phrase));
+  const strongContext = hasStrongGameContext(allContext);
+  if (detail.categoryId !== "20" && !titleMatches && !strongContext) return false;
 
   const multiWordMatch = matchedIncludes.some((phrase) => wordCount(phrase) > 1);
   if (multiWordMatch) {
@@ -154,7 +162,9 @@ async function fetchVideoDetails(ids: string[], apiKey: string) {
     detailsUrl.searchParams.set("id", batch.join(","));
     detailsUrl.searchParams.set("key", apiKey);
     const detailsResponse = await fetch(detailsUrl);
-    if (!detailsResponse.ok) continue;
+    if (!detailsResponse.ok) {
+      throw new Error(`YouTube video details failed: ${detailsResponse.status} ${(await detailsResponse.text()).slice(0, 1000)}`);
+    }
     const detailsPayload = await detailsResponse.json() as { items?: Array<{ id: string; statistics?: { viewCount?: string }; snippet?: { categoryId?: string; description?: string; tags?: string[] } }> };
     for (const item of detailsPayload.items ?? []) {
       details.set(item.id, {
@@ -176,7 +186,7 @@ async function revalidateRecentMentions(
   apiKey: string,
 ) {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("mentions")
     .select("id, external_id, raw_payload")
     .eq("game_id", gameId)
@@ -185,6 +195,7 @@ async function revalidateRecentMentions(
     .order("detected_at", { ascending: false })
     .limit(100);
 
+  if (error) throw error;
   const mentions = (data ?? []) as ExistingMention[];
   if (!mentions.length) return 0;
 
@@ -196,7 +207,10 @@ async function revalidateRecentMentions(
     if (!matchesTrackedGame(item, details.get(mention.external_id), includes, excludes)) rejectedIds.push(mention.id);
   }
 
-  if (rejectedIds.length) await supabase.from("mentions").delete().in("id", rejectedIds);
+  if (rejectedIds.length) {
+    const { error: deleteError } = await supabase.from("mentions").delete().in("id", rejectedIds);
+    if (deleteError) throw deleteError;
+  }
   return rejectedIds.length;
 }
 
@@ -244,7 +258,8 @@ Deno.serve(async (request) => {
     }
 
     const workspaceIds = Array.from(new Set(games.map((game) => game.workspace_id)));
-    const { data: subscriptions } = await supabase.from("subscriptions").select("workspace_id, plan, status").in("workspace_id", workspaceIds);
+    const { data: subscriptions, error: subscriptionError } = await supabase.from("subscriptions").select("workspace_id, plan, status").in("workspace_id", workspaceIds);
+    if (subscriptionError) throw subscriptionError;
     const planByWorkspace = new Map((subscriptions ?? []).map((item) => [
       item.workspace_id as string,
       (item.status === "active" || item.status === "trialing" ? item.plan : "free") as Plan,
@@ -253,7 +268,8 @@ Deno.serve(async (request) => {
     let totalMentions = 0;
     for (const game of games) {
       const runStarted = new Date();
-      const { data: aliasesData } = await supabase.from("game_aliases").select("phrase, type").eq("game_id", game.id);
+      const { data: aliasesData, error: aliasesError } = await supabase.from("game_aliases").select("phrase, type").eq("game_id", game.id);
+      if (aliasesError) throw aliasesError;
       const includes = Array.from(new Set([game.title, ...(aliasesData ?? []).filter((item) => item.type === "include").map((item) => item.phrase as string)]));
       const excludes = (aliasesData ?? []).filter((item) => item.type === "exclude").map((item) => item.phrase as string);
       const revalidatedRemoved = await revalidateRecentMentions(supabase, game.id, includes, excludes, apiKey);
@@ -261,13 +277,20 @@ Deno.serve(async (request) => {
       const publishedAfter = game.youtube_last_scanned_at
         ? new Date(new Date(game.youtube_last_scanned_at).getTime() - 5 * 60_000).toISOString()
         : new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString();
+      const queueDelayMinutes = game.youtube_next_scan_at
+        ? Math.max(0, Math.round((runStarted.getTime() - new Date(game.youtube_next_scan_at).getTime()) / 60_000))
+        : 0;
+      const scanIntervalMinutes = game.youtube_last_scanned_at
+        ? Math.max(0, Math.round((runStarted.getTime() - new Date(game.youtube_last_scanned_at).getTime()) / 60_000))
+        : null;
 
       const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
       searchUrl.searchParams.set("part", "snippet");
       searchUrl.searchParams.set("type", "video");
-      searchUrl.searchParams.set("videoCategoryId", "20");
+      searchUrl.searchParams.set("topicId", YOUTUBE_GAMING_TOPIC_ID);
+      searchUrl.searchParams.set("safeSearch", "none");
       searchUrl.searchParams.set("order", "date");
-      searchUrl.searchParams.set("maxResults", "25");
+      searchUrl.searchParams.set("maxResults", String(YOUTUBE_SEARCH_PAGE_SIZE));
       searchUrl.searchParams.set("publishedAfter", publishedAfter);
       searchUrl.searchParams.set("q", searchTerm);
       searchUrl.searchParams.set("key", apiKey);
@@ -279,23 +302,29 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      const searchPayload = await searchResponse.json() as { items?: SearchItem[] };
+      const searchPayload = await searchResponse.json() as SearchPayload;
       const items = searchPayload.items ?? [];
       const ids = items.map((item) => item.id.videoId).filter(Boolean);
       const details = await fetchVideoDetails(ids, apiKey);
+      const searchHasNextPage = Boolean(searchPayload.nextPageToken);
 
       let gameMentions = 0;
       let filteredOut = 0;
+      let acceptedNonGaming = 0;
+      let missingVideoDetails = 0;
       for (const item of items) {
         const videoId = item.id.videoId;
         const detail = details.get(videoId);
+        if (!detail) missingVideoDetails += 1;
         if (!matchesTrackedGame(item, detail, includes, excludes)) {
           filteredOut += 1;
-          await supabase.from("mentions").delete().eq("game_id", game.id).eq("platform", "youtube").eq("external_id", videoId);
+          const { error: deleteError } = await supabase.from("mentions").delete().eq("game_id", game.id).eq("platform", "youtube").eq("external_id", videoId);
+          if (deleteError) throw deleteError;
           continue;
         }
 
         const views = detail?.views ?? 0;
+        if (detail?.categoryId !== "20") acceptedNonGaming += 1;
         const thumbnail = item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? null;
         const { error: upsertError } = await supabase.from("mentions").upsert({
           game_id: game.id,
@@ -312,14 +341,15 @@ Deno.serve(async (request) => {
           signal_score: signalScore(views, false),
           raw_payload: item,
         }, { onConflict: "game_id,platform,external_id" });
-        if (!upsertError) gameMentions += 1;
+        if (upsertError) throw upsertError;
+        gameMentions += 1;
       }
 
       totalMentions += gameMentions;
       const plan = planByWorkspace.get(game.workspace_id) ?? "free";
       const now = new Date();
       const next = new Date(now.getTime() + youtubeCadenceMinutes(plan) * 60_000).toISOString();
-      await Promise.all([
+      const [gameUpdateResult, scanRunResult] = await Promise.all([
         supabase.from("games").update({ youtube_last_scanned_at: now.toISOString(), youtube_next_scan_at: next }).eq("id", game.id),
         supabase.from("scan_runs").insert({
           game_id: game.id,
@@ -331,13 +361,25 @@ Deno.serve(async (request) => {
           metadata: {
             query: searchTerm,
             published_after: publishedAfter,
-            youtube_category_id: "20",
+            youtube_topic_id: YOUTUBE_GAMING_TOPIC_ID,
+            safe_search: "none",
+            search_page_size: YOUTUBE_SEARCH_PAGE_SIZE,
+            candidate_count: items.length,
+            search_total_results_approx: searchPayload.pageInfo?.totalResults ?? null,
+            search_has_next_page: searchHasNextPage,
+            search_results_truncated: searchHasNextPage,
             filtered_out: filteredOut,
+            accepted_non_gaming: acceptedNonGaming,
+            missing_video_details: missingVideoDetails,
             revalidated_removed: revalidatedRemoved,
             strict_single_word_filter: includes.some((phrase) => wordCount(phrase) === 1),
+            queue_delay_minutes: queueDelayMinutes,
+            scan_interval_minutes: scanIntervalMinutes,
           },
         }),
       ]);
+      if (gameUpdateResult.error) throw gameUpdateResult.error;
+      if (scanRunResult.error) throw scanRunResult.error;
     }
 
     return json({ ok: true, games: games.length, mentions: totalMentions });
