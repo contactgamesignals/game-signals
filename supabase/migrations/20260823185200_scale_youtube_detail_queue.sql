@@ -69,6 +69,63 @@ $$;
 revoke all on function public.claim_youtube_detail_candidates(integer, integer) from public, anon, authenticated;
 grant execute on function public.claim_youtube_detail_candidates(integer, integer) to service_role;
 
+create or replace function public.complete_youtube_detail_candidates(p_pairs jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_deleted integer;
+begin
+  with requested as (
+    select x.game_id, x.external_id
+    from jsonb_to_recordset(coalesce(p_pairs, '[]'::jsonb)) as x(game_id uuid, external_id text)
+  )
+  delete from public.youtube_detail_candidates c
+  using requested r
+  where c.game_id = r.game_id
+    and c.external_id = r.external_id;
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.complete_youtube_detail_candidates(jsonb) from public, anon, authenticated;
+grant execute on function public.complete_youtube_detail_candidates(jsonb) to service_role;
+
+create or replace function public.release_youtube_detail_candidates(
+  p_pairs jsonb,
+  p_retry_after_seconds integer default 60
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_updated integer;
+begin
+  with requested as (
+    select x.game_id, x.external_id
+    from jsonb_to_recordset(coalesce(p_pairs, '[]'::jsonb)) as x(game_id uuid, external_id text)
+  )
+  update public.youtube_detail_candidates c
+  set claimed_at = null,
+      available_at = now() + make_interval(secs => greatest(5, least(coalesce(p_retry_after_seconds, 60), 3600)))
+  from requested r
+  where c.game_id = r.game_id
+    and c.external_id = r.external_id;
+
+  get diagnostics v_updated = row_count;
+  return v_updated;
+end;
+$$;
+
+revoke all on function public.release_youtube_detail_candidates(jsonb, integer) from public, anon, authenticated;
+grant execute on function public.release_youtube_detail_candidates(jsonb, integer) to service_role;
+
 -- batchGetStats has its own granular quota bucket as of June 2026. Statistics
 -- enrichment is best-effort and must never block creator detection.
 insert into public.internal_settings(key, value)
