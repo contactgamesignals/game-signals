@@ -6,6 +6,7 @@ import EmailDigestSettings from "@/components/EmailDigestSettings";
 import PaidPlanChangePanel from "@/components/PaidPlanChangePanel";
 import { BRAND } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
+import { edgeFunctionErrorMessage } from "@/lib/supabase/function-error";
 import type { BillingPeriod, PaidPlanName, PlanName } from "@/lib/plans";
 import { PLAN_LABELS, PLAN_LIMITS, normalizePlan } from "@/lib/plans";
 import { BILLING_PROVIDER_LABELS, type BillingProvider } from "@/lib/billing-provider";
@@ -168,7 +169,9 @@ export default function SettingsClient({
     const { data, error: functionError } = await supabase.functions.invoke("manage-discord", {
       body: { action, workspace_id: workspaceId, ...extra },
     });
-    if (functionError) throw new Error(functionError.message);
+    if (functionError) {
+      throw new Error(await edgeFunctionErrorMessage(functionError, "Could not complete the Discord request."));
+    }
     if (data?.error) throw new Error(String(data.error));
     return data as Record<string, unknown>;
   }
@@ -178,7 +181,9 @@ export default function SettingsClient({
     const { data, error: functionError } = await supabase.functions.invoke(billingFunction, {
       body: { action, workspace_id: workspaceId, ...extra },
     });
-    if (functionError) throw new Error(functionError.message);
+    if (functionError) {
+      throw new Error(await edgeFunctionErrorMessage(functionError, "Could not complete the billing request."));
+    }
     const result = data as BillingResponse | null;
     if (result?.error) throw new Error(result.error);
     return result ?? {};
