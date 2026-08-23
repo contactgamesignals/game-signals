@@ -138,6 +138,10 @@ jobs:
           done < <(tail -n 12 "$LOG_FILE")
           exit "$STATUS"
 
+      - name: Test 1000-game monitoring queues in isolated PostgreSQL 17
+        shell: bash
+        run: bash scripts/test-monitoring-scale-postgres.sh
+
       - name: Lint
         run: npm run lint
 
