@@ -126,7 +126,6 @@ function singleWordSnippetLooksIntentional(item: YouTubeSearchItem, phrase: stri
 
   if (!titleMatch && !hashtagMatch) return false;
   if (foreignAnchor && !mixedCoverage) return false;
-  if (foreignAnchor && mixedCoverage && !hashtagMatch && !episodeMarker && !syntaxMatch) return false;
 
   let score = 0;
   if (titleMatch) score += 3;
@@ -157,7 +156,6 @@ function singleWordDetailedLooksIntentional(
 
   if (!titleMatch && !hashtagMatch) return false;
   if (foreignAnchor && !mixedCoverage) return false;
-  if (foreignAnchor && mixedCoverage && !hashtagMatch && !episodeMarker && !syntaxMatch) return false;
 
   let score = 0;
   if (titleMatch) score += 3;
