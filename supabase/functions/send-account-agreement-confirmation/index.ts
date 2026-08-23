@@ -2,8 +2,6 @@ import { PDFDocument, PDFFont, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { authorizeRequest, json, jsonHeaders, serviceClient } from "../_shared/core.ts";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const TERMS_VERSION = "2026-08-17-v1";
-const PRIVACY_VERSION = "2026-08-17-v1";
 const WITHDRAWAL_VERSION = "2026-08-17-v1";
 const COMPANY_NAME = "Lumino Games sp. z o.o.";
 const COMPANY_ADDRESS = "ul. Kazimierza Morawskiego 5/127, 30-102 Kraków, Małopolskie, Poland";
@@ -59,7 +57,13 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function buildConfirmationText(input: { email: string; acceptedAt: string; phone: string }) {
+function buildConfirmationText(input: {
+  email: string;
+  acceptedAt: string;
+  phone: string;
+  termsVersion: string;
+  privacyVersion: string;
+}) {
   return `WHO PLAYS MY GAME - ACCOUNT AGREEMENT CONFIRMATION
 
 This document confirms the online agreement concluded when you created and confirmed your Who Plays My Game account.
@@ -77,24 +81,24 @@ Website: ${SITE_URL}
 Account
 Email: ${input.email}
 Agreement accepted: ${input.acceptedAt}
-Terms version: ${TERMS_VERSION}
-Privacy version: ${PRIVACY_VERSION}
+Terms version: ${input.termsVersion}
+Privacy version: ${input.privacyVersion}
 Withdrawal information version: ${WITHDRAWAL_VERSION}
 
 Service agreed at signup
 - Who Plays My Game is a web-based creator-monitoring service for game developers and publishers.
-- The Free public-beta plan costs 0 USD and creates no recurring payment obligation.
-- Free includes one active tracked game, YouTube video monitoring, Twitch live-stream monitoring and the authenticated creator-signal dashboard.
+- Creating an account costs 0 USD and creates no recurring payment obligation.
+- An account without a paid plan has 0 active tracked-game slots. Active YouTube and Twitch monitoring requires a paid subscription.
+- Paid subscriptions are purchased separately through Paddle LIVE. Paid plan capacity determines how many games can be actively monitored.
 - Kick monitoring is not currently available.
-- Paid subscriptions are not part of this Free account agreement and require a separate Paddle checkout.
 - The service requires internet access, a current mainstream browser and a working email account for authentication.
 - Monitoring relies on third-party platforms and APIs, so complete or immediate detection of every public mention cannot be guaranteed.
 
 Duration and termination
-The Free account continues until it is deleted or otherwise terminated under the Terms. You can request account deletion through the product subject to legal-record retention and other safeguards described in the Terms and Privacy Policy.
+The account continues until it is deleted or otherwise terminated under the Terms. A paid subscription has its own billing period and cancellation state. You can request account deletion through the product subject to active-subscription safeguards, legal-record retention and other protections described in the Terms and Privacy Policy.
 
 Withdrawal
-If mandatory consumer law gives you a right to withdraw from this distance contract, the statutory period is generally 14 days from conclusion of the contract. Starting the Free service does not by itself waive mandatory withdrawal rights. To withdraw, send an unambiguous statement before the deadline to ${SUPPORT_EMAIL} or to the registered address above.
+If mandatory consumer law gives you a right to withdraw from this distance contract, the statutory period is generally 14 days from conclusion of the contract. Starting access to the account or service does not by itself waive mandatory withdrawal rights. To withdraw, send an unambiguous statement before the deadline to ${SUPPORT_EMAIL} or to the registered address above.
 
 Model withdrawal statement:
 "I hereby give notice that I withdraw from my contract for the Who Plays My Game service concluded on ${input.acceptedAt}. Account email: ${input.email}. Name: __________. Date: __________."
@@ -103,7 +107,7 @@ Complaints and support
 Product-access, functionality, conformity, privacy or legal requests can be sent to ${SUPPORT_EMAIL} or through the contact details above. Mandatory consumer remedies are not excluded.
 
 Personal data
-Account and service data are processed as described in Privacy Policy version ${PRIVACY_VERSION}. Payment-card data is not collected for the Free plan.
+Account and service data are processed as described in Privacy Policy version ${input.privacyVersion}. For paid transactions, payment-card details are handled by Paddle; Who Plays My Game does not store full payment-card details.
 
 Applicable documents accepted at signup
 Terms: ${SITE_URL}/terms
@@ -256,7 +260,7 @@ function buildEmailText(input: { email: string; acceptedAt: string }) {
 
 Your account is ready.
 
-Plan: Free
+Account state: No paid plan
 Price: 0 USD
 Account: ${input.email}
 Agreement accepted: ${formatAcceptedDate(input.acceptedAt)}
@@ -288,7 +292,7 @@ function buildEmailHtml(input: { email: string; acceptedAt: string }) {
       </div>
       <div style="padding:0 34px 28px">
         <div style="background:#f7f8fb;border:1px solid #e7e9ef;border-radius:12px;padding:18px 20px;line-height:1.7;font-size:14px">
-          <div><strong>Plan:</strong> Free</div>
+          <div><strong>Account state:</strong> No paid plan</div>
           <div><strong>Price:</strong> 0 USD</div>
           <div><strong>Account:</strong> ${email}</div>
           <div><strong>Agreement accepted:</strong> ${acceptedAt}</div>
@@ -337,8 +341,6 @@ Deno.serve(async (request) => {
       .from("account_legal_acceptances")
       .select("id,user_id,terms_version,privacy_version,accepted_at,confirmation_text,confirmation_sha256,confirmation_status,confirmation_provider_message_id,confirmation_attempts")
       .eq("user_id", auth.userId)
-      .eq("terms_version", TERMS_VERSION)
-      .eq("privacy_version", PRIVACY_VERSION)
       .eq("source", "signup")
       .order("accepted_at", { ascending: false })
       .limit(1)
@@ -362,7 +364,13 @@ Deno.serve(async (request) => {
     const supportPhone = Deno.env.get("GAMESIGNAL_SUPPORT_PHONE")?.trim() || PUBLIC_SUPPORT_PHONE;
 
     if (!row.confirmation_text || !row.confirmation_sha256) {
-      const confirmationText = buildConfirmationText({ email: recipient, acceptedAt: row.accepted_at, phone: supportPhone });
+      const confirmationText = buildConfirmationText({
+        email: recipient,
+        acceptedAt: row.accepted_at,
+        phone: supportPhone,
+        termsVersion: row.terms_version,
+        privacyVersion: row.privacy_version,
+      });
       const confirmationHash = await sha256(confirmationText);
       const { data: prepared, error: prepareError } = await supabase
         .from("account_legal_acceptances")

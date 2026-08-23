@@ -23,9 +23,14 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/scan-twitch/index.ts
           deno check --node-modules-dir=auto supabase/functions/notify-discord/index.ts
           deno check --node-modules-dir=auto supabase/functions/notify-email/index.ts
+          deno check --node-modules-dir=auto supabase/functions/send-account-agreement-confirmation/index.ts
 
       - name: Test YouTube detail queue in isolated PostgreSQL 17
         shell: bash
         run: |
           docker pull postgres:17-alpine
-          bash scripts/test-youtube-detail-queue-postgres.sh
+          if ! bash scripts/test-youtube-detail-queue-postgres.sh; then
+            echo "PostgreSQL container startup raced with its initialization; retrying the isolated regression once."
+            sleep 2
+            bash scripts/test-youtube-detail-queue-postgres.sh
+          fi

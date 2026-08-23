@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { COMPANY } from "@/lib/company";
-import { LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
+import { LEGAL_UPDATED_DATES, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: `Privacy Policy - ${COMPANY.productName}`,
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
 
         <div className="kicker" style={{ marginTop: 24 }}>Legal · public beta</div>
         <h1>Privacy Policy</h1>
-        <p>Last updated: {LEGAL_UPDATED_DATE} · Privacy version: {LEGAL_VERSIONS.privacy}</p>
+        <p>Last updated: {LEGAL_UPDATED_DATES.privacy} · Privacy version: {LEGAL_VERSIONS.privacy}</p>
         <p>
           This policy explains how personal data is handled in {COMPANY.productName}, a product operated by {COMPANY.legalName}.
         </p>
@@ -59,7 +59,7 @@ export default function PrivacyPage() {
           <li><strong>Billing and checkout evidence:</strong> to initiate the selected checkout, synchronize subscription access, retain checkout choices and handle cancellation, withdrawal, refund, complaint or dispute requests. The legal bases may include performance of the contract, legal obligations and legitimate interests in maintaining reliable transaction records and defending legal claims.</li>
           <li><strong>Security, abuse prevention and support:</strong> to protect accounts, diagnose problems and respond to support requests. The legal basis is our legitimate interest in operating a secure and reliable service.</li>
           <li><strong>Creator-signal monitoring:</strong> to identify public mentions of monitored games and present those signals to the relevant workspace. The legal basis is our legitimate interest in providing creator-intelligence monitoring from publicly available sources.</li>
-          <li><strong>Legal and accounting duties:</strong> where applicable, to comply with tax, accounting, consumer-protection and other legal obligations. New real-money subscriptions remain unavailable until Paddle LIVE is activated.</li>
+          <li><strong>Legal and accounting duties:</strong> where applicable, to comply with tax, accounting, consumer-protection and other legal obligations connected with the service and paid subscriptions.</li>
           <li><strong>Consent:</strong> where we specifically ask for consent for a separate purpose.</li>
         </ul>
 
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           Paddle acts as Merchant of Record for transactions processed through Paddle. Paddle may collect billing identity, address, payment-method and tax information, calculate applicable transaction taxes, process the payment, issue customer billing documents and provide customer self-service through Paddle Customer Portal. We receive the identifiers and transaction/subscription information needed to associate the Paddle purchase with the correct workspace and access level.
         </p>
         <p>
-          The verified integration currently remains in Sandbox while the separate Paddle LIVE account, domain, catalog, credentials and notification destination are prepared. Public Sandbox checkout is disabled and does not accept real money.
+          Paddle LIVE is the current billing route for new paid subscriptions. The product stores only the Paddle transaction, customer and subscription information needed to synchronize access and maintain appropriate evidence. Paddle Sandbox remains internal test history and public Sandbox checkout is disabled.
         </p>
 
         <h2>7. International processing</h2>
