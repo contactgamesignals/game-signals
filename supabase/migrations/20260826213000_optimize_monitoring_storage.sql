@@ -2,22 +2,16 @@
 -- Twitch provider payloads are redundant with normalized mention columns, so new/upserted
 -- Twitch rows no longer retain them. Detailed Twitch history is kept for at least 48 hours,
 -- the newest 10,000 Twitch signals per workspace, and the newest 500 per game. Older detail
--- is compacted into all-time rollups used by dashboard stats. YouTube detail is unchanged.
+-- is compacted into small all-time rollups used by dashboard stats. YouTube detail is unchanged.
 
 create table if not exists public.signal_archive_rollups (
   game_id uuid not null references public.games(id) on delete cascade,
-  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   platform public.mention_platform not null,
   bucket_date date not null,
   signal_count bigint not null default 0 check (signal_count >= 0),
   total_reach numeric not null default 0 check (total_reach >= 0),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
   primary key (game_id, platform, bucket_date)
 );
-
-create index if not exists signal_archive_rollups_workspace_idx
-  on public.signal_archive_rollups (workspace_id, platform, bucket_date desc);
 
 alter table public.signal_archive_rollups enable row level security;
 
@@ -26,7 +20,14 @@ create policy signal_archive_rollups_select_member
   on public.signal_archive_rollups
   for select
   to authenticated
-  using (private.is_workspace_member(workspace_id));
+  using (
+    exists (
+      select 1
+      from public.games g
+      where g.id = signal_archive_rollups.game_id
+        and private.is_workspace_member(g.workspace_id)
+    )
+  );
 
 revoke all on table public.signal_archive_rollups from anon, authenticated;
 grant select on table public.signal_archive_rollups to authenticated;
@@ -34,18 +35,9 @@ grant all on table public.signal_archive_rollups to service_role;
 
 create table if not exists public.signal_archive_creators (
   game_id uuid not null references public.games(id) on delete cascade,
-  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   creator_key text not null,
-  creator_name text not null,
-  first_seen_at timestamptz not null,
-  last_seen_at timestamptz not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
   primary key (game_id, creator_key)
 );
-
-create index if not exists signal_archive_creators_workspace_idx
-  on public.signal_archive_creators (workspace_id, creator_key);
 
 alter table public.signal_archive_creators enable row level security;
 
@@ -54,7 +46,14 @@ create policy signal_archive_creators_select_member
   on public.signal_archive_creators
   for select
   to authenticated
-  using (private.is_workspace_member(workspace_id));
+  using (
+    exists (
+      select 1
+      from public.games g
+      where g.id = signal_archive_creators.game_id
+        and private.is_workspace_member(g.workspace_id)
+    )
+  );
 
 revoke all on table public.signal_archive_creators from anon, authenticated;
 grant select on table public.signal_archive_creators to authenticated;
@@ -143,59 +142,29 @@ begin
   rollup as (
     insert into public.signal_archive_rollups (
       game_id,
-      workspace_id,
       platform,
       bucket_date,
       signal_count,
-      total_reach,
-      created_at,
-      updated_at
+      total_reach
     )
     select
       c.game_id,
-      c.workspace_id,
       'twitch'::public.mention_platform,
       (c.detected_at at time zone 'UTC')::date,
       count(*)::bigint,
-      coalesce(sum(c.reach), 0)::numeric,
-      now(),
-      now()
+      coalesce(sum(c.reach), 0)::numeric
     from candidates c
-    group by c.game_id, c.workspace_id, (c.detected_at at time zone 'UTC')::date
+    group by c.game_id, (c.detected_at at time zone 'UTC')::date
     on conflict (game_id, platform, bucket_date) do update
       set signal_count = public.signal_archive_rollups.signal_count + excluded.signal_count,
-          total_reach = public.signal_archive_rollups.total_reach + excluded.total_reach,
-          updated_at = now()
+          total_reach = public.signal_archive_rollups.total_reach + excluded.total_reach
     returning 1
   ),
   creators as (
-    insert into public.signal_archive_creators (
-      game_id,
-      workspace_id,
-      creator_key,
-      creator_name,
-      first_seen_at,
-      last_seen_at,
-      created_at,
-      updated_at
-    )
-    select
-      c.game_id,
-      c.workspace_id,
-      lower(c.creator_name),
-      min(c.creator_name),
-      min(c.detected_at),
-      max(c.detected_at),
-      now(),
-      now()
+    insert into public.signal_archive_creators (game_id, creator_key)
+    select distinct c.game_id, lower(c.creator_name)
     from candidates c
-    group by c.game_id, c.workspace_id, lower(c.creator_name)
-    on conflict (game_id, creator_key) do update
-      set workspace_id = excluded.workspace_id,
-          creator_name = excluded.creator_name,
-          first_seen_at = least(public.signal_archive_creators.first_seen_at, excluded.first_seen_at),
-          last_seen_at = greatest(public.signal_archive_creators.last_seen_at, excluded.last_seen_at),
-          updated_at = now()
+    on conflict (game_id, creator_key) do nothing
     returning 1
   ),
   deleted as (
@@ -240,7 +209,8 @@ as $$
       coalesce(sum(r.signal_count), 0)::bigint as signal_count,
       coalesce(sum(r.total_reach), 0)::numeric as total_reach
     from public.signal_archive_rollups r
-    where r.workspace_id = p_workspace_id
+    join public.games g on g.id = r.game_id
+    where g.workspace_id = p_workspace_id
   ),
   creators as (
     select lower(m.creator_name) as creator_key
@@ -249,7 +219,8 @@ as $$
     union
     select a.creator_key
     from public.signal_archive_creators a
-    where a.workspace_id = p_workspace_id
+    join public.games g on g.id = a.game_id
+    where g.workspace_id = p_workspace_id
   )
   select
     (c.signal_count + a.signal_count)::bigint,
