@@ -145,10 +145,7 @@ begin
 
   insert into public.profiles (id, email, display_name)
   values (p_user_id, coalesce(v_email, ''), v_preferred_name)
-  on conflict (id) do update
-    set email = excluded.email,
-        display_name = coalesce(nullif(trim(coalesce(public.profiles.display_name, '')), ''), excluded.display_name),
-        updated_at = now();
+  on conflict (id) do nothing;
 
   insert into public.account_legal_acceptances (user_id, terms_version, privacy_version, source)
   values (p_user_id, p_terms_version, p_privacy_version, 'signup')
