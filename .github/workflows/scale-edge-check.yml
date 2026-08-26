@@ -29,8 +29,14 @@ jobs:
         shell: bash
         run: |
           docker pull postgres:17-alpine
-          if ! bash scripts/test-youtube-detail-queue-postgres.sh; then
-            echo "PostgreSQL container startup raced with its initialization; retrying the isolated regression once."
-            sleep 2
-            bash scripts/test-youtube-detail-queue-postgres.sh
-          fi
+          for attempt in 1 2 3 4; do
+            if bash scripts/test-youtube-detail-queue-postgres.sh; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "Isolated PostgreSQL regression failed after 4 clean-container attempts."
+              exit 1
+            fi
+            echo "PostgreSQL container initialization raced with the test; retrying clean-container attempt $((attempt + 1))/4."
+            sleep $((attempt * 2))
+          done
