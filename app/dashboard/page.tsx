@@ -18,6 +18,12 @@ type DashboardStatsRow = {
   total_reach: number | string | null;
 };
 
+function hasGoogleIdentity(user: { app_metadata?: Record<string, unknown> }) {
+  const provider = user.app_metadata?.provider;
+  const providers = user.app_metadata?.providers;
+  return provider === "google" || (Array.isArray(providers) && providers.includes("google"));
+}
+
 export default async function DashboardPage() {
   if (!isSupabaseConfigured()) {
     return (
@@ -45,6 +51,10 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
+
+  if (!membershipError && !membershipData && hasGoogleIdentity(user)) {
+    redirect("/auth/complete-google-signup");
+  }
 
   if (membershipError || !membershipData) {
     return (
