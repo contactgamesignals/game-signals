@@ -1,6 +1,10 @@
 import AuthCard from "@/components/AuthCard";
+import { isGoogleAuthEnabled } from "@/lib/supabase/auth-provider-settings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
-export default function SignupPage() {
-  return <AuthCard mode="signup" configured={isSupabaseConfigured()} />;
+export const revalidate = 60;
+
+export default async function SignupPage() {
+  const googleEnabled = isSupabaseConfigured() ? await isGoogleAuthEnabled() : false;
+  return <AuthCard mode="signup" configured={isSupabaseConfigured()} googleEnabled={googleEnabled} />;
 }
