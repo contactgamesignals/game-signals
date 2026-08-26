@@ -3,6 +3,16 @@ import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+type UntypedRpcResult = {
+  data: string | null;
+  error: { code?: string; message?: string } | null;
+};
+
+type UntypedRpc = (
+  functionName: string,
+  args: Record<string, unknown>,
+) => PromiseLike<UntypedRpcResult>;
+
 export async function POST(request: Request) {
   const requestUrl = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -29,7 +39,8 @@ export async function POST(request: Request) {
   }
 
   const admin = getSupabaseAdminClient();
-  const { data: workspaceId, error } = await admin.rpc("complete_google_oauth_signup", {
+  const rpc = admin.rpc.bind(admin) as unknown as UntypedRpc;
+  const { data: workspaceId, error } = await rpc("complete_google_oauth_signup", {
     p_user_id: user.id,
     p_terms_version: LEGAL_VERSIONS.terms,
     p_privacy_version: LEGAL_VERSIONS.privacy,
