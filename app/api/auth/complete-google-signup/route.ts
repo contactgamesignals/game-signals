@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { LEGAL_VERSIONS } from "@/lib/legal-versions";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type UntypedRpcResult = {
@@ -38,8 +37,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const admin = getSupabaseAdminClient();
-  const rpc = admin.rpc.bind(admin) as unknown as UntypedRpc;
+  const rpc = supabase.rpc.bind(supabase) as unknown as UntypedRpc;
   const { data: workspaceId, error } = await rpc("complete_google_oauth_signup", {
     p_user_id: user.id,
     p_terms_version: LEGAL_VERSIONS.terms,
