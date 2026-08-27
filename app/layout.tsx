@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import InteractionFeedback from "@/components/InteractionFeedback";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
@@ -34,11 +35,20 @@ export const metadata: Metadata = {
     siteName: BRAND.name,
     title,
     description,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `${BRAND.name} - Twitch and YouTube game monitoring`,
+      },
+    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title,
     description,
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: "/favicon.svg",
@@ -51,6 +61,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <InteractionFeedback />
         {children}
+        <Analytics />
       </body>
     </html>
   );
