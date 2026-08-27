@@ -1,6 +1,6 @@
 # Who Plays My Game - current project status
 
-Last updated: 2026-08-23.
+Last updated: 2026-08-27.
 
 This file is the compact source of truth for the current product state. Current code, production runtime and this document take precedence where older readiness/checkpoint notes conflict. Historical GameSignal identifiers and immutable billing/legal evidence remain unchanged for compatibility and audit continuity.
 
@@ -65,6 +65,7 @@ Implemented and production-backed:
 - Paddle Customer Portal
 - in-app Paddle paid-plan changes
 - provider-aware billing identity so legacy Stripe subscriptions remain associated with Stripe
+- Google OAuth login and signup through Supabase Auth
 
 Kick remains intentionally unavailable. Do not implement scraping or private endpoints as a workaround.
 
@@ -90,11 +91,29 @@ Example on a 5-slot plan: 4 active games -> delete one active game -> 3 active +
 Production Auth uses the canonical domain and supports:
 
 - email/password signup and login
+- Google OAuth signup and login
 - forgot/reset password
 - Resend custom SMTP on verified `auth.whoplaysmygame.com`
 - Cloudflare Turnstile enforced server-side on public email/password auth flows
 
-Public signup requires visible acceptance of current Terms and acknowledgement of the Privacy Policy. The database independently fail-closes signup unless current legal-version metadata is present, and accepted versions/timestamp are stored in service-role-only evidence.
+Google OAuth is LIVE in Supabase. Production `/login` and `/signup` both resolve the Google provider as enabled and render `Continue with Google`. Supabase Auth reloaded the provider configuration successfully after activation and subsequent `/settings` checks return HTTP 200.
+
+Google OAuth intentionally uses a deferred-provisioning legal flow for brand-new Google users:
+
+- Google first creates the Auth user and `public.profiles` row only
+- a new Google user receives no workspace, membership, subscription or product access before current Terms and Privacy acceptance
+- `/auth/complete-google-signup` presents the required legal acceptance
+- `/api/auth/complete-google-signup` verifies the authenticated user and same-origin request
+- service-role-only RPC `public.complete_google_oauth_signup(uuid,text,text)` verifies a real Google identity and atomically creates legal evidence, default workspace, owner membership and free Paddle subscription
+- the RPC is idempotent and serializes concurrent completion for the same Auth user
+- `anon` and `authenticated` cannot execute the RPC directly; `service_role` can
+- existing email/password users who later use Google with the same verified email are expected to identity-link to the same Auth user and retain their existing workspace
+
+The application OAuth callback is `https://www.whoplaysmygame.com/auth/callback?next=/dashboard`. Google itself redirects through the Supabase Auth callback `https://mgaufxduaaobrlyzdrdo.supabase.co/auth/v1/callback`.
+
+Public email/password signup requires visible acceptance of current Terms and acknowledgement of the Privacy Policy. The database independently fail-closes signup unless current legal-version metadata is present, and accepted versions/timestamp are stored in service-role-only evidence.
+
+Current Terms and Privacy versions used by signup are both `2026-08-24-v2`.
 
 The account agreement confirmation flow is ACTIVE. It sends a concise branded email plus `who-plays-my-game-account-agreement.pdf`, freezes the full confirmation text before sending, verifies its SHA-256, uses Resend idempotency and persists delivery state.
 
@@ -104,7 +123,7 @@ Active production workers/schedulers:
 
 - Twitch scanner v38
 - YouTube scanner v40
-- Discord notification worker v35
+- Discord notification worker v36
 - daily email digest worker v25
 
 Current cadence logic:
@@ -156,6 +175,8 @@ Do not increase the YouTube scheduler cadence or production Search Queries budge
 - `/robots.txt` and `/sitemap.xml` are live
 - dedicated SEO pages exist for Twitch stream alerts, YouTube game monitoring and game creator monitoring
 
+Current production deployment for the Google OAuth rollout is Vercel deployment `dpl_Ai4bCkbfGPd2CyVC4Sj6LXh6DiyM`, built from main commit `b3481e2f743496a5463f3572134d154ea3dd9de7`. It is READY and serves the canonical production aliases.
+
 ## Paddle billing
 
 Paddle is the current Merchant of Record route for new subscriptions. Existing Stripe-backed records remain Stripe-associated and are not silently converted.
@@ -174,7 +195,7 @@ LIVE production configuration includes:
 - public Sandbox checkout disabled
 - all four paid plans mapped to LIVE Paddle prices
 
-A real LIVE Indie monthly subscription is currently active and synchronized in Supabase. Its current period ends on 2026-09-21. LIVE customer and subscription IDs are stored and Customer Portal integration is available.
+A real LIVE Indie monthly subscription is currently active and synchronized in Supabase. LIVE customer and subscription IDs are stored and Customer Portal integration is available.
 
 A historical Paddle Sandbox subscription is retained for internal test history. Billing environment is stored per subscription so Sandbox identity is never sent to the LIVE Paddle API.
 
@@ -183,7 +204,7 @@ A historical Paddle Sandbox subscription is retained for internal test history. 
 Implemented on production:
 
 - current billing period is preserved during this flow
-- immediate upgrade uses Paddle proration and charges only the calculated difference for the remainder of the period
+- immediate upgrade can use Paddle proration and charge only the calculated difference for the remainder of the period
 - upgrade can instead be scheduled for the next renewal
 - downgrade is allowed only for the next renewal
 - downgrade is blocked until active games fit the target plan limit
@@ -192,7 +213,9 @@ Implemented on production:
 - current entitlement stays active until the scheduled renewal is successfully paid
 - monthly-to-yearly and yearly-to-monthly switching is intentionally deferred to a separate future flow
 
-On 2026-08-22 the first LIVE Change Plan preview exposed `not authorized to read subscription`. Production data remained unchanged. The cause was missing Paddle API-key subscription permission, not database corruption or a plan-change code failure. The existing LIVE key was updated to `Subscriptions: Write`, which also supplies the read access required by the preview. A post-permission end-to-end retry is the current validation step.
+The original LIVE preview failure on 2026-08-22 was caused by missing Paddle subscription permission. The LIVE API key was updated to `Subscriptions: Write`, which also provides the required read access.
+
+The next-renewal upgrade path has since advanced successfully in LIVE production: the active monthly Indie subscription currently has `pending_plan = studio`, requested on 2026-08-24 and scheduled to take effect at the next renewal on 2026-09-21. This confirms that scheduled upgrade state is being persisted correctly. Immediate prorated upgrade and downgrade should still be treated as separate live-path validations unless reverified after this status update.
 
 ## Legacy Stripe and KSeF
 
@@ -206,13 +229,22 @@ Do not rewrite immutable historical direct-billing evidence just to match curren
 
 Current versions:
 
-- Terms: `2026-08-17-v1`
-- Privacy: `2026-08-17-v1`
+- Terms: `2026-08-24-v2`
+- Privacy: `2026-08-24-v2`
 - Withdrawal: `2026-08-17-v1`
+- Refund Policy page revision date: `2026-08-17-v1`
 
 Operator contact uses the current registered address, support email and public support phone. `/refunds` provides the standalone Refund Policy URL used for Paddle verification.
 
 ## Security
+
+Google OAuth deferred provisioning is fail-closed around legal acceptance. Brand-new Google users cannot receive a workspace or product access until the service-role completion path verifies both Google identity and current legal versions.
+
+The Google completion RPC access currently verifies as:
+
+- `anon`: no EXECUTE
+- `authenticated`: no EXECUTE
+- `service_role`: EXECUTE
 
 Known reviewed Supabase advisor notices remain intentionally tracked:
 
@@ -221,6 +253,20 @@ Known reviewed Supabase advisor notices remain intentionally tracked:
 - RLS-without-policy INFO notices concern internal service-role-only billing/legal tables with no client policy by design
 
 Do not blindly change these notices without rechecking worker dependencies and access-control intent.
+
+## Current production health snapshot
+
+Verified after Google provider activation on 2026-08-27:
+
+- Vercel production deployment: READY
+- production `/login`: HTTP 200 and Google enabled
+- production `/signup`: HTTP 200 and Google enabled
+- Vercel production error/fatal runtime logs in the checked one-hour window: none
+- Supabase Auth provider configuration reload: successful
+- latest checked 30-minute cron window: 62 total, 62 succeeded, 0 non-success
+- latest checked 30-minute monitoring scan window: 10 total, 10 success, 0 non-success
+- users/profiles/workspaces/memberships/subscriptions remain balanced at 7 each before the first Google sign-in
+- Google identities remain 0 before the first interactive Google sign-in, which is expected
 
 ## Current launch invariants
 
@@ -240,19 +286,27 @@ Do not blindly change these notices without rechecking worker dependencies and a
 - Paddle LIVE checkout: ON
 - real LIVE paid subscription: ACTIVE and webhook-synchronized
 - Paddle Customer Portal: ACTIVE
-- in-app Change Plan: IMPLEMENTED, final LIVE path validation in progress
-- Paddle LIVE API key subscription permission: WRITE enabled on 2026-08-22
+- in-app Change Plan: IMPLEMENTED
+- next-renewal Indie -> Studio scheduled change: VERIFIED in LIVE state
+- immediate prorated upgrade and downgrade: separate live-path validation still desirable
 - public Paddle Sandbox new checkout: OFF
 - Stripe LIVE new sales: OFF
 - KSeF PROD: OFF
 - Kick: OFF
-- Turnstile: ON
+- Turnstile: ON for public email/password auth
+- Google OAuth: ON through Supabase Auth
 - Auth email: ON through Resend
 - account agreement confirmation: ON, concise body plus PDF attachment
+- current Terms/Privacy signup versions: `2026-08-24-v2`
 - product email: opt-in daily digest only
 - no secrets committed to Git
 - preserve RLS and worker authorization
 
 ## Next validation step
 
-Retry the existing LIVE Indie -> Studio Change Plan preview after the Paddle permission update. First verify that Paddle returns the exact preview amounts without changing the subscription. Then separately validate immediate upgrade, next-renewal upgrade and downgrade paths before considering Change Plan fully closed.
+Perform one interactive production Google sign-in. Preferably test both cases over time:
+
+1. Brand-new Google email: verify Google Auth creates only the Auth user/profile first, then `/auth/complete-google-signup` requires current legal acceptance, and completion creates exactly one workspace, owner membership, free subscription and legal evidence before dashboard access.
+2. Existing verified email/password account using the same Google email: verify Supabase links the Google identity to the existing Auth user and preserves the existing workspace instead of creating another account/workspace.
+
+After an interactive Google login, verify the agreement confirmation email and recheck Auth logs, Google identity count, workspace/membership/subscription counts, Vercel runtime errors and monitoring health. Immediate-proration and downgrade Change Plan paths can then be revalidated separately if desired.
