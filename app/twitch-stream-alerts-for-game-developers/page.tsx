@@ -66,7 +66,7 @@ export default function TwitchStreamAlertsPage() {
         </p>
 
         <div className="dashboard-actions" style={{ marginTop: 28 }}>
-          <Link className="btn btn-primary" href="/signup">Start monitoring free</Link>
+          <Link className="btn btn-primary" href="/signup">Create free account</Link>
           <Link className="btn btn-ghost" href="/youtube-game-monitoring">YouTube monitoring</Link>
           <Link className="btn btn-ghost" href="/game-creator-monitoring">Creator monitoring</Link>
           <Link className="btn btn-ghost" href="/">Product overview</Link>

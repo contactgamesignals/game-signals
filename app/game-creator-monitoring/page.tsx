@@ -65,7 +65,7 @@ export default function GameCreatorMonitoringPage() {
         </p>
 
         <div className="dashboard-actions" style={{ marginTop: 28 }}>
-          <Link className="btn btn-primary" href="/signup">Start monitoring free</Link>
+          <Link className="btn btn-primary" href="/signup">Create free account</Link>
           <Link className="btn btn-ghost" href="/twitch-stream-alerts-for-game-developers">Twitch stream alerts</Link>
           <Link className="btn btn-ghost" href="/youtube-game-monitoring">YouTube monitoring</Link>
           <Link className="btn btn-ghost" href="/">Product overview</Link>
