@@ -46,6 +46,15 @@ markup = replace(markup, '<div class="notice">In production this form should be 
 markup = replace(markup, '<p style="color:#9099ad">In production this step would create a checkout session and activate the selected plan after payment.</p>', '<p style="color:#9099ad">Paid plans use Paddle Checkout and can be managed later in Paddle Customer Portal.</p>');
 markup = replace(markup, '<div class="notice">This demo does not process any payments.</div>', '<div class="notice">New paid checkout is temporarily unavailable while Paddle LIVE activation is completed. Free public beta accounts are open now.</div>');
 
+const legacyLoginModalStart = '<div class="modal-backdrop" id="loginModal">';
+const planModalStart = '<div class="modal-backdrop" id="planModal">';
+const legacyLoginModalIndex = markup.indexOf(legacyLoginModalStart);
+const planModalIndex = markup.indexOf(planModalStart);
+
+if (legacyLoginModalIndex !== -1 && planModalIndex > legacyLoginModalIndex) {
+  markup = `${markup.slice(0, legacyLoginModalIndex)}${markup.slice(planModalIndex)}`;
+}
+
 markup = markup.replaceAll(LEGACY_BRAND.name, BRAND.name).replaceAll(LEGACY_BRAND.supportEmail, BRAND.supportEmail);
 
 export const landingRealityMarkup = markup;
