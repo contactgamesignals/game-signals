@@ -104,8 +104,19 @@ export async function authorizeRequest(request: Request, gameId?: string) {
   if (error || !data.user) throw new Error("Unauthorized");
 
   if (gameId) {
-    const { data: game } = await userClient.from("games").select("id").eq("id", gameId).maybeSingle();
+    const { data: game } = await userClient
+      .from("games")
+      .select("id, workspace_id")
+      .eq("id", gameId)
+      .maybeSingle();
     if (!game) throw new Error("Forbidden");
+
+    const { data: access, error: accessError } = await userClient
+      .rpc("workspace_product_access", { p_workspace_id: game.workspace_id })
+      .maybeSingle();
+    if (accessError || !access || String(access.effective_plan ?? "free") === "free") {
+      throw new Error("Forbidden");
+    }
   }
 
   return { internal: false, userId: data.user.id, scheduler: null };
@@ -121,16 +132,13 @@ export function chunks<T>(items: T[], size: number) {
 
 export type Plan = "free" | "indie" | "studio" | "publisher" | "crazy";
 
-function isPaidPlan(plan: Plan) {
-  return plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy";
+export function twitchCadenceMinutes(_plan: Plan) {
+  return 10;
 }
 
-export function twitchCadenceMinutes(plan: Plan) {
-  return isPaidPlan(plan) ? 10 : 10;
-}
-
-export function youtubeCadenceMinutes(plan: Plan) {
-  return isPaidPlan(plan) ? 30 : 120;
+export function youtubeCadenceMinutes(_plan: Plan) {
+  // Free workspaces cannot have active monitors. Trial and paid monitors therefore share the production cadence.
+  return 30;
 }
 
 export function signalScore(reach: number, isLive: boolean) {
