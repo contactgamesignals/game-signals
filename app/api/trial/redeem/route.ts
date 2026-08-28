@@ -24,8 +24,14 @@ function friendlyTrialError(message: string) {
   if (message.includes("TRIAL_FORBIDDEN")) {
     return "Only a workspace owner or admin can activate a trial code.";
   }
+  if (message.includes("TRIAL_CODE_USED")) {
+    return "This trial code has already been used.";
+  }
+  if (message.includes("TRIAL_CODE_DISABLED")) {
+    return "This trial code is no longer available.";
+  }
   if (message.includes("TRIAL_CODE_INVALID")) {
-    return "This trial code is invalid, expired, disabled, or has reached its redemption limit.";
+    return "This trial code is invalid.";
   }
   return "Could not activate the trial code.";
 }
