@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
+import { readWorkspaceProductAccess } from "@/lib/product-access";
 
 export const dynamic = "force-dynamic";
 
@@ -80,23 +81,24 @@ export async function POST(request: Request) {
   }
 
   const workspaceId = membership.workspace_id as string;
-  const [{ data: subscription }, slotStateResult] = await Promise.all([
-    supabase.from("subscriptions").select("plan, status").eq("workspace_id", workspaceId).maybeSingle(),
-    readGameSlotState(workspaceId),
-  ]);
+  let productAccess;
+  try {
+    productAccess = await readWorkspaceProductAccess(supabase, workspaceId);
+  } catch {
+    return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
+  }
 
+  const slotStateResult = await readGameSlotState(workspaceId);
   if (slotStateResult.error) {
     return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
   }
 
   const slotState = slotStateResult.state;
-  const plan = subscription?.status === "active" || subscription?.status === "trialing"
-    ? normalizePlan(subscription?.plan)
-    : "free";
+  const plan = productAccess.plan;
 
   if (plan === "free") {
     return NextResponse.json(
-      { error: "Choose a paid plan before adding a game." },
+      { error: "Choose a paid plan or redeem a valid trial code before adding a game." },
       { status: 403 },
     );
   }
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: `Your ${plan} plan supports up to ${gameLimit} active game(s). Pause a game or change plan to free a slot.` },
+      { error: `Your current access supports up to ${gameLimit} active game(s). Pause a game or change plan to free a slot.` },
       { status: 403 },
     );
   }

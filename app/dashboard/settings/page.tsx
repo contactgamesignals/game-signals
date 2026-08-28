@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import BillingRecoveryCard from "@/components/BillingRecoveryCard";
 import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
 import SettingsClient from "@/components/SettingsClient";
+import TrialCodeCard from "@/components/TrialCodeCard";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { BRAND } from "@/lib/brand";
 import { COMPANY } from "@/lib/company";
@@ -10,6 +11,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
 import { configuredBillingProvider, normalizeBillingProvider } from "@/lib/billing-provider";
+import { readWorkspaceProductAccess } from "@/lib/product-access";
 
 export const dynamic = "force-dynamic";
 
@@ -27,17 +29,19 @@ export default async function SettingsPage() {
     .maybeSingle();
   if (!membership) redirect("/dashboard");
 
-  const [{ data: subscription }, { data: profile }] = await Promise.all([
+  const workspaceId = membership.workspace_id as string;
+  const [{ data: subscription }, { data: profile }, productAccess] = await Promise.all([
     supabase
       .from("subscriptions")
       .select("plan, status, stripe_customer_id, stripe_subscription_id, billing_provider, billing_customer_id, billing_subscription_id, tax_access_status, tax_access_reason")
-      .eq("workspace_id", membership.workspace_id)
+      .eq("workspace_id", workspaceId)
       .maybeSingle(),
     supabase
       .from("profiles")
       .select("display_name")
       .eq("id", data.user.id)
       .maybeSingle(),
+    readWorkspaceProductAccess(supabase, workspaceId),
   ]);
 
   const workspaceValue = Array.isArray(membership.workspaces)
@@ -82,7 +86,7 @@ export default async function SettingsPage() {
     const { data: invoice } = await supabase
       .from("billing_invoice_records")
       .select("invoice_number, amount_remaining, currency, hosted_invoice_url, attempt_count, next_payment_attempt")
-      .eq("workspace_id", membership.workspace_id)
+      .eq("workspace_id", workspaceId)
       .eq("stripe_status", "open")
       .gt("amount_remaining", 0)
       .order("invoice_created_at", { ascending: false })
@@ -105,7 +109,7 @@ export default async function SettingsPage() {
         {canManageBilling && stripePaymentNeedsAttention ? (
           <div className="settings-grid" style={{ marginBottom: 16 }}>
             <BillingRecoveryCard
-              workspaceId={membership.workspace_id as string}
+              workspaceId={workspaceId}
               plan={normalizePlan(subscription?.plan)}
               subscriptionStatus={subscriptionStatus}
               hostedInvoiceUrl={recoveryInvoice?.hosted_invoice_url ?? null}
@@ -120,10 +124,15 @@ export default async function SettingsPage() {
         {canManageBilling && stripeTaxReviewRequired ? (
           <div className="settings-grid" style={{ marginBottom: 16 }}>
             <BillingTaxReviewCard
-              workspaceId={membership.workspace_id as string}
+              workspaceId={workspaceId}
               plan={normalizePlan(subscription?.plan)}
               reason={subscription?.tax_access_reason ?? null}
             />
+          </div>
+        ) : null}
+        {canManageBilling && productAccess.accessKind !== "paid" ? (
+          <div className="settings-grid" style={{ marginBottom: 16 }}>
+            <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
           </div>
         ) : null}
 
@@ -131,7 +140,7 @@ export default async function SettingsPage() {
           {showProductSettings ? (
             <div className="settings-stack">
               <SettingsClient
-                workspaceId={membership.workspace_id as string}
+                workspaceId={workspaceId}
                 currentPlan={normalizePlan(subscription?.plan)}
                 subscriptionStatus={subscriptionStatus}
                 billingProvider={billingProvider}
@@ -146,7 +155,7 @@ export default async function SettingsPage() {
               userId={data.user.id}
               email={email}
               initialDisplayName={displayName}
-              workspaceId={membership.workspace_id as string}
+              workspaceId={workspaceId}
               initialWorkspaceName={workspaceName}
               canManageBilling={canManageBilling}
             />

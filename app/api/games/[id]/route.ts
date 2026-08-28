@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { normalizePlan, PLAN_LIMITS } from "@/lib/plans";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
+import { readWorkspaceProductAccess } from "@/lib/product-access";
 
 const GAME_SELECT = "id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at";
 const GAME_SLOT_COOLDOWN_MS = 12 * 60 * 60 * 1000;
@@ -110,27 +111,24 @@ export async function PATCH(
       if (!targetGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
       targetWorkspaceId = targetGame.workspace_id as string;
-      const [{ data: subscription }, slotStateResult] = await Promise.all([
-        supabase
-          .from("subscriptions")
-          .select("plan, status")
-          .eq("workspace_id", targetWorkspaceId)
-          .maybeSingle(),
-        readGameSlotState(targetWorkspaceId),
-      ]);
+      let productAccess;
+      try {
+        productAccess = await readWorkspaceProductAccess(supabase, targetWorkspaceId);
+      } catch {
+        return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
+      }
 
+      const slotStateResult = await readGameSlotState(targetWorkspaceId);
       if (slotStateResult.error) {
         return NextResponse.json({ error: "Could not verify available game slots." }, { status: 500 });
       }
 
       const slotState = slotStateResult.state;
-      const plan = subscription?.status === "active" || subscription?.status === "trialing"
-        ? normalizePlan(subscription?.plan)
-        : "free";
+      const plan = productAccess.plan;
 
       if (plan === "free") {
         return NextResponse.json(
-          { error: "Choose a paid plan before resuming game monitoring." },
+          { error: "Choose a paid plan or redeem a valid trial code before resuming game monitoring." },
           { status: 403 },
         );
       }
@@ -142,7 +140,7 @@ export async function PATCH(
         }
 
         return NextResponse.json(
-          { error: `Your ${plan} plan already uses all ${gameLimit} active game slot(s). Pause another game or change plan first.` },
+          { error: `Your current access already uses all ${gameLimit} active game slot(s). Pause another game or change plan first.` },
           { status: 403 },
         );
       }
@@ -240,6 +238,22 @@ export async function DELETE(
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
+  const { data: existingGame, error: existingGameError } = await supabase
+    .from("games")
+    .select("id, workspace_id, title, enabled")
+    .eq("id", id)
+    .maybeSingle();
+  if (existingGameError) return NextResponse.json({ error: existingGameError.message }, { status: 400 });
+  if (!existingGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
+
+  let hadMonitoringAccess = false;
+  try {
+    const productAccess = await readWorkspaceProductAccess(supabase, existingGame.workspace_id as string);
+    hadMonitoringAccess = productAccess.plan !== "free";
+  } catch {
+    return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
+  }
+
   const { data: deletedGame, error } = await supabase
     .from("games")
     .delete()
@@ -250,7 +264,7 @@ export async function DELETE(
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   if (!deletedGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
-  const cooldownCreated = Boolean(deletedGame.enabled);
+  const cooldownCreated = Boolean(deletedGame.enabled && hadMonitoringAccess);
   const cooldownUntil = cooldownCreated
     ? new Date(Date.now() + GAME_SLOT_COOLDOWN_MS).toISOString()
     : null;
