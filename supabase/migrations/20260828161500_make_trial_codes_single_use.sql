@@ -184,7 +184,7 @@ begin
   end if;
 
   if v_code = '' then
-    v_code := 'WPMG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+    v_code := 'WPMG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
   end if;
 
   if v_code !~ '^[A-Z0-9][A-Z0-9-]{3,31}$' then
@@ -227,7 +227,7 @@ begin
 
   for v_position in 1..p_count loop
     loop
-      v_code := 'WPMG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+      v_code := 'WPMG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
       begin
         insert into private.trial_codes(code, label, active)
         values (v_code, v_label_prefix || ' ' || lpad(v_position::text, 3, '0'), true);
