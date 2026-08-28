@@ -3,7 +3,7 @@ import DashboardClient from "@/components/DashboardClient";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { readGameSlotState } from "@/lib/game-slot-cooldown";
-import { normalizePlan } from "@/lib/plans";
+import { readWorkspaceProductAccess } from "@/lib/product-access";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
 
   const [
     { data: gamesData },
-    { data: subscriptionData },
+    productAccess,
     { data: youtubeMentionsData },
     { data: twitchMentionsData },
     { data: statsData },
@@ -87,11 +87,7 @@ export default async function DashboardPage() {
       .select("id, title, steam_url, enabled, twitch_game_id, youtube_last_scanned_at, twitch_last_scanned_at, created_at")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("subscriptions")
-      .select("plan, status")
-      .eq("workspace_id", workspaceId)
-      .maybeSingle(),
+    readWorkspaceProductAccess(supabase, workspaceId),
     supabase
       .from("mentions")
       .select(DASHBOARD_MENTION_SELECT)
@@ -135,9 +131,7 @@ export default async function DashboardPage() {
       email={user.email ?? "Account"}
       workspaceName={workspaceName}
       workspaceId={workspaceId}
-      plan={subscriptionData?.status === "active" || subscriptionData?.status === "trialing"
-        ? normalizePlan(subscriptionData?.plan)
-        : "free"}
+      plan={productAccess.plan}
       initialGames={games}
       initialMentions={mentions}
       initialStats={initialStats}
