@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { isPaidPlan } from "@/lib/plans";
+import { readWorkspaceProductAccess } from "@/lib/product-access";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +31,15 @@ export async function GET() {
   if (!membership) return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
 
   const workspaceId = membership.workspace_id as string;
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select("plan, status")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  let productAccess;
+  try {
+    productAccess = await readWorkspaceProductAccess(supabase, workspaceId);
+  } catch {
+    return NextResponse.json({ error: "Could not verify product access." }, { status: 500 });
+  }
 
-  const active = subscription?.status === "active" || subscription?.status === "trialing";
-  if (!active || !isPaidPlan(subscription?.plan)) {
-    return NextResponse.json({ error: "CSV export requires an active paid plan." }, { status: 403 });
+  if (!isPaidPlan(productAccess.plan)) {
+    return NextResponse.json({ error: "CSV export requires an active paid plan or promotional trial." }, { status: 403 });
   }
 
   const { data: gamesData } = await supabase
