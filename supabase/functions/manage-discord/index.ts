@@ -74,15 +74,22 @@ Deno.serve(async (request) => {
     };
     if (!body.workspace_id || !body.action) return json({ error: "Missing workspace or action." }, 400);
 
-    const [{ data: membership, error: membershipError }, { data: subscription }] = await Promise.all([
-      userClient.from("workspace_members").select("role").eq("workspace_id", body.workspace_id).eq("user_id", authData.user.id).maybeSingle(),
-      userClient.from("subscriptions").select("plan, status").eq("workspace_id", body.workspace_id).maybeSingle(),
-    ]);
+    const { data: membership, error: membershipError } = await userClient
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", body.workspace_id)
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
     if (membershipError || !membership) return json({ error: "Forbidden." }, 403);
 
-    const plan = String(subscription?.plan ?? "free");
-    const subscriptionActive = subscription?.status === "active" || subscription?.status === "trialing";
-    const allowed = subscriptionActive && (plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy");
+    const { data: access, error: accessError } = await userClient
+      .rpc("workspace_product_access", { p_workspace_id: body.workspace_id })
+      .maybeSingle();
+    if (accessError) throw accessError;
+
+    const plan = String(access?.effective_plan ?? "free");
+    const accessKind = String(access?.access_kind ?? "none");
+    const allowed = plan === "indie" || plan === "studio" || plan === "publisher" || plan === "crazy";
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const { data: existing, error: channelError } = await service
@@ -102,6 +109,7 @@ Deno.serve(async (request) => {
         minimum_live_viewers: existing?.minimum_live_viewers ?? 0,
         allowed,
         plan,
+        access_kind: accessKind,
       });
     }
 
@@ -114,11 +122,11 @@ Deno.serve(async (request) => {
         const { error } = await service.from("notification_channels").delete().eq("id", existing.id);
         if (error) throw error;
       }
-      return json({ ok: true, configured: false, allowed, plan });
+      return json({ ok: true, configured: false, allowed, plan, access_kind: accessKind });
     }
 
     if (!allowed) {
-      return json({ error: "Discord alerts require an active paid plan." }, 403);
+      return json({ error: "Discord alerts require an active paid plan or promotional trial." }, 403);
     }
 
     if (body.action === "test") {
@@ -150,7 +158,15 @@ Deno.serve(async (request) => {
     }, { onConflict: "workspace_id,type" });
     if (upsertError) throw upsertError;
 
-    return json({ ok: true, configured: true, allowed, plan, minimum_signal_score: 0, minimum_live_viewers: minimumLiveViewers });
+    return json({
+      ok: true,
+      configured: true,
+      allowed,
+      plan,
+      access_kind: accessKind,
+      minimum_signal_score: 0,
+      minimum_live_viewers: minimumLiveViewers,
+    });
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Unexpected error." }, 500);
