@@ -114,7 +114,8 @@ export async function authorizeRequest(request: Request, gameId?: string) {
     const { data: access, error: accessError } = await userClient
       .rpc("workspace_product_access", { p_workspace_id: game.workspace_id })
       .maybeSingle();
-    if (accessError || !access || String(access.effective_plan ?? "free") === "free") {
+    const accessRow = access as { effective_plan?: unknown } | null;
+    if (accessError || !accessRow || String(accessRow.effective_plan ?? "free") === "free") {
       throw new Error("Forbidden");
     }
   }
