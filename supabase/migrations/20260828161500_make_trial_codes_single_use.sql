@@ -205,7 +205,7 @@ create or replace function private.create_trial_code_batch(
   p_label_prefix text default 'Influencer invite'
 )
 returns table(
-  position integer,
+  sequence_no integer,
   code text,
   label text
 )
@@ -214,7 +214,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_position integer;
+  v_sequence integer;
   v_code text;
   v_label_prefix text := trim(coalesce(p_label_prefix, ''));
 begin
@@ -225,12 +225,12 @@ begin
     raise exception 'TRIAL_BATCH_LABEL_INVALID' using errcode = '22023';
   end if;
 
-  for v_position in 1..p_count loop
+  for v_sequence in 1..p_count loop
     loop
       v_code := 'WPMG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
       begin
         insert into private.trial_codes(code, label, active)
-        values (v_code, v_label_prefix || ' ' || lpad(v_position::text, 3, '0'), true);
+        values (v_code, v_label_prefix || ' ' || lpad(v_sequence::text, 3, '0'), true);
         exit;
       exception when unique_violation then
         -- Extremely unlikely random collision: generate another code without
@@ -238,9 +238,9 @@ begin
       end;
     end loop;
 
-    position := v_position;
+    sequence_no := v_sequence;
     code := v_code;
-    label := v_label_prefix || ' ' || lpad(v_position::text, 3, '0');
+    label := v_label_prefix || ' ' || lpad(v_sequence::text, 3, '0');
     return next;
   end loop;
 end;
