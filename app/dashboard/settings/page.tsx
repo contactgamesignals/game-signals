@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plans";
 import { configuredBillingProvider, normalizeBillingProvider } from "@/lib/billing-provider";
 import { readWorkspaceProductAccess } from "@/lib/product-access";
+import { readWorkspaceTrialHistory } from "@/lib/trial-history";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function SettingsPage() {
   if (!membership) redirect("/dashboard");
 
   const workspaceId = membership.workspace_id as string;
-  const [{ data: subscription }, { data: profile }, productAccess] = await Promise.all([
+  const [{ data: subscription }, { data: profile }, productAccess, trialHistory] = await Promise.all([
     supabase
       .from("subscriptions")
       .select("plan, status, stripe_customer_id, stripe_subscription_id, billing_provider, billing_customer_id, billing_subscription_id, tax_access_status, tax_access_reason")
@@ -42,6 +43,7 @@ export default async function SettingsPage() {
       .eq("id", data.user.id)
       .maybeSingle(),
     readWorkspaceProductAccess(supabase, workspaceId),
+    readWorkspaceTrialHistory(supabase, workspaceId),
   ]);
 
   const workspaceValue = Array.isArray(membership.workspaces)
@@ -72,6 +74,7 @@ export default async function SettingsPage() {
   const stripeTaxReviewRequired =
     billingProvider === "stripe" && (subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review");
   const showProductSettings = !stripePaymentNeedsAttention && !stripeTaxReviewRequired;
+  const showTrialCodeCard = productAccess.accessKind === "trial" || !trialHistory.redeemedAt;
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -130,7 +133,7 @@ export default async function SettingsPage() {
             />
           </div>
         ) : null}
-        {canManageBilling && productAccess.accessKind !== "paid" ? (
+        {canManageBilling && productAccess.accessKind !== "paid" && showTrialCodeCard ? (
           <div className="settings-grid" style={{ marginBottom: 16 }}>
             <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
           </div>

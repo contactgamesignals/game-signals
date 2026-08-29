@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
+import DashboardTrialExperience from "@/components/DashboardTrialExperience";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { readGameSlotState } from "@/lib/game-slot-cooldown";
 import { readWorkspaceProductAccess } from "@/lib/product-access";
+import { readWorkspaceTrialHistory } from "@/lib/trial-history";
 import type { DashboardGame, DashboardMention } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +79,7 @@ export default async function DashboardPage() {
   const [
     { data: gamesData },
     productAccess,
+    trialHistory,
     { data: youtubeMentionsData },
     { data: twitchMentionsData },
     { data: statsData },
@@ -88,6 +91,7 @@ export default async function DashboardPage() {
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     readWorkspaceProductAccess(supabase, workspaceId),
+    readWorkspaceTrialHistory(supabase, workspaceId),
     supabase
       .from("mentions")
       .select(DASHBOARD_MENTION_SELECT)
@@ -127,16 +131,24 @@ export default async function DashboardPage() {
   };
 
   return (
-    <DashboardClient
-      email={user.email ?? "Account"}
-      workspaceName={workspaceName}
-      workspaceId={workspaceId}
-      plan={productAccess.plan}
-      initialGames={games}
-      initialMentions={mentions}
-      initialStats={initialStats}
-      initialCooldownSlots={slotState?.cooldown_slots ?? 0}
-      initialNextSlotAvailableAt={slotState?.next_slot_available_at ?? null}
-    />
+    <>
+      <DashboardTrialExperience
+        accessKind={productAccess.accessKind}
+        trialEndsAt={productAccess.trialEndsAt}
+        trialHistoryEndsAt={trialHistory.endsAt}
+        hasPaidHistory={trialHistory.hasPaidHistory}
+      />
+      <DashboardClient
+        email={user.email ?? "Account"}
+        workspaceName={workspaceName}
+        workspaceId={workspaceId}
+        plan={productAccess.plan}
+        initialGames={games}
+        initialMentions={mentions}
+        initialStats={initialStats}
+        initialCooldownSlots={slotState?.cooldown_slots ?? 0}
+        initialNextSlotAvailableAt={slotState?.next_slot_available_at ?? null}
+      />
+    </>
   );
 }
