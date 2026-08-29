@@ -22,7 +22,7 @@ export default function TrialCodeCard({ trialEndsAt }: { trialEndsAt?: string | 
 
   if (trialEndsAt) {
     return (
-      <section className="settings-card">
+      <section id="trial-code" className="settings-card" style={{ scrollMarginTop: 90 }}>
         <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
           <div>
             <h2>Indie trial</h2>
@@ -67,7 +67,7 @@ export default function TrialCodeCard({ trialEndsAt }: { trialEndsAt?: string | 
   }
 
   return (
-    <section className="settings-card">
+    <section id="trial-code" className="settings-card" style={{ scrollMarginTop: 90 }}>
       <div className="settings-row" style={{ borderTop: 0, paddingTop: 0 }}>
         <div>
           <h2>Have an invite trial code?</h2>
