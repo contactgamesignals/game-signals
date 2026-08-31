@@ -231,12 +231,7 @@ export default function DashboardClient({
 
   useEffect(() => {
     const pendingRaw = localStorage.getItem(PENDING_GAME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PENDING_GAME_STORAGE_KEY);
-    if (!pendingRaw) return;
-
-    if (!hasPaidPlan) {
-      router.push(PLANS_HREF);
-      return;
-    }
+    if (!pendingRaw || !hasPaidPlan) return;
 
     localStorage.removeItem(PENDING_GAME_STORAGE_KEY);
     localStorage.removeItem(LEGACY_PENDING_GAME_STORAGE_KEY);
