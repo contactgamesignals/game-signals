@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export type TrialAttributionRow = {
   code: string;
@@ -54,8 +54,8 @@ function attributionRows(value: unknown): TrialAttributionRow[] {
 }
 
 export async function readProductFunnelSnapshot(hours: number | null): Promise<ProductFunnelSnapshot> {
-  const admin: SupabaseClient = getSupabaseAdminClient();
-  const { data, error } = await admin.rpc("operator_product_funnel_snapshot", { p_hours: hours });
+  const supabase: SupabaseClient = await createClient();
+  const { data, error } = await supabase.rpc("operator_product_funnel_snapshot", { p_hours: hours });
   if (error) throw error;
 
   const row = objectValue(data);
