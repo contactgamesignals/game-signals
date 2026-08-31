@@ -3,7 +3,7 @@
 -- not expose customer email addresses, notification destinations, or billing
 -- identifiers.
 create or replace function public.operator_product_funnel_snapshot(
-  p_since timestamptz default null
+  p_hours integer default null
 )
 returns jsonb
 language sql
@@ -14,7 +14,8 @@ as $$
   with cohort_users as (
     select p.id as user_id
     from public.profiles p
-    where p_since is null or p.created_at >= p_since
+    where p_hours is null
+      or p.created_at >= now() - make_interval(hours => greatest(p_hours, 0))
   ),
   user_stages as (
     select
@@ -79,7 +80,10 @@ as $$
     group by tc.id, tc.code, tc.label, tc.assigned_to
   )
   select jsonb_build_object(
-    'cohort_since', p_since,
+    'cohort_since', case
+      when p_hours is null then null
+      else now() - make_interval(hours => greatest(p_hours, 0))
+    end,
     'generated_at', now(),
     'signups', (select count(*)::integer from cohort_users),
     'added_game', (select count(*) filter (where added_game)::integer from user_stages),
@@ -106,7 +110,7 @@ as $$
   );
 $$;
 
-revoke all on function public.operator_product_funnel_snapshot(timestamptz) from public;
-revoke all on function public.operator_product_funnel_snapshot(timestamptz) from anon;
-revoke all on function public.operator_product_funnel_snapshot(timestamptz) from authenticated;
-grant execute on function public.operator_product_funnel_snapshot(timestamptz) to service_role;
+revoke all on function public.operator_product_funnel_snapshot(integer) from public;
+revoke all on function public.operator_product_funnel_snapshot(integer) from anon;
+revoke all on function public.operator_product_funnel_snapshot(integer) from authenticated;
+grant execute on function public.operator_product_funnel_snapshot(integer) to service_role;

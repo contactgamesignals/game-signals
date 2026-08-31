@@ -52,9 +52,9 @@ function attributionRows(value: unknown): TrialAttributionRow[] {
   });
 }
 
-export async function readProductFunnelSnapshot(since: string | null): Promise<ProductFunnelSnapshot> {
+export async function readProductFunnelSnapshot(hours: number | null): Promise<ProductFunnelSnapshot> {
   const admin = getSupabaseAdminClient();
-  const { data, error } = await admin.rpc("operator_product_funnel_snapshot", { p_since: since });
+  const { data, error } = await admin.rpc("operator_product_funnel_snapshot", { p_hours: hours });
   if (error) throw error;
 
   const row = objectValue(data);

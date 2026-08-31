@@ -15,11 +15,11 @@ type PageProps = {
   searchParams: Promise<{ range?: string | string[] }>;
 };
 
-const RANGES: Array<{ key: RangeKey; label: string; milliseconds: number | null }> = [
-  { key: "24h", label: "24 hours", milliseconds: 24 * 60 * 60 * 1000 },
-  { key: "7d", label: "7 days", milliseconds: 7 * 24 * 60 * 60 * 1000 },
-  { key: "30d", label: "30 days", milliseconds: 30 * 24 * 60 * 60 * 1000 },
-  { key: "all", label: "All time", milliseconds: null },
+const RANGES: Array<{ key: RangeKey; label: string; hours: number | null }> = [
+  { key: "24h", label: "24 hours", hours: 24 },
+  { key: "7d", label: "7 days", hours: 7 * 24 },
+  { key: "30d", label: "30 days", hours: 30 * 24 },
+  { key: "all", label: "All time", hours: null },
 ];
 
 function rangeKey(value: string | string[] | undefined): RangeKey {
@@ -43,8 +43,7 @@ export default async function ProductAnalyticsPage({ searchParams }: PageProps) 
   const params = await searchParams;
   const selectedRange = rangeKey(params.range);
   const range = RANGES.find((item) => item.key === selectedRange) ?? RANGES[1];
-  const since = range.milliseconds === null ? null : new Date(Date.now() - range.milliseconds).toISOString();
-  const snapshot = await readProductFunnelSnapshot(since);
+  const snapshot = await readProductFunnelSnapshot(range.hours);
 
   const stages = [
     { label: "Signups", value: snapshot.signups, note: "Accounts created" },
