@@ -1,0 +1,147 @@
+-- Allow the private operator analytics page to use the signed-in Supabase session
+-- instead of requiring a service-role secret in Vercel. Access is enforced again
+-- inside PostgreSQL through a private operator allowlist.
+create table if not exists private.operator_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+revoke all on table private.operator_users from public;
+revoke all on table private.operator_users from anon;
+revoke all on table private.operator_users from authenticated;
+revoke all on table private.operator_users from service_role;
+
+insert into private.operator_users (user_id)
+select id
+from auth.users
+where lower(email) = lower('whoplaysmygame@gmail.com')
+on conflict (user_id) do nothing;
+
+create or replace function public.operator_product_funnel_snapshot(
+  p_hours integer default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  snapshot jsonb;
+begin
+  if auth.uid() is null or not exists (
+    select 1
+    from private.operator_users ou
+    where ou.user_id = auth.uid()
+  ) then
+    raise exception 'operator access required' using errcode = '42501';
+  end if;
+
+  with cohort_users as (
+    select p.id as user_id
+    from public.profiles p
+    where p_hours is null
+      or p.created_at >= now() - make_interval(hours => greatest(p_hours, 0))
+  ),
+  user_stages as (
+    select
+      cu.user_id,
+      exists (
+        select 1
+        from public.workspace_members wm
+        join public.games g on g.workspace_id = wm.workspace_id
+        where wm.user_id = cu.user_id
+      ) as added_game,
+      exists (
+        select 1
+        from private.trial_redemptions tr
+        where tr.redeemed_by_user_id = cu.user_id
+      ) as trial_redeemed,
+      exists (
+        select 1
+        from public.workspace_members wm
+        join public.notification_channels nc on nc.workspace_id = wm.workspace_id
+        where wm.user_id = cu.user_id
+          and nc.type = 'discord'
+          and nc.enabled = true
+      ) as discord_connected_current,
+      exists (
+        select 1
+        from public.billing_checkout_consents bcc
+        where bcc.user_id = cu.user_id
+          and bcc.billing_provider = 'paddle'
+          and bcc.billing_checkout_id is not null
+      ) as checkout_started,
+      exists (
+        select 1
+        from public.workspace_members wm
+        join public.subscriptions s on s.workspace_id = wm.workspace_id
+        where wm.user_id = cu.user_id
+          and s.billing_provider = 'paddle'
+          and s.billing_environment = 'live'
+          and s.billing_subscription_id is not null
+      ) as purchase_completed
+    from cohort_users cu
+  ),
+  trial_attribution as (
+    select
+      tc.id as trial_code_id,
+      tc.code,
+      tc.label,
+      tc.assigned_to,
+      count(distinct tr.redeemed_by_user_id)::integer as redemptions,
+      count(distinct tr.redeemed_by_user_id) filter (
+        where exists (
+          select 1
+          from public.subscriptions s
+          where s.workspace_id = tr.workspace_id
+            and s.billing_provider = 'paddle'
+            and s.billing_environment = 'live'
+            and s.billing_subscription_id is not null
+        )
+      )::integer as purchases
+    from private.trial_codes tc
+    join private.trial_redemptions tr on tr.trial_code_id = tc.id
+    join cohort_users cu on cu.user_id = tr.redeemed_by_user_id
+    group by tc.id, tc.code, tc.label, tc.assigned_to
+  )
+  select jsonb_build_object(
+    'cohort_since', case
+      when p_hours is null then null
+      else now() - make_interval(hours => greatest(p_hours, 0))
+    end,
+    'generated_at', now(),
+    'signups', (select count(*)::integer from cohort_users),
+    'added_game', (select count(*) filter (where added_game)::integer from user_stages),
+    'trial_redeemed', (select count(*) filter (where trial_redeemed)::integer from user_stages),
+    'discord_connected_current', (select count(*) filter (where discord_connected_current)::integer from user_stages),
+    'checkout_started', (select count(*) filter (where checkout_started)::integer from user_stages),
+    'purchase_completed', (select count(*) filter (where purchase_completed)::integer from user_stages),
+    'trial_attribution', coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'code', ta.code,
+            'label', ta.label,
+            'assigned_to', ta.assigned_to,
+            'redemptions', ta.redemptions,
+            'purchases', ta.purchases
+          )
+          order by ta.redemptions desc, ta.code
+        )
+        from trial_attribution ta
+      ),
+      '[]'::jsonb
+    )
+  )
+  into snapshot;
+
+  return snapshot;
+end;
+$$;
+
+revoke all on function public.operator_product_funnel_snapshot(integer) from public;
+revoke all on function public.operator_product_funnel_snapshot(integer) from anon;
+revoke all on function public.operator_product_funnel_snapshot(integer) from authenticated;
+revoke all on function public.operator_product_funnel_snapshot(integer) from service_role;
+grant execute on function public.operator_product_funnel_snapshot(integer) to authenticated;
