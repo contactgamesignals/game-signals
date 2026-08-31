@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import BillingRecoveryCard from "@/components/BillingRecoveryCard";
 import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
 import SettingsClient from "@/components/SettingsClient";
+import SettingsTopbarActions from "@/components/SettingsTopbarActions";
 import TrialCodeCard from "@/components/TrialCodeCard";
 import WorkspaceSettings from "@/components/WorkspaceSettings";
 import { BRAND } from "@/lib/brand";
@@ -75,6 +76,7 @@ export default async function SettingsPage() {
     billingProvider === "stripe" && (subscriptionStatus === "blocked_tax" || subscription?.tax_access_status === "review");
   const showProductSettings = !stripePaymentNeedsAttention && !stripeTaxReviewRequired;
   const showTrialCodeCard = productAccess.accessKind === "trial" || !trialHistory.redeemedAt;
+  const trialCardVisible = canManageBilling && productAccess.accessKind !== "paid" && showTrialCodeCard;
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -102,7 +104,7 @@ export default async function SettingsPage() {
     <div className="app-shell">
       <header className="app-topbar">
         <Link href="/dashboard" className="brand"><span className="brand-mark" /><span>{BRAND.name}</span></Link>
-        <div className="app-topbar-right">{email}</div>
+        <SettingsTopbarActions email={email} />
       </header>
       <main className="dashboard-main" style={{ maxWidth: 1180, margin: "0 auto" }}>
         <div className="dashboard-head">
@@ -133,13 +135,8 @@ export default async function SettingsPage() {
             />
           </div>
         ) : null}
-        {canManageBilling && productAccess.accessKind !== "paid" && showTrialCodeCard ? (
-          <div className="settings-grid" style={{ marginBottom: 16 }}>
-            <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
-          </div>
-        ) : null}
 
-        <div className={showProductSettings ? "settings-columns" : "settings-columns settings-columns-single"}>
+        <div className={`${showProductSettings ? "settings-columns" : "settings-columns settings-columns-single"}${trialCardVisible ? " settings-columns-with-trial" : ""}`}>
           {showProductSettings ? (
             <div className="settings-stack">
               <SettingsClient
@@ -150,7 +147,10 @@ export default async function SettingsPage() {
                 billingHasCustomer={billingHasCustomer}
                 billingHasSubscription={billingHasSubscription}
               />
+              {trialCardVisible ? <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} /> : null}
             </div>
+          ) : trialCardVisible ? (
+            <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
           ) : null}
 
           <div className="settings-grid settings-stack">

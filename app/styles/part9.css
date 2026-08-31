@@ -16,6 +16,10 @@
 .settings-columns .settings-card .form-grid{gap:11px}
 .settings-columns .settings-card .settings-row:not(:first-child){padding:12px 0}
 .settings-columns .settings-card .dashboard-actions{gap:8px}
+.settings-columns-with-trial{display:grid;grid-template-columns:minmax(0,1fr)}
+.settings-columns-with-trial .settings-card{order:3}
+.settings-columns-with-trial .billing-card{order:1}
+.settings-columns-with-trial #trial-code{order:2}
 .settings-columns-single{max-width:1100px}
 .settings-legal-footer{max-width:1100px;margin:2px auto 0;color:#687188;font-size:11px;line-height:1.7;padding:4px 4px 10px}.settings-legal-footer a{color:inherit;text-decoration:underline;text-underline-offset:3px}.settings-legal-footer a:hover{color:#9ba6bd}
 @media(max-width:820px){.settings-columns{max-width:none;border-radius:15px}.settings-columns .settings-card{grid-template-columns:1fr;gap:14px;padding:20px 18px}.settings-columns .settings-card>*:first-child,.settings-columns .settings-card>*:not(:first-child){grid-column:1}.settings-columns .settings-card>.settings-row:first-child .plan-pill{margin-top:9px}.settings-legal-footer{padding:2px 2px 8px}}
