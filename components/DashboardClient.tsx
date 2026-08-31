@@ -54,6 +54,7 @@ type DeleteGameResponse = {
 const TWITCH_LIVE_FRESHNESS_MS = 6 * 60 * 1000;
 const DASHBOARD_MENTIONS_PER_PLATFORM = 250;
 const PENDING_GAME_STORAGE_KEY = "who-plays-my-game-pending-game";
+const PENDING_GAME_PLAN_PROMPTED_STORAGE_KEY = "who-plays-my-game-pending-game-plan-prompted";
 const LEGACY_PENDING_GAME_STORAGE_KEY = "gamesignal-pending-game";
 const PLANS_HREF = "/dashboard/settings";
 
@@ -231,13 +232,21 @@ export default function DashboardClient({
 
   useEffect(() => {
     const pendingRaw = localStorage.getItem(PENDING_GAME_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PENDING_GAME_STORAGE_KEY);
-    if (!pendingRaw) return;
-
-    if (!hasPaidPlan) {
-      router.push(PLANS_HREF);
+    if (!pendingRaw) {
+      localStorage.removeItem(PENDING_GAME_PLAN_PROMPTED_STORAGE_KEY);
       return;
     }
 
+    if (!hasPaidPlan) {
+      const promptedPending = localStorage.getItem(PENDING_GAME_PLAN_PROMPTED_STORAGE_KEY);
+      if (promptedPending !== pendingRaw) {
+        localStorage.setItem(PENDING_GAME_PLAN_PROMPTED_STORAGE_KEY, pendingRaw);
+        router.replace(PLANS_HREF);
+      }
+      return;
+    }
+
+    localStorage.removeItem(PENDING_GAME_PLAN_PROMPTED_STORAGE_KEY);
     localStorage.removeItem(PENDING_GAME_STORAGE_KEY);
     localStorage.removeItem(LEGACY_PENDING_GAME_STORAGE_KEY);
     try {
