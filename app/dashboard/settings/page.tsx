@@ -149,6 +149,8 @@ export default async function SettingsPage() {
               />
               {trialCardVisible ? <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} /> : null}
             </div>
+          ) : trialCardVisible ? (
+            <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
           ) : null}
 
           <div className="settings-grid settings-stack">
