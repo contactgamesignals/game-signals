@@ -80,6 +80,7 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (membershipError || !membership) return json({ error: "Forbidden." }, 403);
 
+    const canManage = membership.role === "owner" || membership.role === "admin";
     const { data: access, error: accessError } = await userClient
       .rpc("workspace_product_access", { p_workspace_id: body.workspace_id })
       .maybeSingle();
@@ -104,17 +105,18 @@ Deno.serve(async (request) => {
       return json({
         configured: Boolean(existing),
         enabled: existing?.enabled ?? false,
-        destination: existing?.destination ?? authData.user.email ?? "",
+        destination: canManage ? existing?.destination ?? authData.user.email ?? "" : "",
         minimum_signal_score: 0,
         minimum_live_viewers: existing?.minimum_live_viewers ?? 0,
         allowed,
+        can_manage: canManage,
         plan,
         access_kind: accessKind,
         provider_configured: providerConfigured,
       });
     }
 
-    if (membership.role !== "owner" && membership.role !== "admin") {
+    if (!canManage) {
       return json({ error: "Only workspace owners and admins can change email settings." }, 403);
     }
 
@@ -123,7 +125,7 @@ Deno.serve(async (request) => {
         const { error } = await service.from("notification_channels").delete().eq("id", existing.id);
         if (error) throw error;
       }
-      return json({ ok: true, configured: false, allowed, plan, access_kind: accessKind, provider_configured: providerConfigured });
+      return json({ ok: true, configured: false, allowed, can_manage: true, plan, access_kind: accessKind, provider_configured: providerConfigured });
     }
 
     if (!allowed) {
@@ -140,7 +142,7 @@ Deno.serve(async (request) => {
         `<div style="font-family:system-ui,sans-serif;line-height:1.5"><h2>Who Plays My Game test notification</h2><p>Your email alerts are connected correctly.</p><p style="color:#667085">Workspace: ${escapeHtml(body.workspace_id)}</p></div>`,
         `gamesignal-test:${body.workspace_id}:${crypto.randomUUID()}`,
       );
-      return json({ ok: true });
+      return json({ ok: true, can_manage: true });
     }
 
     if (!providerConfigured) return json({ error: "Email provider is not configured yet." }, 503);
@@ -163,6 +165,7 @@ Deno.serve(async (request) => {
       configured: true,
       destination: email,
       allowed,
+      can_manage: true,
       plan,
       access_kind: accessKind,
       provider_configured: providerConfigured,

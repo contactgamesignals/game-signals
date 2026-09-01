@@ -14,6 +14,7 @@ type EmailStatus = {
   minimum_signal_score: number;
   minimum_live_viewers: number;
   allowed: boolean;
+  can_manage: boolean;
   plan: string;
   provider_configured: boolean;
 };
@@ -50,6 +51,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
           minimum_signal_score: Number(data.minimum_signal_score ?? 0),
           minimum_live_viewers: Number(data.minimum_live_viewers ?? 0),
           allowed: Boolean(data.allowed),
+          can_manage: Boolean(data.can_manage),
           plan: String(data.plan ?? "free"),
           provider_configured: Boolean(data.provider_configured),
         };
@@ -68,7 +70,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
 
   async function saveDigest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!status?.allowed || !status.provider_configured) return;
+    if (!status?.can_manage || !status.allowed || !status.provider_configured) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -85,6 +87,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
         minimum_signal_score: 0,
         minimum_live_viewers: Number(data.minimum_live_viewers ?? minimumLiveViewers),
         allowed: Boolean(data.allowed ?? current?.allowed),
+        can_manage: Boolean(data.can_manage ?? current?.can_manage ?? true),
         plan: String(data.plan ?? current?.plan ?? "free"),
         provider_configured: Boolean(data.provider_configured ?? current?.provider_configured),
       }));
@@ -98,7 +101,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
   }
 
   async function testDigest() {
-    if (!status?.configured || !status.enabled || !status.provider_configured) return;
+    if (!status?.can_manage || !status.configured || !status.enabled || !status.provider_configured) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -113,6 +116,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
   }
 
   async function disableDigest() {
+    if (!status?.can_manage) return;
     if (!window.confirm("Turn off the daily email digest for this workspace?")) return;
     setBusy(true);
     setError(null);
@@ -129,7 +133,8 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
   }
 
   const providerReady = Boolean(status?.provider_configured);
-  const locked = status !== null && (!status.allowed || !providerReady);
+  const canManage = Boolean(status?.can_manage);
+  const locked = !status || !canManage || !status.allowed || !providerReady;
   const connected = Boolean(status?.configured && status?.enabled && providerReady);
 
   return (
@@ -148,7 +153,12 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
 
       {status && !status.allowed ? (
         <div className="status-message" style={{ marginBottom: 14 }}>
-          Daily email digests are available on active Indie, Studio, and Publisher plans.
+          Daily email digests are available with active paid monitoring or a promotional trial.
+        </div>
+      ) : null}
+      {status && !status.can_manage ? (
+        <div className="status-message" style={{ marginBottom: 14 }}>
+          Only workspace owners and admins can manage the daily email digest. The saved destination is hidden.
         </div>
       ) : null}
       {status && !providerReady ? (
@@ -170,7 +180,7 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
             type="email"
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            placeholder="you@studio.com"
+            placeholder={canManage ? "you@studio.com" : "Hidden for workspace members"}
             required
             autoComplete="email"
             disabled={busy || locked}
@@ -193,11 +203,11 @@ export default function EmailDigestSettings({ workspaceId }: Props) {
             <span className="service-mark mail" aria-hidden="true" />
             {connected ? "Update daily digest" : "Enable daily digest"}
           </button>
-          <button className="btn btn-ghost" type="button" disabled={busy || !connected} onClick={testDigest}>
+          <button className="btn btn-ghost" type="button" disabled={busy || !connected || !canManage} onClick={testDigest}>
             <span className="service-mark mail" aria-hidden="true" />Send test
           </button>
           {connected ? (
-            <button className="icon-btn danger" type="button" disabled={busy} onClick={disableDigest}>
+            <button className="icon-btn danger" type="button" disabled={busy || !canManage} onClick={disableDigest}>
               Turn off
             </button>
           ) : null}
