@@ -142,6 +142,10 @@ jobs:
         shell: bash
         run: bash scripts/test-monitoring-scale-postgres.sh
 
+      - name: Test per-game Discord routing in isolated PostgreSQL 17
+        shell: bash
+        run: bash scripts/test-per-game-discord-postgres.sh
+
       - name: Lint
         run: npm run lint
 
