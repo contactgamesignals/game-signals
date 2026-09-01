@@ -36,8 +36,26 @@
 .plan-change-summary strong{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
 .plan-change-help{margin:0;color:#9da8bf;font-size:11px;line-height:1.55}
 
+/* Each monitored game can route creator alerts to its own Discord server/channel. */
+.settings-columns-with-game-discord{display:grid;grid-template-columns:minmax(0,1fr)}
+.settings-columns-with-game-discord .settings-card{order:4}
+.settings-columns-with-game-discord .billing-card{order:1}
+.settings-columns-with-game-discord #trial-code{order:2}
+.settings-columns-with-game-discord .per-game-discord-settings{order:3}
+.settings-columns-with-game-discord .settings-card:not(.per-game-discord-settings):has(.service-mark.discord){display:none}
+.discord-game-list{display:grid;gap:12px}
+.discord-game-config{display:grid;gap:13px;padding:16px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(5,8,18,.38)}
+.discord-game-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.discord-game-head>div{display:grid;gap:4px;min-width:0}
+.discord-game-head strong{font-family:var(--font-space-grotesk),sans-serif;font-size:15px;line-height:1.3;overflow-wrap:anywhere}
+.discord-game-head>div>span{color:#7f899e;font-size:10.5px}
+.discord-game-form{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(180px,220px);gap:12px!important;align-items:end}
+.discord-game-form .dashboard-actions{grid-column:1/-1;margin-top:2px}
+.discord-game-config .auth-success,.discord-game-config .auth-error{margin:0}
+
 @media(max-width:1180px){.plan-change-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-change-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:980px){.billing-current-plan>.plan-change-root{grid-column:1}.plan-change-root>.billing-current-actions{justify-self:start}.plan-change-head{flex-direction:column}.plan-change-timing{grid-template-columns:1fr}}
+@media(max-width:760px){.discord-game-form{grid-template-columns:1fr}.discord-game-form .dashboard-actions{grid-column:1}.discord-game-head{align-items:flex-start}}
 @media(max-width:720px){.nav-inner{gap:8px}.nav .brand{gap:7px;font-size:14px;min-width:0}.nav .actions{gap:6px;flex:0 0 auto}.nav .actions .btn{padding:9px 11px;font-size:12px}.nav .actions .btn-ghost{display:inline-flex;align-items:center;justify-content:center}}
-@media(max-width:620px){.billing-current-actions{width:100%}.billing-current-actions .btn{flex:1}.plan-change-grid,.plan-change-summary{grid-template-columns:1fr}.plan-change-scheduled{grid-template-columns:1fr}.plan-change-card{padding:16px}}
+@media(max-width:620px){.billing-current-actions{width:100%}.billing-current-actions .btn{flex:1}.plan-change-grid,.plan-change-summary{grid-template-columns:1fr}.plan-change-scheduled{grid-template-columns:1fr}.plan-change-card{padding:16px}.discord-game-config{padding:14px}.discord-game-head{flex-direction:column}.discord-game-form .dashboard-actions .btn{width:100%}}
 @media(max-width:340px){.nav .brand>span:last-child{display:none}}
