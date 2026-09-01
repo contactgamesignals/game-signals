@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import BillingRecoveryCard from "@/components/BillingRecoveryCard";
 import BillingTaxReviewCard from "@/components/BillingTaxReviewCard";
+import GameDiscordSettings from "@/components/GameDiscordSettings";
 import SettingsClient from "@/components/SettingsClient";
 import SettingsTopbarActions from "@/components/SettingsTopbarActions";
 import TrialCodeCard from "@/components/TrialCodeCard";
@@ -32,7 +33,7 @@ export default async function SettingsPage() {
   if (!membership) redirect("/dashboard");
 
   const workspaceId = membership.workspace_id as string;
-  const [{ data: subscription }, { data: profile }, productAccess, trialHistory] = await Promise.all([
+  const [{ data: subscription }, { data: profile }, { data: games }, productAccess, trialHistory] = await Promise.all([
     supabase
       .from("subscriptions")
       .select("plan, status, stripe_customer_id, stripe_subscription_id, billing_provider, billing_customer_id, billing_subscription_id, tax_access_status, tax_access_reason")
@@ -43,6 +44,11 @@ export default async function SettingsPage() {
       .select("display_name")
       .eq("id", data.user.id)
       .maybeSingle(),
+    supabase
+      .from("games")
+      .select("id, title, enabled")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true }),
     readWorkspaceProductAccess(supabase, workspaceId),
     readWorkspaceTrialHistory(supabase, workspaceId),
   ]);
@@ -77,6 +83,11 @@ export default async function SettingsPage() {
   const showProductSettings = !stripePaymentNeedsAttention && !stripeTaxReviewRequired;
   const showTrialCodeCard = productAccess.accessKind === "trial" || !trialHistory.redeemedAt;
   const trialCardVisible = canManageBilling && productAccess.accessKind !== "paid" && showTrialCodeCard;
+  const discordGames = (games ?? []).map((game) => ({
+    id: String(game.id),
+    title: String(game.title),
+    enabled: Boolean(game.enabled),
+  }));
 
   let recoveryInvoice: {
     invoice_number: string | null;
@@ -136,7 +147,7 @@ export default async function SettingsPage() {
           </div>
         ) : null}
 
-        <div className={`${showProductSettings ? "settings-columns" : "settings-columns settings-columns-single"}${trialCardVisible ? " settings-columns-with-trial" : ""}`}>
+        <div className={`${showProductSettings ? "settings-columns settings-columns-with-game-discord" : "settings-columns settings-columns-single"}${trialCardVisible ? " settings-columns-with-trial" : ""}`}>
           {showProductSettings ? (
             <div className="settings-stack">
               <SettingsClient
@@ -148,6 +159,11 @@ export default async function SettingsPage() {
                 billingHasSubscription={billingHasSubscription}
               />
               {trialCardVisible ? <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} /> : null}
+              <GameDiscordSettings
+                workspaceId={workspaceId}
+                games={discordGames}
+                canManage={canManageBilling}
+              />
             </div>
           ) : trialCardVisible ? (
             <TrialCodeCard trialEndsAt={productAccess.trialEndsAt} />
