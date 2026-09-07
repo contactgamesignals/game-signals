@@ -276,7 +276,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Could not initialize secure game deletion." }, { status: 500 });
   }
 
-  const { data: deletedGame, error } = await admin
+  const { data: deletedGameData, error } = await admin
     .from("games")
     .delete()
     .eq("id", id)
@@ -284,6 +284,13 @@ export async function DELETE(
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  const deletedGame = deletedGameData as {
+    id: string;
+    workspace_id: string;
+    title: string;
+    enabled: boolean;
+  } | null;
   if (!deletedGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
   const cooldownCreated = Boolean(deletedGame.enabled && hadMonitoringAccess);
