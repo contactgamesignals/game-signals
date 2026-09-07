@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { PLAN_LIMITS } from "@/lib/plans";
 import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
@@ -246,6 +247,20 @@ export async function DELETE(
   if (existingGameError) return NextResponse.json({ error: existingGameError.message }, { status: 400 });
   if (!existingGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", existingGame.workspace_id)
+    .eq("user_id", authData.user.id)
+    .maybeSingle();
+
+  if (membershipError) {
+    return NextResponse.json({ error: "Could not verify game management access." }, { status: 500 });
+  }
+  if (!membership || !["owner", "admin"].includes(String(membership.role))) {
+    return NextResponse.json({ error: "Only workspace owners and admins can remove games." }, { status: 403 });
+  }
+
   let hadMonitoringAccess = false;
   try {
     const productAccess = await readWorkspaceProductAccess(supabase, existingGame.workspace_id as string);
@@ -254,13 +269,21 @@ export async function DELETE(
     return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
   }
 
-  const { data: deletedRows, error } = await supabase.rpc("delete_workspace_game", {
-    p_game_id: id,
-  });
+  let admin;
+  try {
+    admin = getSupabaseAdminClient();
+  } catch {
+    return NextResponse.json({ error: "Could not initialize secure game deletion." }, { status: 500 });
+  }
+
+  const { data: deletedGame, error } = await admin
+    .from("games")
+    .delete()
+    .eq("id", id)
+    .select("id, workspace_id, title, enabled")
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  const deletedGame = Array.isArray(deletedRows) ? deletedRows[0] : null;
   if (!deletedGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
   const cooldownCreated = Boolean(deletedGame.enabled && hadMonitoringAccess);
