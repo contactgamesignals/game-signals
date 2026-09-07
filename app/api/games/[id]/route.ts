@@ -254,14 +254,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
   }
 
-  const { data: deletedGame, error } = await supabase
-    .from("games")
-    .delete()
-    .eq("id", id)
-    .select("id, workspace_id, title, enabled")
-    .maybeSingle();
+  const { data: deletedRows, error } = await supabase.rpc("delete_workspace_game", {
+    p_game_id: id,
+  });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  const deletedGame = Array.isArray(deletedRows) ? deletedRows[0] : null;
   if (!deletedGame) return NextResponse.json({ error: "Game not found." }, { status: 404 });
 
   const cooldownCreated = Boolean(deletedGame.enabled && hadMonitoringAccess);
