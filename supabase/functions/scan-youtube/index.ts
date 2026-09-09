@@ -1,4 +1,5 @@
 import { authorizeRequest, chunks, json, jsonHeaders, serviceClient, signalScore, youtubeCadenceMinutes, type Plan } from "../_shared/core.ts";
+import { prioritizeYouTubeQuotaCandidates } from "../_shared/youtube-scheduling.ts";
 import {
   classifyYouTubeSearchCandidate,
   matchesYouTubeTrackedGame,
@@ -622,6 +623,8 @@ Deno.serve(async (request) => {
       const detailQueue = await processPendingDetailCandidates(supabase, apiKey);
       return json({ ok: !detailQueue.error, games: 0, mentions: detailQueue.accepted, quota_limited: detailQueue.quotaLimited, detail_queue: detailQueue });
     }
+
+    games = prioritizeYouTubeQuotaCandidates(games);
 
     const searchGranted = await reserveQuota(supabase, "youtube_search", games.length);
     if (searchGranted <= 0) {
