@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { prioritizeYouTubeQuotaCandidates } from "../supabase/functions/_shared/youtube-scheduling.ts";
 
 const source = readFileSync(resolve(process.cwd(), "supabase/functions/scan-youtube/index.ts"), "utf8");
 const matching = readFileSync(resolve(process.cwd(), "supabase/functions/_shared/youtube-matching.ts"), "utf8");
@@ -64,6 +65,22 @@ for (const snippet of forbiddenSnippets) {
   if (source.includes(snippet)) {
     throw new Error(`YouTube discovery regression: forbidden behavior is present: ${snippet}`);
   }
+}
+
+const prioritized = prioritizeYouTubeQuotaCandidates([
+  { id: "b", youtube_next_scan_at: "2026-09-09T21:00:00Z", youtube_scan_page_token: null },
+  { id: "c", youtube_next_scan_at: "2026-09-09T19:00:00Z", youtube_scan_page_token: null },
+  { id: "a", youtube_next_scan_at: "2026-09-09T22:00:00Z", youtube_scan_page_token: "next-page" },
+  { id: "d", youtube_next_scan_at: "2026-09-09T19:00:00Z", youtube_scan_page_token: null },
+]);
+
+const prioritizedIds = prioritized.map((game) => game.id).join(",");
+if (prioritizedIds !== "a,c,d,b") {
+  throw new Error(`YouTube quota fairness regression: unexpected priority order: ${prioritizedIds}`);
+}
+
+if (!source.includes("games = prioritizeYouTubeQuotaCandidates(games);")) {
+  throw new Error("YouTube quota fairness regression: claimed games are not sorted before quota slicing.");
 }
 
 console.log("YouTube discovery, pagination and quota-decoupling safeguards are present.");
