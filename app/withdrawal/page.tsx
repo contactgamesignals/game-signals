@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { COMPANY } from "@/lib/company";
-import { getLegalSupportPhone, LEGAL_UPDATED_DATE, LEGAL_VERSIONS } from "@/lib/legal";
+import { LEGAL_UPDATED_DATES, LEGAL_VERSIONS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Withdrawal - Who Plays My Game",
-  description: "Consumer withdrawal information and model statement for Who Plays My Game.",
+  description: "Consumer withdrawal information for Who Plays My Game purchases processed through Paddle.",
 };
 
 export default function WithdrawalPage() {
-  const supportPhone = getLegalSupportPhone();
-
   return (
     <main className="auth-page" style={{ alignItems: "flex-start", paddingTop: 48, paddingBottom: 64 }}>
       <article className="auth-card" style={{ width: "min(920px, 100%)", maxWidth: 920 }}>
@@ -21,67 +19,63 @@ export default function WithdrawalPage() {
 
         <div className="kicker" style={{ marginTop: 24 }}>Consumer information</div>
         <h1>Withdrawal from an Individual subscription</h1>
-        <p>Last updated: {LEGAL_UPDATED_DATE} · Withdrawal information version: {LEGAL_VERSIONS.withdrawal}</p>
+        <p>Last updated: {LEGAL_UPDATED_DATES.withdrawal} · Withdrawal information version: {LEGAL_VERSIONS.withdrawal}</p>
         <p>
-          This page is intended for buyers who purchased {COMPANY.productName} as an individual and who have a statutory right to withdraw from a distance contract. Company/business purchases do not receive an additional contractual 14-day withdrawal right, although mandatory protections that apply by law remain unaffected.
+          This page is intended for buyers who purchased {COMPANY.productName} as an individual and may have a statutory right to withdraw from a distance transaction. Company or business purchases do not receive an additional contractual 14-day withdrawal right from {COMPANY.legalName}, although mandatory protections that apply by law remain unaffected.
         </p>
 
-        <h2>How to withdraw</h2>
+        <h2>Purchases processed through Paddle</h2>
         <p>
-          If a 14-day statutory withdrawal right applies to you, you can send an unambiguous statement before the deadline to <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a> or by post to {COMPANY.registeredAddress}. You do not have to use the wording below, but it can make the request easier to identify.
-        </p>
-        {supportPhone ? <p>Phone contact: <a href={`tel:${supportPhone.replaceAll(" ", "")}`}>{supportPhone}</a>.</p> : null}
-        <p>
-          If {COMPANY.productName} later provides an electronic withdrawal form, a withdrawal submitted through that form will be acknowledged without undue delay on a durable medium as required by applicable law. Email withdrawal remains available independently of such a form.
+          New paid {COMPANY.productName} subscriptions are processed through Paddle. For Paddle transactions, Paddle is the Merchant of Record and seller for the customer transaction and handles payment-side refunds and applicable statutory withdrawal requests under the Paddle Buyer Terms and Refund Policy.
         </p>
         <p>
-          If you expressly requested that {COMPANY.productName} start immediately during the withdrawal period and you then validly withdraw, applicable law may require payment of a proportionate amount for the service supplied up to the time we receive your withdrawal statement.
+          To request a refund or exercise an applicable statutory withdrawal right for a Paddle purchase, submit the request through <a href="https://paddle.net" target="_blank" rel="noreferrer">Paddle Buyer Support</a>. You can also review the <a href="https://www.paddle.com/legal/refund-policy" target="_blank" rel="noreferrer">Paddle Refund Policy</a>. The transaction confirmation or Paddle Customer Portal can help identify the relevant subscription or transaction.
         </p>
         <p>
-          Starting the service does not by itself mean that a statutory withdrawal right is lost. Any loss of the right after full performance applies only where all statutory conditions for that consequence have been satisfied.
-        </p>
-        <p>
-          Cancellation of future renewals is different from statutory withdrawal. Ordinary subscription cancellation is available through the applicable billing provider&apos;s customer portal; the current Paddle integration uses Paddle Customer Portal. Cancellation normally takes effect at the end of the current paid period without a prorated refund or credit, except where applicable law requires otherwise.
+          You may also contact <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a> if you need product-side assistance or help identifying the purchase. For a Paddle transaction, {COMPANY.legalName} does not issue the payment refund directly to the buyer; the payment-side request is handled through Paddle.
         </p>
 
-        <h2>Model withdrawal statement</h2>
+        <h2>Withdrawal period and immediate access</h2>
+        <p>
+          Paddle&apos;s current Buyer Terms and Refund Policy describe the withdrawal period and the effect that immediate access, use of the product, or other transaction circumstances may have on a refund or withdrawal request. Mandatory consumer rights that cannot legally be excluded remain unaffected.
+        </p>
+        <p>
+          Cancellation of future renewals is different from statutory withdrawal. A Paddle subscription can be cancelled through Paddle Customer Portal. Cancellation normally takes effect at the end of the current paid billing period, subject to Paddle&apos;s applicable terms and mandatory law.
+        </p>
+
+        <h2>Example withdrawal request</h2>
+        <p>
+          Paddle Buyer Support provides the payment-side request route. If useful, the following information can help identify your purchase when submitting a request there:
+        </p>
         <div className="status-message" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
-{`To: ${COMPANY.legalName}
-${COMPANY.registeredAddress}
-Email: ${COMPANY.supportEmail}${supportPhone ? `\nPhone: ${supportPhone}` : ""}
-
-I hereby give notice that I withdraw from my contract for the ${COMPANY.productName} subscription.
+{`I would like to exercise any applicable statutory withdrawal right for my ${COMPANY.productName} subscription purchased through Paddle.
 
 ${COMPANY.productName} account email: __________________________
+Paddle transaction or subscription ID: __________________________
 Plan: __________________________
-Order / subscription date: __________________________
+Purchase or renewal date: __________________________
 Name: __________________________
-Address: __________________________
-Date: __________________________
-
-Signature (only if sent on paper): __________________________`}
+Date: __________________________`}
         </div>
 
-        <h2>Refund timing where withdrawal is valid</h2>
+        <h2>Refund handling where withdrawal is valid</h2>
         <p>
-          Where a valid withdrawal requires repayment, the amount due will be returned without undue delay and, in any event, no later than the statutory deadline, generally 14 days from the day we are informed of the withdrawal. Repayment will normally use the same payment method used for the original transaction unless another lawful method is expressly agreed, without imposing additional fees on the consumer because of that alternative.
-        </p>
-        <p>
-          Any amount lawfully due for service already supplied during the withdrawal period after an express request for immediate performance may be deducted where permitted by law.
+          For a Paddle transaction, Paddle handles any payment-side reimbursement under its Refund Policy, Buyer Terms and applicable mandatory law. The payment method, timing and any effect of product use are therefore handled through the Paddle transaction rather than by a separate direct payment from {COMPANY.legalName}.
         </p>
 
         <h2>Complaints and problems with the service</h2>
         <p>
-          Withdrawal is not the only consumer remedy. If the digital service is not supplied or is not in conformity with the contract, mandatory rights to have the service brought into conformity, receive a price reduction, terminate the contract or receive a refund may apply independently of the ordinary refund policy.
+          Withdrawal is not the only consumer remedy. Product-access, functionality or service-quality problems can be reported directly to <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a>. Mandatory remedies for a digital service that is not supplied or is not in conformity with the contract remain unaffected.
         </p>
         <p>
-          Complaints can be sent to <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a> or to the registered address above. Where Polish consumer law applies, the complaint will be answered within the statutory period, generally 14 days from receipt unless another mandatory rule applies.
+          If your purchase was not processed through Paddle, contact <a href={`mailto:${COMPANY.supportEmail}`}>{COMPANY.supportEmail}</a> and we will help identify the billing route associated with that transaction.
         </p>
 
         <div className="dashboard-actions" style={{ marginTop: 28 }}>
-          <a className="btn btn-primary" href={`mailto:${COMPANY.supportEmail}?subject=Who%20Plays%20My%20Game%20withdrawal`}>Email withdrawal</a>
+          <a className="btn btn-primary" href="https://paddle.net" target="_blank" rel="noreferrer">Open Paddle Buyer Support</a>
           <Link className="btn btn-ghost" href="/terms">Terms</Link>
           <Link className="btn btn-ghost" href="/privacy">Privacy Policy</Link>
+          <Link className="btn btn-ghost" href="/refunds">Refund Policy</Link>
         </div>
       </article>
     </main>
