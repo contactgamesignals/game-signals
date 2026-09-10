@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const billing = readFileSync("supabase/functions/paddle-billing/index.ts", "utf8");
+const legalVersions = readFileSync("lib/legal-versions.ts", "utf8");
+const currentTermsVersion = legalVersions.match(/terms: "([^"]+)"/)?.[1];
+const currentPrivacyVersion = legalVersions.match(/privacy: "([^"]+)"/)?.[1];
+assert.ok(currentTermsVersion, "Current Terms version must be declared.");
+assert.ok(currentPrivacyVersion, "Current Privacy version must be declared.");
+assert.ok(
+  billing.includes(`const TERMS_VERSION = "${currentTermsVersion}";`),
+  "Paddle checkout consent must record the current Terms version.",
+);
+assert.ok(
+  billing.includes(`const PRIVACY_VERSION = "${currentPrivacyVersion}";`),
+  "Paddle checkout consent must record the current Privacy version.",
+);
 assert.match(billing, /custom_data:[\s\S]*workspace_id/);
 assert.match(billing, /billing_checkout_consents/);
 assert.match(billing, /\/portal-sessions/);
@@ -63,4 +76,4 @@ assert.doesNotMatch(
   "Legacy Stripe/KSeF readiness must not block the current Paddle launch gate.",
 );
 
-console.log("Paddle Edge Function, Paddle.js, provider-neutral migration and Paddle launch-gate safeguards passed.");
+console.log("Paddle Edge Function, consent-version evidence, Paddle.js, provider-neutral migration and Paddle launch-gate safeguards passed.");
