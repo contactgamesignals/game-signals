@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { PLAN_LIMITS } from "@/lib/plans";
 import { readGameSlotState, type GameSlotState } from "@/lib/game-slot-cooldown";
@@ -269,23 +268,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Could not verify monitoring access." }, { status: 500 });
   }
 
-  let admin;
-  try {
-    admin = getSupabaseAdminClient();
-  } catch {
-    return NextResponse.json({ error: "Could not initialize secure game deletion." }, { status: 500 });
-  }
-
-  const { data: deletedGameData, error } = await admin
-    .from("games")
-    .delete()
-    .eq("id", id)
-    .select("id, workspace_id, title, enabled")
-    .maybeSingle();
+  const { data: deletedGameData, error } = await supabase.rpc("delete_workspace_game", {
+    p_game_id: id,
+  });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  const deletedGame = deletedGameData as {
+  const deletedGame = ((deletedGameData ?? [])[0] ?? null) as {
     id: string;
     workspace_id: string;
     title: string;
