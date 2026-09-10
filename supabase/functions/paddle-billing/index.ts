@@ -23,8 +23,8 @@ const headers = {
 
 const PUBLIC_SITE_URL = "https://www.whoplaysmygame.com";
 const PADDLE_LIVE_CHECKOUT_URL = "https://whoplaysmygame.com/pay";
-const TERMS_VERSION = "2026-08-17-v1";
-const PRIVACY_VERSION = "2026-08-17-v1";
+const TERMS_VERSION = "2026-08-24-v2";
+const PRIVACY_VERSION = "2026-08-24-v2";
 const CHANGE_LOCK_WINDOW_MS = 30 * 60 * 1000;
 
 const PLAN_RANK: Record<PaddlePaidPlan, number> = {

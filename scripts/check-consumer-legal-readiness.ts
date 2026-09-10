@@ -22,9 +22,10 @@ assert.doesNotMatch(company, /Ujastek 1/);
 
 assert.match(legalVersions, /terms: "2026-08-24-v2"/);
 assert.match(legalVersions, /privacy: "2026-08-24-v2"/);
-assert.match(legalVersions, /withdrawal: "2026-08-17-v1"/);
+assert.match(legalVersions, /withdrawal: "2026-09-10-v1"/);
 assert.match(legalVersions, /terms: "24 August 2026"/);
 assert.match(legalVersions, /privacy: "24 August 2026"/);
+assert.match(legalVersions, /withdrawal: "10 September 2026"/);
 assert.match(legal, /GAMESIGNAL_SUPPORT_PHONE/);
 assert.match(legal, /import "server-only"/);
 assert.match(legal, /LEGAL_UPDATED_DATE, LEGAL_UPDATED_DATES, LEGAL_VERSIONS/);
@@ -66,11 +67,15 @@ assert.doesNotMatch(privacy, /New real-money subscriptions remain unavailable/i)
 assert.doesNotMatch(privacy, /currently remains in Sandbox while/i);
 
 assert.match(withdrawal, /Withdrawal information version: \{LEGAL_VERSIONS\.withdrawal\}/);
-assert.match(withdrawal, /generally 14 days from the day we are informed/);
-assert.match(withdrawal, /same payment method/i);
-assert.match(withdrawal, /durable medium/i);
-assert.match(withdrawal, /Starting the service does not by itself mean/i);
+assert.match(withdrawal, /LEGAL_UPDATED_DATES\.withdrawal/);
+assert.match(withdrawal, /Paddle is the Merchant of Record and seller/i);
+assert.match(withdrawal, /https:\/\/paddle\.net/);
+assert.match(withdrawal, /https:\/\/www\.paddle\.com\/legal\/refund-policy/);
+assert.match(withdrawal, /does not issue the payment refund directly to the buyer/i);
 assert.match(withdrawal, /Paddle Customer Portal/i);
+assert.match(withdrawal, /Mandatory consumer rights that cannot legally be excluded remain unaffected/i);
+assert.doesNotMatch(withdrawal, /To: \$\{COMPANY\.legalName\}/);
+assert.doesNotMatch(withdrawal, /Email withdrawal/);
 
 assert.match(signup, /LEGAL_VERSIONS/);
 assert.match(signup, /I agree to the/);
@@ -164,4 +169,4 @@ for (const line of [
 }
 assert.doesNotMatch(envExample, /NEXT_PUBLIC_GAMESIGNAL_SUPPORT_PHONE/);
 
-console.log("Live legal documents, server-enforced signup evidence and durable confirmation sender are fail-closed.");
+console.log("Live legal documents, Paddle withdrawal routing, server-enforced signup evidence and durable confirmation sender are fail-closed.");
