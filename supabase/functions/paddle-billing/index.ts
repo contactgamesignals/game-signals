@@ -425,6 +425,7 @@ Deno.serve(async (request) => {
         status: subscription.status ?? "trialing",
         billing_period: subscription.billing_period ?? null,
         current_period_end: subscription.current_period_end ?? null,
+        cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
         pending_plan: subscription.pending_plan ?? null,
         pending_plan_effective_at: subscription.pending_plan_effective_at ?? null,
         has_customer: storedPaddleIdentity && Boolean(subscription.billing_customer_id),
