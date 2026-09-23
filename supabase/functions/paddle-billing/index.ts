@@ -6,6 +6,7 @@ import {
   isPaddlePaidPlan,
   paddleApiBase,
   paddleCatalogPlans,
+  paddlePlanChangeBillingMode,
   priceMetadata,
   requirePaddlePrice,
   resolvePaddleEnvironment,
@@ -74,7 +75,7 @@ type PlanChangeContext = {
   customData: PaddleObject;
   activeGames: number;
   targetLimit: number;
-  prorationBillingMode: "prorated_immediately" | "full_next_billing_period";
+  prorationBillingMode: "prorated_immediately" | "do_not_bill";
 };
 
 function json(data: unknown, status = 200) {
@@ -313,7 +314,7 @@ async function preparePlanChange(input: {
     customData,
     activeGames,
     targetLimit,
-    prorationBillingMode: body.change_timing === "immediate" ? "prorated_immediately" : "full_next_billing_period",
+    prorationBillingMode: paddlePlanChangeBillingMode(body.change_timing),
   } satisfies PlanChangeContext;
 }
 
