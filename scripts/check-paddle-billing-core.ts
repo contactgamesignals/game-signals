@@ -7,6 +7,7 @@ import {
   paddleApiBase,
   paddleCancelAtPeriodEnd,
   paddleCatalogPlans,
+  paddlePlanChangeBillingMode,
   PADDLE_LIVE_PRICE_IDS,
   priceMetadata,
   requirePaddlePrice,
@@ -50,6 +51,8 @@ assert.equal(mapPaddleSubscriptionStatus("paused"), "past_due");
 assert.equal(mapPaddleSubscriptionStatus("unexpected"), "incomplete");
 assert.equal(paddleCancelAtPeriodEnd({ action: "cancel" }), true);
 assert.equal(paddleCancelAtPeriodEnd({ action: "pause" }), false);
+assert.equal(paddlePlanChangeBillingMode("immediate"), "prorated_immediately");
+assert.equal(paddlePlanChangeBillingMode("next_billing_period"), "do_not_bill");
 assert.equal(resolvePaddleEnvironment(undefined), "sandbox");
 assert.equal(resolvePaddleEnvironment("live"), "live");
 assert.equal(paddleApiBase("sandbox"), "https://sandbox-api.paddle.com");
