@@ -274,7 +274,7 @@ export default function PaidPlanChangePanel({
   if (billingProvider !== "paddle") {
     return (
       <div className="billing-current-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || !billingConfigured || !billingHasCustomer} onClick={openPortal}>Manage billing</button>
+        <button type="button" className="btn btn-primary" disabled={busy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("overview")}>Manage billing</button>
       </div>
     );
   }
