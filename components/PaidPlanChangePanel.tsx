@@ -20,6 +20,7 @@ type Money = {
 };
 
 type PlanChangeTiming = "immediate" | "next_billing_period";
+type PortalTarget = "overview" | "cancel";
 
 type BillingResponse = {
   configured?: boolean;
@@ -180,12 +181,12 @@ export default function PaidPlanChangePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, billingProvider]);
 
-  async function openPortal() {
+  async function openPortal(target: PortalTarget = "overview") {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const data = await invoke("portal");
+      const data = await invoke("portal", billingProvider === "paddle" ? { portal_target: target } : {});
       if (!data.url) throw new Error("Billing portal URL was not returned.");
       window.location.assign(data.url);
     } catch (portalError) {
@@ -286,7 +287,8 @@ export default function PaidPlanChangePanel({
             {open ? "Close plan change" : "Change plan"}
           </button>
         ) : null}
-        <button type="button" className="btn btn-ghost" disabled={busy || !billingConfigured || !billingHasCustomer} onClick={openPortal}>Manage billing</button>
+        <button type="button" className="btn btn-ghost" disabled={busy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("overview")}>Manage billing</button>
+        <button type="button" className="btn btn-ghost" disabled={busy || statusBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("cancel")}>Cancel subscription</button>
       </div>
 
       {pendingPlan ? (
