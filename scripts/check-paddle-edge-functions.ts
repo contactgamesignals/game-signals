@@ -22,6 +22,7 @@ assert.match(billing, /portal_target/, "Paddle portal actions must support expli
 assert.match(billing, /cancel_subscription/, "Paddle billing must expose the authenticated cancellation deep link.");
 assert.match(billing, /update_subscription_payment_method/, "Paddle billing must expose the authenticated payment-method deep link.");
 assert.match(billing, /subscription\.status === "past_due"/, "Cancellation must explain Paddle's past-due restriction instead of silently failing.");
+assert.match(billing, /cancel_at_period_end: Boolean\(subscription\.cancel_at_period_end\)/, "Paddle billing status must expose scheduled cancellation state.");
 assert.match(billing, /assertPaddleCheckoutEnabled/);
 assert.match(billing, /PADDLE_CHECKOUT_URL/);
 assert.match(billing, /PADDLE_SANDBOX_CHECKOUT_ENABLED/);
@@ -38,6 +39,8 @@ assert.doesNotMatch(billing, /pdl_(?:sdbx|live)_apikey_[A-Za-z0-9_]+/, "Paddle A
 
 const paidPlanPanel = readFileSync("components/PaidPlanChangePanel.tsx", "utf8");
 assert.match(paidPlanPanel, /Cancel subscription/, "Active Paddle subscriptions need a direct cancellation action.");
+assert.match(paidPlanPanel, /Cancellation scheduled/, "Scheduled Paddle cancellations must be visible in settings.");
+assert.match(paidPlanPanel, /!pendingPlan && !cancellationScheduled/, "Plan changes must be hidden while cancellation is already scheduled.");
 assert.match(paidPlanPanel, /portal_target: target/, "Cancellation must request a Paddle deep link rather than the generic portal.");
 
 const settingsClient = readFileSync("components/SettingsClient.tsx", "utf8");
