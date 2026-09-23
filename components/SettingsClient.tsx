@@ -41,6 +41,7 @@ type BillingResponse = {
 };
 
 type BuyerType = "individual" | "company";
+type PortalTarget = "overview" | "payment_method";
 
 type PlanCard = {
   plan: PaidPlanName;
@@ -139,6 +140,7 @@ export default function SettingsClient({
 
   const effectivePlan = billingStatus === "active" || billingStatus === "trialing" ? billingPlan : "free";
   const hasPaidPlan = effectivePlan !== "free";
+  const paymentPastDue = billingStatus === "past_due";
   const hasExistingSubscription = billingHasSubscription && billingStatus !== "canceled";
   const providerLabel = BILLING_PROVIDER_LABELS[billingProvider];
   const billingFunction = billingProvider === "paddle" ? "paddle-billing" : "stripe-billing";
@@ -310,12 +312,12 @@ export default function SettingsClient({
     }
   }
 
-  async function openBillingPortal() {
+  async function openBillingPortal(target: PortalTarget = "overview") {
     setBillingBusy(true);
     setBillingError(null);
     setBillingMessage(null);
     try {
-      const data = await invokeBilling("portal");
+      const data = await invokeBilling("portal", billingProvider === "paddle" ? { portal_target: target } : {});
       if (!data.url) throw new Error(`${providerLabel} did not return a billing portal URL.`);
       window.location.assign(data.url);
     } catch (portalError) {
@@ -371,7 +373,13 @@ export default function SettingsClient({
             <p>{hasPaidPlan ? "Manage your current subscription and billing." : "Choose the game limit that fits your team."}</p>
           </div>
           <span className="plan-pill">
-            {billingChecking ? "Checking…" : hasPaidPlan ? `${PLAN_LABELS[effectivePlan]} · ${billingStatus}` : "No active plan"}
+            {billingChecking
+              ? "Checking…"
+              : paymentPastDue
+                ? "Payment failed · monitoring paused"
+                : hasPaidPlan
+                  ? `${PLAN_LABELS[effectivePlan]} · ${billingStatus}`
+                  : "No active plan"}
           </span>
         </div>
 
@@ -386,9 +394,15 @@ export default function SettingsClient({
         {hasPaidPlan || hasExistingSubscription ? (
           <div className="billing-current-plan">
             <div>
-              <span className="kicker">Current subscription</span>
-              <h3>{hasPaidPlan ? PLAN_LABELS[effectivePlan] : "Subscription"}</h3>
-              <p>{hasPaidPlan ? gameLimitLabel(effectivePlan as PaidPlanName) : "Manage your subscription in the billing portal."}</p>
+              <span className="kicker">{paymentPastDue ? "Payment failed" : "Current subscription"}</span>
+              <h3>{paymentPastDue ? `${PLAN_LABELS[billingPlan]} payment failed` : hasPaidPlan ? PLAN_LABELS[effectivePlan] : "Subscription"}</h3>
+              <p>
+                {paymentPastDue
+                  ? "Monitoring and paid features are paused because the latest renewal payment did not succeed."
+                  : hasPaidPlan
+                    ? gameLimitLabel(effectivePlan as PaidPlanName)
+                    : "Manage your subscription in the billing portal."}
+              </p>
             </div>
             {hasPaidPlan ? (
               <PaidPlanChangePanel
@@ -398,13 +412,24 @@ export default function SettingsClient({
                 billingConfigured={billingConfigured}
                 billingHasCustomer={billingHasCustomer}
               />
+            ) : paymentPastDue && billingProvider === "paddle" ? (
+              <div className="billing-current-actions">
+                <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openBillingPortal("payment_method")}>
+                  Update payment method
+                </button>
+                <button type="button" className="btn btn-ghost" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openBillingPortal("overview")}>
+                  Manage billing
+                </button>
+              </div>
             ) : (
-              <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={openBillingPortal}>
+              <button type="button" className="btn btn-primary" disabled={billingBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openBillingPortal("overview")}>
                 Manage billing
               </button>
             )}
             <p className="billing-portal-note">
-              Change your game limit here. Payment methods, billing documents and cancellation stay in the billing portal.
+              {paymentPastDue && billingProvider === "paddle"
+                ? "Paddle blocks subscription changes while a payment is past due. Monitoring is already off. Resolve the payment issue first; after that, you can cancel the subscription from the billing controls."
+                : "Change your game limit here. Payment methods and billing documents stay in the billing portal. Paddle subscriptions also have a direct Cancel subscription button above."}
             </p>
           </div>
         ) : selectedPlanCard ? (
