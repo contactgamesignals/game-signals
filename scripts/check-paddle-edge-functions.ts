@@ -28,6 +28,8 @@ assert.ok(
   "Customer Portal must remain reachable independently from the new-checkout lock.",
 );
 assert.match(billing, /collection_mode: "automatic"/);
+assert.match(billing, /paddlePlanChangeBillingMode\(body\.change_timing\)/, "Plan changes must use the shared Paddle billing-mode guard.");
+assert.doesNotMatch(billing, /full_next_billing_period/, "Deferred plan changes must not create a second full charge at renewal.");
 assert.doesNotMatch(billing, /pdl_(?:sdbx|live)_apikey_[A-Za-z0-9_]+/, "Paddle API keys must never be committed.");
 
 const paddlePage = readFileSync("components/PaddleCheckoutPage.tsx", "utf8");
