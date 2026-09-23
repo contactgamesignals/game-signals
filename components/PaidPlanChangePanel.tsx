@@ -28,6 +28,7 @@ type BillingResponse = {
   status?: string;
   billing_period?: BillingPeriod | null;
   current_period_end?: string | null;
+  cancel_at_period_end?: boolean;
   pending_plan?: string | null;
   pending_plan_effective_at?: string | null;
   url?: string;
@@ -112,6 +113,7 @@ export default function PaidPlanChangePanel({
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod | null>(null);
   const [livePlan, setLivePlan] = useState<PaidPlanName>(currentPlan);
   const [renewalAt, setRenewalAt] = useState<string | null>(null);
+  const [cancellationScheduled, setCancellationScheduled] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<PaidPlanName | null>(null);
   const [pendingEffectiveAt, setPendingEffectiveAt] = useState<string | null>(null);
   const [targetPlan, setTargetPlan] = useState<PaidPlanName | null>(null);
@@ -165,6 +167,7 @@ export default function PaidPlanChangePanel({
       if (normalized !== "free") setLivePlan(normalized);
       setBillingPeriod(data.billing_period === "yearly" ? "yearly" : data.billing_period === "monthly" ? "monthly" : null);
       setRenewalAt(data.current_period_end ?? null);
+      setCancellationScheduled(Boolean(data.cancel_at_period_end));
       const pending = normalizePlan(data.pending_plan);
       setPendingPlan(pending === "free" ? null : pending);
       setPendingEffectiveAt(data.pending_plan_effective_at ?? null);
@@ -282,14 +285,26 @@ export default function PaidPlanChangePanel({
   return (
     <div className="plan-change-root">
       <div className="billing-current-actions">
-        {!pendingPlan ? (
+        {!pendingPlan && !cancellationScheduled ? (
           <button type="button" className="btn btn-primary" disabled={busy || statusBusy || !billingConfigured || !billingHasCustomer || !billingPeriod} onClick={() => setOpen((value) => !value)}>
             {open ? "Close plan change" : "Change plan"}
           </button>
         ) : null}
         <button type="button" className="btn btn-ghost" disabled={busy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("overview")}>Manage billing</button>
-        <button type="button" className="btn btn-ghost" disabled={busy || statusBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("cancel")}>Cancel subscription</button>
+        {!cancellationScheduled ? (
+          <button type="button" className="btn btn-ghost" disabled={busy || statusBusy || !billingConfigured || !billingHasCustomer} onClick={() => void openPortal("cancel")}>Cancel subscription</button>
+        ) : null}
       </div>
+
+      {cancellationScheduled ? (
+        <div className="plan-change-scheduled">
+          <div>
+            <span className="kicker">Cancellation scheduled</span>
+            <strong>Ends {formatDate(renewalAt)}</strong>
+          </div>
+          <p>Your {PLAN_LABELS[livePlan]} plan stays active until {formatDate(renewalAt)} and will not renew after that. Open Manage billing if you want to keep the subscription.</p>
+        </div>
+      ) : null}
 
       {pendingPlan ? (
         <div className="plan-change-scheduled">
@@ -304,7 +319,7 @@ export default function PaidPlanChangePanel({
       {message ? <div className="auth-success plan-change-feedback">{message}</div> : null}
       {error ? <div className="auth-error plan-change-feedback">{error}</div> : null}
 
-      {open && !pendingPlan ? (
+      {open && !pendingPlan && !cancellationScheduled ? (
         <div className="plan-change-flow">
           {!targetPlan ? (
             <>
