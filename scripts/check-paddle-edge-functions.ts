@@ -18,6 +18,10 @@ assert.ok(
 assert.match(billing, /custom_data:[\s\S]*workspace_id/);
 assert.match(billing, /billing_checkout_consents/);
 assert.match(billing, /\/portal-sessions/);
+assert.match(billing, /portal_target/, "Paddle portal actions must support explicit workflow targets.");
+assert.match(billing, /cancel_subscription/, "Paddle billing must expose the authenticated cancellation deep link.");
+assert.match(billing, /update_subscription_payment_method/, "Paddle billing must expose the authenticated payment-method deep link.");
+assert.match(billing, /subscription\.status === "past_due"/, "Cancellation must explain Paddle's past-due restriction instead of silently failing.");
 assert.match(billing, /assertPaddleCheckoutEnabled/);
 assert.match(billing, /PADDLE_CHECKOUT_URL/);
 assert.match(billing, /PADDLE_SANDBOX_CHECKOUT_ENABLED/);
@@ -31,6 +35,15 @@ assert.match(billing, /collection_mode: "automatic"/);
 assert.match(billing, /paddlePlanChangeBillingMode\(body\.change_timing\)/, "Plan changes must use the shared Paddle billing-mode guard.");
 assert.doesNotMatch(billing, /full_next_billing_period/, "Deferred plan changes must not create a second full charge at renewal.");
 assert.doesNotMatch(billing, /pdl_(?:sdbx|live)_apikey_[A-Za-z0-9_]+/, "Paddle API keys must never be committed.");
+
+const paidPlanPanel = readFileSync("components/PaidPlanChangePanel.tsx", "utf8");
+assert.match(paidPlanPanel, /Cancel subscription/, "Active Paddle subscriptions need a direct cancellation action.");
+assert.match(paidPlanPanel, /portal_target: target/, "Cancellation must request a Paddle deep link rather than the generic portal.");
+
+const settingsClient = readFileSync("components/SettingsClient.tsx", "utf8");
+assert.match(settingsClient, /Payment failed · monitoring paused/, "Past-due Paddle subscriptions must clearly say that monitoring is paused.");
+assert.match(settingsClient, /Update payment method/, "Past-due Paddle subscriptions need a direct payment recovery action.");
+assert.match(settingsClient, /Monitoring and paid features are paused/, "Past-due UI must match product-access enforcement.");
 
 const paddlePage = readFileSync("components/PaddleCheckoutPage.tsx", "utf8");
 assert.match(paddlePage, /if \(environment === "sandbox"\) paddle\.Environment\.set\("sandbox"\)/);

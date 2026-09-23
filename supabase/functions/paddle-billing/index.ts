@@ -46,6 +46,7 @@ type BuyerType = "individual" | "company";
 type PaddleEnvironment = "sandbox" | "live";
 type PaddleObject = Record<string, unknown>;
 type PlanChangeTiming = "immediate" | "next_billing_period";
+type PortalTarget = "overview" | "cancel" | "payment_method";
 
 type StoredSubscription = {
   plan: unknown;
@@ -100,6 +101,10 @@ function isBuyerType(value: unknown): value is BuyerType {
 
 function isPlanChangeTiming(value: unknown): value is PlanChangeTiming {
   return value === "immediate" || value === "next_billing_period";
+}
+
+function isPortalTarget(value: unknown): value is PortalTarget {
+  return value === "overview" || value === "cancel" || value === "payment_method";
 }
 
 function canonicalSiteUrl() {
@@ -347,6 +352,7 @@ Deno.serve(async (request) => {
       plan?: unknown;
       period?: unknown;
       change_timing?: unknown;
+      portal_target?: unknown;
       buyer_type?: unknown;
       terms_accepted?: unknown;
       recurring_billing_accepted?: unknown;
@@ -441,7 +447,16 @@ Deno.serve(async (request) => {
       if (!storedPaddleEnvironment || !subscription.billing_customer_id) {
         return json({ error: "No Paddle customer exists for this workspace yet." }, 409);
       }
-      const subscriptionIds = subscription.billing_subscription_id ? [String(subscription.billing_subscription_id)] : [];
+      const portalTarget: PortalTarget = isPortalTarget(body.portal_target) ? body.portal_target : "overview";
+      if (portalTarget === "cancel" && subscription.status === "past_due") {
+        return json({
+          error: "Paddle cannot cancel a subscription while its payment is past due. Monitoring is already paused. Update the payment method first, then cancel the subscription.",
+          blocked: true,
+        }, 409);
+      }
+
+      const subscriptionId = subscription.billing_subscription_id ? String(subscription.billing_subscription_id) : null;
+      const subscriptionIds = subscriptionId ? [subscriptionId] : [];
       const portal = await paddleRequest(`/customers/${encodeURIComponent(String(subscription.billing_customer_id))}/portal-sessions`, {
         method: "POST",
         body: subscriptionIds.length ? { subscription_ids: subscriptionIds } : {},
@@ -449,8 +464,24 @@ Deno.serve(async (request) => {
       const data = objectValue(portal.data);
       const urls = objectValue(data?.urls);
       const general = objectValue(urls?.general);
-      if (typeof general?.overview !== "string") throw new Error("Paddle did not return a customer portal URL.");
-      return json({ url: general.overview, provider: "paddle", paddle_mode: storedPaddleEnvironment });
+      if (portalTarget === "overview") {
+        if (typeof general?.overview !== "string") throw new Error("Paddle did not return a customer portal URL.");
+        return json({ url: general.overview, provider: "paddle", paddle_mode: storedPaddleEnvironment });
+      }
+
+      const subscriptionUrls = Array.isArray(urls?.subscriptions) ? urls.subscriptions : [];
+      const matchingSubscription = subscriptionUrls
+        .map((value) => objectValue(value))
+        .find((value) => value && stringValue(value.id) === subscriptionId);
+      const deepLink = portalTarget === "cancel"
+        ? stringValue(matchingSubscription?.cancel_subscription)
+        : stringValue(matchingSubscription?.update_subscription_payment_method);
+      if (!deepLink) {
+        throw new Error(portalTarget === "cancel"
+          ? "Paddle did not return a subscription cancellation URL."
+          : "Paddle did not return a payment-method update URL.");
+      }
+      return json({ url: deepLink, provider: "paddle", paddle_mode: storedPaddleEnvironment });
     }
 
     if (body.action === "change_preview" || body.action === "change_plan") {
