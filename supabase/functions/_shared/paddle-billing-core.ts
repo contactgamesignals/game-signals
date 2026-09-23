@@ -1,6 +1,8 @@
 export type PaddleEnvironment = "sandbox" | "live";
 export type PaddlePaidPlan = "indie" | "studio" | "publisher" | "crazy";
 export type PaddleBillingPeriod = "monthly" | "yearly";
+export type PaddlePlanChangeTiming = "immediate" | "next_billing_period";
+export type PaddlePlanChangeBillingMode = "prorated_immediately" | "do_not_bill";
 export type GameSignalSubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "incomplete";
 
 const PADDLE_PAID_PLANS: PaddlePaidPlan[] = ["indie", "studio", "publisher", "crazy"];
@@ -71,6 +73,10 @@ export function isPaddlePaidPlan(value: unknown): value is PaddlePaidPlan {
 
 export function isPaddleBillingPeriod(value: unknown): value is PaddleBillingPeriod {
   return value === "monthly" || value === "yearly";
+}
+
+export function paddlePlanChangeBillingMode(timing: PaddlePlanChangeTiming): PaddlePlanChangeBillingMode {
+  return timing === "immediate" ? "prorated_immediately" : "do_not_bill";
 }
 
 export function paddleApiBase(environment: PaddleEnvironment) {
